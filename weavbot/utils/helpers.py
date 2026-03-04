@@ -56,7 +56,6 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     for item in tpl.iterdir():
         if item.name.endswith(".md"):
             _write(item, workspace / item.name)
-    _write(tpl / "MEMORY.md", workspace / "MEMORY.md")
     ensure_dir(workspace / "memory")
     (workspace / "skills").mkdir(exist_ok=True)
 
