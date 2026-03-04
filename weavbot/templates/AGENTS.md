@@ -19,3 +19,19 @@ Get USER_ID and CHANNEL from the current session (e.g., `8281248569` and `telegr
 - **Rewrite**: `write_file` to replace all tasks
 
 When the user asks for a recurring/periodic task, update `HEARTBEAT.md` instead of creating a one-time cron reminder.
+
+## Tool Usage Notes
+
+Tool signatures are provided automatically via function calling.
+This section documents non-obvious constraints and usage patterns.
+
+### exec — Safety Limits
+
+- Commands have a configurable timeout (default 60s)
+- Dangerous commands are blocked (rm -rf, format, dd, shutdown, etc.)
+- Output is truncated at 10,000 characters
+- `restrictToWorkspace` config can limit file access to the workspace
+
+### cron — Scheduled Reminders
+
+- Please refer to cron skill for usage.
