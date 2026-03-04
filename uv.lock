@@ -2718,7 +2718,6 @@ wheels = [
 
 [[package]]
 name = "weavbot"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "croniter" },
@@ -2796,7 +2795,7 @@ requires-dist = [
     { name = "websocket-client", specifier = ">=1.9.0,<2.0.0" },
     { name = "websockets", specifier = ">=16.0,<17.0" },
 ]
-provides-extras = ["matrix", "dev"]
+provides-extras = ["dev", "matrix"]
 
 [[package]]
 name = "websocket-client"
