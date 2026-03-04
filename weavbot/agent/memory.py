@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -43,12 +44,12 @@ _SAVE_MEMORY_TOOL = [
 
 
 class MemoryStore:
-    """Two-layer memory: MEMORY.md (long-term facts) + HISTORY.md (grep-searchable log)."""
+    """Two-layer memory: MEMORY.md (long-term facts) + memory/YYYY-MM-DD.md (daily history logs)."""
 
     def __init__(self, workspace: Path):
+        self.workspace = workspace
         self.memory_dir = ensure_dir(workspace / "memory")
-        self.memory_file = self.memory_dir / "MEMORY.md"
-        self.history_file = self.memory_dir / "HISTORY.md"
+        self.memory_file = workspace / "MEMORY.md"
 
     def read_long_term(self) -> str:
         if self.memory_file.exists():
@@ -59,7 +60,8 @@ class MemoryStore:
         self.memory_file.write_text(content, encoding="utf-8")
 
     def append_history(self, entry: str) -> None:
-        with open(self.history_file, "a", encoding="utf-8") as f:
+        history_file = self.memory_dir / f"{date.today().isoformat()}.md"
+        with open(history_file, "a", encoding="utf-8") as f:
             f.write(entry.rstrip() + "\n\n")
 
     def get_memory_context(self) -> str:
@@ -75,7 +77,7 @@ class MemoryStore:
         archive_all: bool = False,
         memory_window: int = 50,
     ) -> bool:
-        """Consolidate old messages into MEMORY.md + HISTORY.md via LLM tool call.
+        """Consolidate old messages into MEMORY.md + memory/YYYY-MM-DD.md via LLM tool call.
 
         Returns True on success (including no-op), False on failure.
         """
