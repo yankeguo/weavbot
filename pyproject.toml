@@ -74,10 +74,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["nanobot/", "bridge/", "README.md", "LICENSE"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"bridge" = "nanobot/bridge"
+include = ["nanobot/", "README.md", "LICENSE"]
 
 [tool.ruff]
 line-length = 100
