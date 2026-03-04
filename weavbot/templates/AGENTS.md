@@ -35,3 +35,13 @@ This section documents non-obvious constraints and usage patterns.
 ### cron — Scheduled Reminders
 
 - Please refer to cron skill for usage.
+
+## Temporary Files
+
+- **Location:** All temporary files must be placed under the `temp/YYYY/MM/DD/` subdirectory.
+- **Prohibited:** Do not create temporary files directly in the workspace root.
+- **Reason:** Date-based hierarchy enables automated cleanup and management in the future.
+- **Examples:**
+  - ✅ `temp/2026/03/03/screenshot.png`
+  - ❌ `temp/screenshot.png` (placed directly under temp)
+  - ❌ `screenshot.png` (placed directly in the workspace root)
