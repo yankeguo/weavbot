@@ -11,7 +11,7 @@ A hard fork of [NanoBot](https://github.com/HKUDS/nanobot)
 - Dedicated file search tools: glob_file, grep_file (ripgrep-based)
 - Enhanced ReadFileTool: binary detection, improved reading options
 - EditFileTool: advanced text replacement strategies
-- Web fetch tool (web_search removed)
+- Web fetch tool enhanced (web_search removed)
 
 ## License
 
