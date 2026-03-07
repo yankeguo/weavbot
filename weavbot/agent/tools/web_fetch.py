@@ -1,39 +1,33 @@
 """Web fetch tool: fetch URL content and extract readable text/markdown."""
 
-import html
 import json
-import re
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+from bs4 import BeautifulSoup
 from loguru import logger
+from markdownify import markdownify
 
 from weavbot.agent.tools.base import Tool
 
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
 MAX_REDIRECTS = 5  # Limit redirects to prevent DoS attacks
+DEFAULT_MAX_CHARS = 150_000
 
 
-def _strip_tags(text: str) -> str:
-    """Remove HTML tags and decode entities."""
-    text = re.sub(r'<script[\s\S]*?</script>', '', text, flags=re.I)
-    text = re.sub(r'<style[\s\S]*?</style>', '', text, flags=re.I)
-    text = re.sub(r'<[^>]+>', '', text)
-    return html.unescape(text).strip()
-
-
-def _normalize(text: str) -> str:
-    """Normalize whitespace."""
-    text = re.sub(r'[ \t]+', ' ', text)
-    return re.sub(r'\n{3,}', '\n\n', text).strip()
+def _html_to_output(html: str, format: str) -> str:
+    """Convert HTML to markdown or plain text."""
+    if format == "markdown":
+        return markdownify(html, heading_style="ATX").strip()
+    return BeautifulSoup(html, "html.parser").get_text(separator="\n").strip()
 
 
 def _validate_url(url: str) -> tuple[bool, str]:
     """Validate URL: must be http(s) with valid domain."""
     try:
         p = urlparse(url)
-        if p.scheme not in ('http', 'https'):
+        if p.scheme not in ("http", "https"):
             return False, f"Only http/https allowed, got '{p.scheme or 'none'}'"
         if not p.netloc:
             return False, "Missing domain"
@@ -51,23 +45,42 @@ class WebFetchTool(Tool):
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "URL to fetch"},
-            "extractMode": {"type": "string", "enum": ["markdown", "text"], "default": "markdown"},
-            "maxChars": {"type": "integer", "minimum": 100}
+            "format": {
+                "type": "string",
+                "enum": ["markdown", "text"],
+                "default": "markdown",
+                "description": "Output format: markdown or plain text",
+            },
+            "max_chars": {
+                "type": "integer",
+                "minimum": 100,
+                "default": DEFAULT_MAX_CHARS,
+                "description": "Max characters to return",
+            },
         },
-        "required": ["url"]
+        "required": ["url"],
     }
 
-    def __init__(self, max_chars: int = 50000, proxy: str | None = None):
+    def __init__(self, max_chars: int = DEFAULT_MAX_CHARS, proxy: str | None = None):
         self.max_chars = max_chars
         self.proxy = proxy
 
-    async def execute(self, url: str, extractMode: str = "markdown", maxChars: int | None = None, **kwargs: Any) -> str:
+    async def execute(
+        self,
+        url: str,
+        format: str = "markdown",
+        max_chars: int | None = None,
+        **kwargs: Any,
+    ) -> str:
         from readability import Document
 
-        max_chars = maxChars or self.max_chars
+        effective_max = max_chars if max_chars is not None else self.max_chars
         is_valid, error_msg = _validate_url(url)
         if not is_valid:
-            return json.dumps({"error": f"URL validation failed: {error_msg}", "url": url}, ensure_ascii=False)
+            return json.dumps(
+                {"error": f"URL validation failed: {error_msg}", "url": url},
+                ensure_ascii=False,
+            )
 
         try:
             logger.debug("WebFetch: {}", "proxy enabled" if self.proxy else "direct connection")
@@ -83,35 +96,36 @@ class WebFetchTool(Tool):
             ctype = r.headers.get("content-type", "")
 
             if "application/json" in ctype:
-                text, extractor = json.dumps(r.json(), indent=2, ensure_ascii=False), "json"
+                text = json.dumps(r.json(), indent=2, ensure_ascii=False)
+                extractor = "json"
             elif "text/html" in ctype or r.text[:256].lower().startswith(("<!doctype", "<html")):
                 doc = Document(r.text)
-                content = self._to_markdown(doc.summary()) if extractMode == "markdown" else _strip_tags(doc.summary())
+                content = _html_to_output(doc.summary(), format)
                 text = f"# {doc.title()}\n\n{content}" if doc.title() else content
                 extractor = "readability"
             else:
-                text, extractor = r.text, "raw"
+                text = r.text
+                extractor = "raw"
 
-            truncated = len(text) > max_chars
-            if truncated: text = text[:max_chars]
+            truncated = len(text) > effective_max
+            if truncated:
+                text = text[:effective_max]
 
-            return json.dumps({"url": url, "finalUrl": str(r.url), "status": r.status_code,
-                              "extractor": extractor, "truncated": truncated, "length": len(text), "text": text}, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "url": url,
+                    "finalUrl": str(r.url),
+                    "status": r.status_code,
+                    "extractor": extractor,
+                    "truncated": truncated,
+                    "length": len(text),
+                    "text": text,
+                },
+                ensure_ascii=False,
+            )
         except httpx.ProxyError as e:
             logger.error("WebFetch proxy error for {}: {}", url, e)
             return json.dumps({"error": f"Proxy error: {e}", "url": url}, ensure_ascii=False)
         except Exception as e:
             logger.error("WebFetch error for {}: {}", url, e)
             return json.dumps({"error": str(e), "url": url}, ensure_ascii=False)
-
-    def _to_markdown(self, html: str) -> str:
-        """Convert HTML to markdown."""
-        # Convert links, headings, lists before stripping tags
-        text = re.sub(r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>([\s\S]*?)</a>',
-                      lambda m: f'[{_strip_tags(m[2])}]({m[1]})', html, flags=re.I)
-        text = re.sub(r'<h([1-6])[^>]*>([\s\S]*?)</h\1>',
-                      lambda m: f'\n{"#" * int(m[1])} {_strip_tags(m[2])}\n', text, flags=re.I)
-        text = re.sub(r'<li[^>]*>([\s\S]*?)</li>', lambda m: f'\n- {_strip_tags(m[1])}', text, flags=re.I)
-        text = re.sub(r'</(p|div|section|article)>', '\n\n', text, flags=re.I)
-        text = re.sub(r'<(br|hr)\s*/?>', '\n', text, flags=re.I)
-        return _normalize(_strip_tags(text))
