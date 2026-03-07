@@ -303,12 +303,12 @@ Usage:
         return {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "The file path to edit"},
-                "old_text": {"type": "string", "description": "The text to find and replace"},
-                "new_text": {"type": "string", "description": "The text to replace with"},
+                "path": {"type": "string", "description": "File path to edit"},
+                "old_text": {"type": "string", "description": "Text to find and replace"},
+                "new_text": {"type": "string", "description": "Replacement text"},
                 "replace_all": {
                     "type": "boolean",
-                    "description": "Replace all occurrences of old_text (default false)",
+                    "description": "Replace all occurrences (default: false)",
                     "default": False,
                 },
             },

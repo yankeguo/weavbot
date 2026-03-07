@@ -16,9 +16,9 @@ MAX_REDIRECTS = 5  # Limit redirects to prevent DoS attacks
 DEFAULT_MAX_CHARS = 150_000
 
 
-def _html_to_output(html: str, format: str) -> str:
+def _html_to_output(html: str, fmt: str) -> str:
     """Convert HTML to markdown or plain text."""
-    if format == "markdown":
+    if fmt == "markdown":
         return markdownify(html, heading_style="ATX").strip()
     return BeautifulSoup(html, "html.parser").get_text(separator="\n").strip()
 
@@ -45,17 +45,17 @@ class WebFetchTool(Tool):
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "URL to fetch"},
-            "format": {
+            "fmt": {
                 "type": "string",
                 "enum": ["markdown", "text"],
                 "default": "markdown",
-                "description": "Output format: markdown or plain text",
+                "description": "Output format: markdown or text (default: markdown)",
             },
             "max_chars": {
                 "type": "integer",
                 "minimum": 100,
                 "default": DEFAULT_MAX_CHARS,
-                "description": "Max characters to return",
+                "description": "Max characters to return (default: 150000)",
             },
         },
         "required": ["url"],
@@ -68,7 +68,7 @@ class WebFetchTool(Tool):
     async def execute(
         self,
         url: str,
-        format: str = "markdown",
+        fmt: str = "markdown",
         max_chars: int | None = None,
         **kwargs: Any,
     ) -> str:
@@ -100,7 +100,7 @@ class WebFetchTool(Tool):
                 extractor = "json"
             elif "text/html" in ctype or r.text[:256].lower().startswith(("<!doctype", "<html")):
                 doc = Document(r.text)
-                content = _html_to_output(doc.summary(), format)
+                content = _html_to_output(doc.summary(), fmt)
                 text = f"# {doc.title()}\n\n{content}" if doc.title() else content
                 extractor = "readability"
             else:

@@ -50,7 +50,7 @@ class ShellTool(Tool):
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "The shell command to execute",
+                    "description": "Shell command to execute",
                 },
                 "workdir": {
                     "type": "string",
@@ -58,7 +58,7 @@ class ShellTool(Tool):
                 },
                 "timeout": {
                     "type": "integer",
-                    "description": "Timeout in seconds. Overrides default if set.",
+                    "description": "Timeout in seconds (overrides default)",
                 },
             },
             "required": ["command"],

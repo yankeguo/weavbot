@@ -42,11 +42,11 @@ class SpawnTool(Tool):
             "properties": {
                 "task": {
                     "type": "string",
-                    "description": "The task for the subagent to complete",
+                    "description": "Task description for the subagent",
                 },
                 "label": {
                     "type": "string",
-                    "description": "Optional short label for the task (for display)",
+                    "description": "Short display label for the task",
                 },
             },
             "required": ["task"],

@@ -48,24 +48,24 @@ class CronTool(Tool):
                     "enum": ["add", "list", "remove"],
                     "description": "Action to perform",
                 },
-                "message": {"type": "string", "description": "Reminder message (for add)"},
-                "every_seconds": {
+                "message": {"type": "string", "description": "Reminder message (required for add)"},
+                "interval": {
                     "type": "integer",
-                    "description": "Interval in seconds (for recurring tasks)",
+                    "description": "Repeat interval in seconds",
                 },
-                "cron_expr": {
+                "expr": {
                     "type": "string",
-                    "description": "Cron expression like '0 9 * * *' (for scheduled tasks)",
+                    "description": "Cron expression (e.g. 0 9 * * *)",
                 },
                 "tz": {
                     "type": "string",
-                    "description": "IANA timezone for cron expressions (e.g. 'America/Vancouver')",
+                    "description": "IANA timezone (e.g. America/Vancouver)",
                 },
                 "at": {
                     "type": "string",
                     "description": "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00')",
                 },
-                "job_id": {"type": "string", "description": "Job ID (for remove)"},
+                "job_id": {"type": "string", "description": "Job ID (required for remove)"},
             },
             "required": ["action"],
         }
@@ -74,8 +74,8 @@ class CronTool(Tool):
         self,
         action: str,
         message: str = "",
-        every_seconds: int | None = None,
-        cron_expr: str | None = None,
+        interval: int | None = None,
+        expr: str | None = None,
         tz: str | None = None,
         at: str | None = None,
         job_id: str | None = None,
@@ -84,7 +84,7 @@ class CronTool(Tool):
         if action == "add":
             if self._in_cron_context.get():
                 return "Error: cannot schedule new jobs from within a cron job execution"
-            return self._add_job(message, every_seconds, cron_expr, tz, at)
+            return self._add_job(message, interval, expr, tz, at)
         elif action == "list":
             return self._list_jobs()
         elif action == "remove":
@@ -94,8 +94,8 @@ class CronTool(Tool):
     def _add_job(
         self,
         message: str,
-        every_seconds: int | None,
-        cron_expr: str | None,
+        interval: int | None,
+        expr: str | None,
         tz: str | None,
         at: str | None,
     ) -> str:
@@ -103,8 +103,8 @@ class CronTool(Tool):
             return "Error: message is required for add"
         if not self._channel or not self._chat_id:
             return "Error: no session context (channel/chat_id)"
-        if tz and not cron_expr:
-            return "Error: tz can only be used with cron_expr"
+        if tz and not expr:
+            return "Error: tz can only be used with expr"
         if tz:
             from zoneinfo import ZoneInfo
 
@@ -115,10 +115,10 @@ class CronTool(Tool):
 
         # Build schedule
         delete_after = False
-        if every_seconds:
-            schedule = CronSchedule(kind="every", every_ms=every_seconds * 1000)
-        elif cron_expr:
-            schedule = CronSchedule(kind="cron", expr=cron_expr, tz=tz)
+        if interval:
+            schedule = CronSchedule(kind="every", every_ms=interval * 1000)
+        elif expr:
+            schedule = CronSchedule(kind="cron", expr=expr, tz=tz)
         elif at:
             from datetime import datetime
 
@@ -127,7 +127,7 @@ class CronTool(Tool):
             schedule = CronSchedule(kind="at", at_ms=at_ms)
             delete_after = True
         else:
-            return "Error: either every_seconds, cron_expr, or at is required"
+            return "Error: either interval, expr, or at is required"
 
         job = self._cron.add_job(
             name=message[:30],

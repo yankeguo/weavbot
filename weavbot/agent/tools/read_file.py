@@ -83,12 +83,12 @@ class ReadFileTool(Tool):
                 "offset": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Starting line (1-based). Default 1.",
+                    "description": "Starting line number, 1-based (default: 1)",
                 },
                 "limit": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Max lines to read. Default 2000.",
+                    "description": "Max lines to return (default: 2000)",
                 },
             },
             "required": ["path"],

@@ -14,7 +14,7 @@ _MAX_LINE_LENGTH = 2000
 _DESCRIPTION = """Fast content search tool that works with any codebase size.
 Searches file contents using regular expressions.
 Supports full regex syntax (e.g. "log.*Error", "function\\s+\\w+", etc.).
-Filter files by pattern with the include parameter (e.g. "*.js", "*.{ts,tsx}").
+Filter files by pattern with the glob parameter (e.g. "*.js", "*.{ts,tsx}").
 Returns file paths and line numbers with at least one match sorted by modification time.
 Use this tool when you need to find files containing specific patterns.
 If you need to identify/count the number of matches within files, use the shell tool with `rg` (ripgrep) directly. Do NOT use grep.
@@ -43,15 +43,15 @@ class GrepFileTool(Tool):
             "properties": {
                 "pattern": {
                     "type": "string",
-                    "description": "The regex pattern to search for in file contents",
+                    "description": "Regex pattern to search for",
                 },
                 "path": {
                     "type": "string",
-                    "description": "The directory to search in. Defaults to workspace.",
+                    "description": "Directory to search in (default: workspace)",
                 },
-                "include": {
+                "glob": {
                     "type": "string",
-                    "description": "File pattern to include in the search (e.g. \"*.js\", \"*.{ts,tsx}\")",
+                    "description": "File glob filter (e.g. *.py, *.{ts,tsx})",
                 },
             },
             "required": ["pattern"],
@@ -61,7 +61,7 @@ class GrepFileTool(Tool):
         self,
         pattern: str,
         path: str | None = None,
-        include: str | None = None,
+        glob: str | None = None,
         **kwargs: Any,
     ) -> str:
         try:
@@ -86,8 +86,8 @@ class GrepFileTool(Tool):
                 "--regexp",
                 pattern,
             ]
-            if include:
-                args.extend(["--glob", include])
+            if glob:
+                args.extend(["--glob", glob])
             args.append(search_path)
 
             try:

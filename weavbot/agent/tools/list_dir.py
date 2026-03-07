@@ -26,7 +26,7 @@ class ListDirTool(Tool):
     def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
-            "properties": {"path": {"type": "string", "description": "The directory path to list"}},
+            "properties": {"path": {"type": "string", "description": "Directory path to list"}},
             "required": ["path"],
         }
 

@@ -37,11 +37,11 @@ class GlobFileTool(Tool):
             "properties": {
                 "pattern": {
                     "type": "string",
-                    "description": "The glob pattern to match files against (e.g. **/*.py or src/**/*.ts)",
+                    "description": "Glob pattern (e.g. **/*.py, src/**/*.ts)",
                 },
                 "path": {
                     "type": "string",
-                    "description": "The directory to search in. If omitted, uses workspace.",
+                    "description": "Directory to search in (default: workspace)",
                 },
             },
             "required": ["pattern"],

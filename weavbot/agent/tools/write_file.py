@@ -27,8 +27,8 @@ class WriteFileTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "The file path to write to"},
-                "content": {"type": "string", "description": "The content to write"},
+                "path": {"type": "string", "description": "File path to write to"},
+                "content": {"type": "string", "description": "File content to write"},
             },
             "required": ["path", "content"],
         }
