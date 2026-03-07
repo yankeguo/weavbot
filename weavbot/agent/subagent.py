@@ -17,7 +17,6 @@ from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.agent.tools.registry import ToolRegistry
 from weavbot.agent.tools.shell import ShellTool
 from weavbot.agent.tools.web_fetch import WebFetchTool
-from weavbot.agent.tools.web_search import WebSearchTool
 from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.config.schema import ExecToolConfig
@@ -36,7 +35,6 @@ class SubagentManager:
         temperature: float = 0.7,
         max_tokens: int = 4096,
         reasoning_effort: str | None = None,
-        brave_api_key: str | None = None,
         web_proxy: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
@@ -49,7 +47,6 @@ class SubagentManager:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.reasoning_effort = reasoning_effort
-        self.brave_api_key = brave_api_key
         self.web_proxy = web_proxy
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
@@ -114,7 +111,6 @@ class SubagentManager:
                 restrict_to_workspace=self.restrict_to_workspace,
                 path_append=self.exec_config.path_append,
             ))
-            tools.register(WebSearchTool(api_key=self.brave_api_key, proxy=self.web_proxy))
             tools.register(WebFetchTool(proxy=self.web_proxy))
             
             system_prompt = self._build_subagent_prompt()
