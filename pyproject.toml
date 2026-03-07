@@ -41,6 +41,8 @@ dependencies = [
     "mcp>=1.26.0,<2.0.0",
     "json-repair>=0.57.0,<1.0.0",
     "openai>=2.8.0",
+    # Pin chardet for requests compatibility (requests expects chardet<6)
+    "chardet>=3.0.2,<6",
 ]
 
 [project.optional-dependencies]
