@@ -48,8 +48,8 @@ Usage:
 - By default, returns up to 2000 lines from the start of the file.
 - The offset parameter is the line number to start from (1-indexed).
 - To read later sections, call again with a larger offset.
-- Use the grep tool to find specific content in large files or files with long lines.
-- If unsure of the file path, use the glob/list_dir tool to look up filenames.
+- Use the grep_file tool to find specific content in large files or files with long lines.
+- If unsure of the file path, use the glob_file or list_dir tool to look up filenames.
 - Contents are returned with each line prefixed as `<line>: <content>`, e.g. "1: foo".
 - Any line longer than 2000 characters is truncated.
 - Call this tool in parallel when reading multiple files.

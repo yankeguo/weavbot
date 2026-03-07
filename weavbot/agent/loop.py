@@ -17,6 +17,8 @@ from weavbot.agent.memory import MemoryStore
 from weavbot.agent.subagent import SubagentManager
 from weavbot.agent.tools.cron import CronTool
 from weavbot.agent.tools.edit_file import EditFileTool
+from weavbot.agent.tools.glob_file import GlobFileTool
+from weavbot.agent.tools.grep_file import GrepFileTool
 from weavbot.agent.tools.list_dir import ListDirTool
 from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.write_file import WriteFileTool
@@ -120,7 +122,7 @@ class AgentLoop:
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
         allowed_dir = self.workspace if self.restrict_to_workspace else None
-        for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool):
+        for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool, GlobFileTool, GrepFileTool):
             self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
         self.tools.register(ExecTool(
             working_dir=str(self.workspace),

@@ -9,6 +9,8 @@ from typing import Any
 from loguru import logger
 
 from weavbot.agent.tools.edit_file import EditFileTool
+from weavbot.agent.tools.glob_file import GlobFileTool
+from weavbot.agent.tools.grep_file import GrepFileTool
 from weavbot.agent.tools.list_dir import ListDirTool
 from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.write_file import WriteFileTool
@@ -104,6 +106,8 @@ class SubagentManager:
             tools.register(WriteFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
+            tools.register(GlobFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
+            tools.register(GrepFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(ExecTool(
                 working_dir=str(self.workspace),
                 timeout=self.exec_config.timeout,
