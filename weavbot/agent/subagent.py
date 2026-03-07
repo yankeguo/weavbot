@@ -15,7 +15,7 @@ from weavbot.agent.tools.list_dir import ListDirTool
 from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.agent.tools.registry import ToolRegistry
-from weavbot.agent.tools.shell import ExecTool
+from weavbot.agent.tools.shell import ShellTool
 from weavbot.agent.tools.web_fetch import WebFetchTool
 from weavbot.agent.tools.web_search import WebSearchTool
 from weavbot.bus.events import InboundMessage
@@ -108,7 +108,7 @@ class SubagentManager:
             tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(GlobFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(GrepFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
-            tools.register(ExecTool(
+            tools.register(ShellTool(
                 working_dir=str(self.workspace),
                 timeout=self.exec_config.timeout,
                 restrict_to_workspace=self.restrict_to_workspace,

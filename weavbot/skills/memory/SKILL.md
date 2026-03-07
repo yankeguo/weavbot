@@ -17,7 +17,7 @@ always: true
 grep -i "keyword" memory/*.md
 ```
 
-Use the `exec` tool to run grep. Combine patterns: `grep -iE "meeting|deadline" memory/*.md`
+Use the `shell` tool to run grep. Combine patterns: `grep -iE "meeting|deadline" memory/*.md`
 
 ## When to Update MEMORY.md
 

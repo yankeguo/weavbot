@@ -24,7 +24,7 @@ from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.agent.tools.message import MessageTool
 from weavbot.agent.tools.registry import ToolRegistry
-from weavbot.agent.tools.shell import ExecTool
+from weavbot.agent.tools.shell import ShellTool
 from weavbot.agent.tools.spawn import SpawnTool
 from weavbot.agent.tools.web_fetch import WebFetchTool
 from weavbot.agent.tools.web_search import WebSearchTool
@@ -124,7 +124,7 @@ class AgentLoop:
         allowed_dir = self.workspace if self.restrict_to_workspace else None
         for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool, GlobFileTool, GrepFileTool):
             self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
-        self.tools.register(ExecTool(
+        self.tools.register(ShellTool(
             working_dir=str(self.workspace),
             timeout=self.exec_config.timeout,
             restrict_to_workspace=self.restrict_to_workspace,
