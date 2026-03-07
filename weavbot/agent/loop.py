@@ -49,6 +49,7 @@ class AgentLoop:
     """
 
     _TOOL_RESULT_MAX_CHARS = 500
+    _PARAM_MAX_CHARS = 80  # Max chars per param for channel display; longer values are truncated
 
     def __init__(
         self,
@@ -172,13 +173,21 @@ class AgentLoop:
 
     @staticmethod
     def _tool_hint(tool_calls: list) -> str:
-        """Format tool calls as concise hint, e.g. 'web_search("query")'."""
-        def _fmt(tc):
-            args = (tc.arguments[0] if isinstance(tc.arguments, list) else tc.arguments) or {}
-            val = next(iter(args.values()), None) if isinstance(args, dict) else None
-            if not isinstance(val, str):
-                return tc.name
-            return f'{tc.name}("{val[:40]}…")' if len(val) > 40 else f'{tc.name}("{val}")'
+        """Format tool calls with name and all params, truncating long values for channel display."""
+        def _fmt(tc) -> str:
+            args = tc.arguments if isinstance(tc.arguments, dict) else {}
+            parts = []
+            for k, v in sorted(args.items()):
+                v_str = str(v)
+                if len(v_str) > AgentLoop._PARAM_MAX_CHARS:
+                    v_str = v_str[:AgentLoop._PARAM_MAX_CHARS] + "…"
+                if isinstance(v, str):
+                    parts.append(f'{k}="{v_str}"')
+                else:
+                    parts.append(f"{k}={v_str}")
+            args_str = ", ".join(parts)
+            return f"{tc.name}({args_str})" if args_str else tc.name
+
         return ", ".join(_fmt(tc) for tc in tool_calls)
 
     async def _run_agent_loop(
