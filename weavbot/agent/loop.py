@@ -16,7 +16,8 @@ from weavbot.agent.context import ContextBuilder
 from weavbot.agent.memory import MemoryStore
 from weavbot.agent.subagent import SubagentManager
 from weavbot.agent.tools.cron import CronTool
-from weavbot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from weavbot.agent.tools.edit_file import EditFileTool
+from weavbot.agent.tools.filesystem import ListDirTool, ReadFileTool, WriteFileTool
 from weavbot.agent.tools.message import MessageTool
 from weavbot.agent.tools.registry import ToolRegistry
 from weavbot.agent.tools.shell import ExecTool
