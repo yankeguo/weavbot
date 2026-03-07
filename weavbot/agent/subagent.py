@@ -14,7 +14,8 @@ from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.agent.tools.registry import ToolRegistry
 from weavbot.agent.tools.shell import ExecTool
-from weavbot.agent.tools.web import WebFetchTool, WebSearchTool
+from weavbot.agent.tools.web_fetch import WebFetchTool
+from weavbot.agent.tools.web_search import WebSearchTool
 from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.config.schema import ExecToolConfig

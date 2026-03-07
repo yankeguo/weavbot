@@ -24,7 +24,8 @@ from weavbot.agent.tools.message import MessageTool
 from weavbot.agent.tools.registry import ToolRegistry
 from weavbot.agent.tools.shell import ExecTool
 from weavbot.agent.tools.spawn import SpawnTool
-from weavbot.agent.tools.web import WebFetchTool, WebSearchTool
+from weavbot.agent.tools.web_fetch import WebFetchTool
+from weavbot.agent.tools.web_search import WebSearchTool
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.providers.base import LLMProvider
