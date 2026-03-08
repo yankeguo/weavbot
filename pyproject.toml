@@ -2,7 +2,7 @@
 name = "weavbot"
 dynamic = ["version"]
 description = "A lightweight personal AI assistant framework"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = { text = "MIT" }
 authors = [{ name = "weavbot contributors" }]
 keywords = ["ai", "agent", "chatbot"]
@@ -10,8 +10,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 dependencies = [
@@ -47,11 +46,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-matrix = [
-    "matrix-nio[e2e]>=0.25.2",
-    "mistune>=3.0.0,<4.0.0",
-    "nh3>=0.2.17,<1.0.0",
-]
 dev = ["pytest>=9.0.0,<10.0.0", "pytest-asyncio>=1.3.0,<2.0.0", "ruff>=0.1.0"]
 
 [project.scripts]
@@ -85,12 +79,8 @@ include = ["weavbot/", "README.md", "LICENSE"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
