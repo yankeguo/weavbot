@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from weavbot.agent.tools.base import Tool
-from weavbot.agent.tools.filesystem import _resolve_path
+from weavbot.utils import resolve_path
 
 # --- Line ending helpers ---
 
@@ -319,7 +319,7 @@ Usage:
         **kwargs: Any,
     ) -> str:
         try:
-            file_path = _resolve_path(path, self._workspace, self._allowed_dir)
+            file_path = resolve_path(path, self._workspace, self._allowed_dir)
             if file_path.exists() and file_path.is_dir():
                 return f"Error: Path is a directory, not a file: {path}"
 

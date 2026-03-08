@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from weavbot.agent.tools.base import Tool
-from weavbot.agent.tools.filesystem import _resolve_path
+from weavbot.utils import resolve_path
 
 # Constants (from read.ts)
 DEFAULT_READ_LIMIT = 2000
@@ -128,7 +128,7 @@ class ReadFileTool(Tool):
         **kwargs: Any,
     ) -> str:
         try:
-            file_path = _resolve_path(path, self._workspace, self._allowed_dir)
+            file_path = resolve_path(path, self._workspace, self._allowed_dir)
             if not file_path.exists():
                 return f"Error: File not found: {path}"
             if not file_path.is_file():

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from weavbot.agent.tools.base import Tool
-from weavbot.agent.tools.filesystem import _resolve_path
+from weavbot.utils import resolve_path
 
 _LIMIT = 100
 
@@ -55,7 +55,7 @@ class GlobFileTool(Tool):
     ) -> str:
         try:
             search_path_str = path if path is not None else "."
-            base = _resolve_path(search_path_str, self._workspace, self._allowed_dir)
+            base = resolve_path(search_path_str, self._workspace, self._allowed_dir)
 
             if not base.exists():
                 return f"Error: Directory not found: {search_path_str}"

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from weavbot.agent.tools.base import Tool
-from weavbot.agent.tools.filesystem import _resolve_path
+from weavbot.utils import resolve_path
 
 
 class ListDirTool(Tool):
@@ -32,7 +32,7 @@ class ListDirTool(Tool):
 
     async def execute(self, path: str, **kwargs: Any) -> str:
         try:
-            dir_path = _resolve_path(path, self._workspace, self._allowed_dir)
+            dir_path = resolve_path(path, self._workspace, self._allowed_dir)
             if not dir_path.exists():
                 return f"Error: Directory not found: {path}"
             if not dir_path.is_dir():

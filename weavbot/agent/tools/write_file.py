@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from weavbot.agent.tools.base import Tool
-from weavbot.agent.tools.filesystem import _resolve_path
+from weavbot.utils import resolve_path
 
 
 class WriteFileTool(Tool):
@@ -35,7 +35,7 @@ class WriteFileTool(Tool):
 
     async def execute(self, path: str, content: str, **kwargs: Any) -> str:
         try:
-            file_path = _resolve_path(path, self._workspace, self._allowed_dir)
+            file_path = resolve_path(path, self._workspace, self._allowed_dir)
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content, encoding="utf-8")
             return f"Successfully wrote {len(content)} bytes to {file_path}"
