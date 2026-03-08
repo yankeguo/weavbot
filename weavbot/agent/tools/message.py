@@ -49,25 +49,19 @@ class MessageTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "Message content to send"
-                },
+                "content": {"type": "string", "description": "Message content to send"},
                 "channel": {
                     "type": "string",
-                    "description": "Target channel (e.g. telegram, discord)"
+                    "description": "Target channel (e.g. telegram, discord)",
                 },
-                "chat_id": {
-                    "type": "string",
-                    "description": "Target chat or user ID"
-                },
+                "chat_id": {"type": "string", "description": "Target chat or user ID"},
                 "media": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "File paths to attach (images, audio, documents)"
-                }
+                    "description": "File paths to attach (images, audio, documents)",
+                },
             },
-            "required": ["content"]
+            "required": ["content"],
         }
 
     async def execute(
@@ -77,7 +71,7 @@ class MessageTool(Tool):
         chat_id: str | None = None,
         message_id: str | None = None,
         media: list[str] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> str:
         channel = channel or self._default_channel
         chat_id = chat_id or self._default_chat_id
@@ -96,7 +90,7 @@ class MessageTool(Tool):
             media=media or [],
             metadata={
                 "message_id": message_id,
-            }
+            },
         )
 
         try:

@@ -8,7 +8,6 @@ from typing import Any, Iterator
 from weavbot.agent.tools.base import Tool
 from weavbot.agent.tools.filesystem import _resolve_path
 
-
 # --- Line ending helpers ---
 
 
@@ -199,12 +198,8 @@ def _indentation_flexible_replacer(content: str, find: str) -> Replacer:
         non_empty = [l for l in lines if l.strip()]
         if not non_empty:
             return text
-        min_indent = min(
-            len(m.group(1)) if (m := re.match(r"^(\s*)", l)) else 0 for l in non_empty
-        )
-        return "\n".join(
-            l[min_indent:] if l.strip() else l for l in lines
-        )
+        min_indent = min(len(m.group(1)) if (m := re.match(r"^(\s*)", l)) else 0 for l in non_empty)
+        return "\n".join(l[min_indent:] if l.strip() else l for l in lines)
 
     normalized_find = _remove_indent(find)
     content_lines = content.split("\n")
@@ -341,12 +336,8 @@ Usage:
 
             content = file_path.read_text(encoding="utf-8")
             ending = _detect_line_ending(content)
-            old_norm = _convert_to_line_ending(
-                _normalize_line_endings(old_text), ending
-            )
-            new_norm = _convert_to_line_ending(
-                _normalize_line_endings(new_text), ending
-            )
+            old_norm = _convert_to_line_ending(_normalize_line_endings(old_text), ending)
+            new_norm = _convert_to_line_ending(_normalize_line_endings(new_text), ending)
 
             try:
                 new_content = _replace(content, old_norm, new_norm, replace_all)
@@ -377,9 +368,7 @@ Usage:
 
         best_ratio, best_start = 0.0, 0
         for i in range(max(1, len(lines) - window + 1)):
-            ratio = difflib.SequenceMatcher(
-                None, old_lines, lines[i : i + window]
-            ).ratio()
+            ratio = difflib.SequenceMatcher(None, old_lines, lines[i : i + window]).ratio()
             if ratio > best_ratio:
                 best_ratio, best_start = ratio, i
 
@@ -398,6 +387,5 @@ Usage:
                 f"Best match ({best_ratio:.0%} similar) at line {best_start + 1}:\n{diff}"
             )
         return (
-            f"Error: old_text not found in {path}. No similar text found. "
-            "Verify the file content."
+            f"Error: old_text not found in {path}. No similar text found. Verify the file content."
         )

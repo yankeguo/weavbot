@@ -14,12 +14,38 @@ MAX_BYTES = 50 * 1024  # 50 KB
 MAX_BYTES_LABEL = "50 KB"
 
 # Binary extensions blacklist (from read.ts isBinaryFile)
-_BINARY_EXTENSIONS = frozenset({
-    ".zip", ".tar", ".gz", ".exe", ".dll", ".so", ".class", ".jar", ".war",
-    ".7z", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-    ".odt", ".ods", ".odp", ".bin", ".dat", ".obj", ".o", ".a", ".lib",
-    ".wasm", ".pyc", ".pyo",
-})
+_BINARY_EXTENSIONS = frozenset(
+    {
+        ".zip",
+        ".tar",
+        ".gz",
+        ".exe",
+        ".dll",
+        ".so",
+        ".class",
+        ".jar",
+        ".war",
+        ".7z",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".odt",
+        ".ods",
+        ".odp",
+        ".bin",
+        ".dat",
+        ".obj",
+        ".o",
+        ".a",
+        ".lib",
+        ".wasm",
+        ".pyc",
+        ".pyo",
+    }
+)
 
 
 def _is_binary_extension(path: Path) -> bool:

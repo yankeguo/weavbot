@@ -13,9 +13,12 @@ from weavbot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from weavbot.providers.registry import find_by_model, find_gateway
 
 # Standard chat-completion message keys.
-_ALLOWED_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "name", "reasoning_content"})
+_ALLOWED_MSG_KEYS = frozenset(
+    {"role", "content", "tool_calls", "tool_call_id", "name", "reasoning_content"}
+)
 _ANTHROPIC_EXTRA_KEYS = frozenset({"thinking_blocks"})
 _ALNUM = string.ascii_letters + string.digits
+
 
 def _short_tool_id() -> str:
     """Generate a 9-char alphanumeric ID compatible with all providers (incl. Mistral)."""
@@ -25,7 +28,7 @@ def _short_tool_id() -> str:
 class LiteLLMProvider(LLMProvider):
     """
     LLM provider using LiteLLM for multi-provider support.
-    
+
     Supports OpenRouter, Anthropic, OpenAI, Gemini, MiniMax, and many other providers through
     a unified interface.  Provider-specific logic is driven by the registry
     (see providers/registry.py) — no if-elif chains needed here.
@@ -132,7 +135,9 @@ class LiteLLMProvider(LLMProvider):
             if msg.get("role") == "system":
                 content = msg["content"]
                 if isinstance(content, str):
-                    new_content = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+                    new_content = [
+                        {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+                    ]
                 else:
                     new_content = list(content)
                     new_content[-1] = {**new_content[-1], "cache_control": {"type": "ephemeral"}}
@@ -161,12 +166,18 @@ class LiteLLMProvider(LLMProvider):
     def _extra_msg_keys(original_model: str, resolved_model: str) -> frozenset[str]:
         """Return provider-specific extra keys to preserve in request messages."""
         spec = find_by_model(original_model) or find_by_model(resolved_model)
-        if (spec and spec.name == "anthropic") or "claude" in original_model.lower() or resolved_model.startswith("anthropic/"):
+        if (
+            (spec and spec.name == "anthropic")
+            or "claude" in original_model.lower()
+            or resolved_model.startswith("anthropic/")
+        ):
             return _ANTHROPIC_EXTRA_KEYS
         return frozenset()
 
     @staticmethod
-    def _sanitize_messages(messages: list[dict[str, Any]], extra_keys: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
+    def _sanitize_messages(
+        messages: list[dict[str, Any]], extra_keys: frozenset[str] = frozenset()
+    ) -> list[dict[str, Any]]:
         """Strip non-standard keys and ensure assistant messages have a content key."""
         allowed = _ALLOWED_MSG_KEYS | extra_keys
         sanitized = []
@@ -213,7 +224,9 @@ class LiteLLMProvider(LLMProvider):
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "messages": self._sanitize_messages(self._sanitize_empty_content(messages), extra_keys=extra_msg_keys),
+            "messages": self._sanitize_messages(
+                self._sanitize_empty_content(messages), extra_keys=extra_msg_keys
+            ),
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
@@ -232,11 +245,11 @@ class LiteLLMProvider(LLMProvider):
         # Pass extra headers (e.g. APP-Code for AiHubMix)
         if self.extra_headers:
             kwargs["extra_headers"] = self.extra_headers
-        
+
         if reasoning_effort:
             kwargs["reasoning_effort"] = reasoning_effort
             kwargs["drop_params"] = True
-        
+
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -264,11 +277,13 @@ class LiteLLMProvider(LLMProvider):
                 if isinstance(args, str):
                     args = json_repair.loads(args)
 
-                tool_calls.append(ToolCallRequest(
-                    id=_short_tool_id(),
-                    name=tc.function.name,
-                    arguments=args,
-                ))
+                tool_calls.append(
+                    ToolCallRequest(
+                        id=_short_tool_id(),
+                        name=tc.function.name,
+                        arguments=args,
+                    )
+                )
 
         usage = {}
         if hasattr(response, "usage") and response.usage:
@@ -280,7 +295,7 @@ class LiteLLMProvider(LLMProvider):
 
         reasoning_content = getattr(message, "reasoning_content", None) or None
         thinking_blocks = getattr(message, "thinking_blocks", None) or None
-        
+
         return LLMResponse(
             content=message.content,
             tool_calls=tool_calls,

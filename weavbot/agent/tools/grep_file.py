@@ -148,12 +148,14 @@ class GrepFileTool(Tool):
                 return "No files found"
 
             total = len(matches)
-            output_lines = [f"Found {total} matches" + (f" (showing first {_LIMIT})" if truncated else "")]
+            output_lines = [
+                f"Found {total} matches" + (f" (showing first {_LIMIT})" if truncated else "")
+            ]
 
             current_file = ""
             for fp, _mtime, ln, text in final_matches:
                 if text and len(text) > _MAX_LINE_LENGTH:
-                    text = text[: _MAX_LINE_LENGTH] + "..."
+                    text = text[:_MAX_LINE_LENGTH] + "..."
                 if current_file != fp:
                     if current_file:
                         output_lines.append("")

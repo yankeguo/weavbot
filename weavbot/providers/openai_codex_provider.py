@@ -59,12 +59,18 @@ class OpenAICodexProvider(LLMProvider):
 
         try:
             try:
-                content, tool_calls, finish_reason = await _request_codex(url, headers, body, verify=True)
+                content, tool_calls, finish_reason = await _request_codex(
+                    url, headers, body, verify=True
+                )
             except Exception as e:
                 if "CERTIFICATE_VERIFY_FAILED" not in str(e):
                     raise
-                logger.warning("SSL certificate verification failed for Codex API; retrying with verify=False")
-                content, tool_calls, finish_reason = await _request_codex(url, headers, body, verify=False)
+                logger.warning(
+                    "SSL certificate verification failed for Codex API; retrying with verify=False"
+                )
+                content, tool_calls, finish_reason = await _request_codex(
+                    url, headers, body, verify=False
+                )
             return LLMResponse(
                 content=content,
                 tool_calls=tool_calls,
@@ -108,7 +114,9 @@ async def _request_codex(
         async with client.stream("POST", url, headers=headers, json=body) as response:
             if response.status_code != 200:
                 text = await response.aread()
-                raise RuntimeError(_friendly_error(response.status_code, text.decode("utf-8", "ignore")))
+                raise RuntimeError(
+                    _friendly_error(response.status_code, text.decode("utf-8", "ignore"))
+                )
             return await _consume_sse(response)
 
 
@@ -121,12 +129,14 @@ def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not name:
             continue
         params = fn.get("parameters") or {}
-        converted.append({
-            "type": "function",
-            "name": name,
-            "description": fn.get("description") or "",
-            "parameters": params if isinstance(params, dict) else {},
-        })
+        converted.append(
+            {
+                "type": "function",
+                "name": name,
+                "description": fn.get("description") or "",
+                "parameters": params if isinstance(params, dict) else {},
+            }
+        )
     return converted
 
 
@@ -177,7 +187,9 @@ def _convert_messages(messages: list[dict[str, Any]]) -> tuple[str, list[dict[st
 
         if role == "tool":
             call_id, _ = _split_tool_call_id(msg.get("tool_call_id"))
-            output_text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+            output_text = (
+                content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+            )
             input_items.append(
                 {
                     "type": "function_call_output",
@@ -300,7 +312,12 @@ async def _consume_sse(response: httpx.Response) -> tuple[str, list[ToolCallRequ
     return content, tool_calls, finish_reason
 
 
-_FINISH_REASON_MAP = {"completed": "stop", "incomplete": "length", "failed": "error", "cancelled": "error"}
+_FINISH_REASON_MAP = {
+    "completed": "stop",
+    "incomplete": "length",
+    "failed": "error",
+    "cancelled": "error",
+}
 
 
 def _map_finish_reason(status: str | None) -> str:
