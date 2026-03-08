@@ -25,18 +25,20 @@ _SAVE_MEMORY_TOOL = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "history_entry": {
+                    "daily_log_entry": {
                         "type": "string",
-                        "description": "A paragraph (2-5 sentences) summarizing key events/decisions/topics. "
-                        "Start with [YYYY-MM-DD HH:MM]. Include detail useful for grep search.",
+                        "description": "Entry for today's memory log (memory/YYYY-MM-DD.md). 2-5 sentences "
+                        "summarizing key events, decisions, or topics. Must start with [YYYY-MM-DD HH:MM]. "
+                        "Include concrete details for grep search.",
                     },
-                    "memory_update": {
+                    "long_term_memory": {
                         "type": "string",
-                        "description": "Full updated long-term memory as markdown. Include all existing "
-                        "facts plus new ones. Return unchanged if nothing new.",
+                        "description": "Complete long-term memory (MEMORY.md) as markdown. Include all existing "
+                        "facts plus any new ones from the conversation. If nothing new to add, return the "
+                        "current memory unchanged.",
                     },
                 },
-                "required": ["history_entry", "memory_update"],
+                "required": ["daily_log_entry", "long_term_memory"],
             },
         },
     }
@@ -134,11 +136,11 @@ class MemoryStore:
                 logger.warning("Memory consolidation: unexpected arguments type {}", type(args).__name__)
                 return False
 
-            if entry := args.get("history_entry"):
+            if entry := args.get("daily_log_entry"):
                 if not isinstance(entry, str):
                     entry = json.dumps(entry, ensure_ascii=False)
                 self.append_history(entry)
-            if update := args.get("memory_update"):
+            if update := args.get("long_term_memory"):
                 if not isinstance(update, str):
                     update = json.dumps(update, ensure_ascii=False)
                 if update != current_memory:
