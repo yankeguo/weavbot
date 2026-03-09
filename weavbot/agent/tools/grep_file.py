@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -99,9 +100,15 @@ class GrepFileTool(Tool):
                 )
                 stdout, stderr = await proc.communicate()
             except FileNotFoundError:
+                if sys.platform == "darwin":
+                    hint = "brew install ripgrep"
+                elif sys.platform == "win32":
+                    hint = "scoop install ripgrep  or  winget install BurntSushi.ripgrep"
+                else:
+                    hint = "apt install ripgrep  or  see https://github.com/BurntSushi/ripgrep#installation"
                 return (
                     "Error: ripgrep (rg) is not installed. "
-                    "Install it (e.g. brew install ripgrep) to use grep_file."
+                    f"Install it (e.g. {hint}) to use grep_file."
                 )
 
             output = stdout.decode("utf-8", errors="replace")

@@ -246,9 +246,8 @@ class DiscordChannel(BaseChannel):
                 content_parts.append(f"[attachment: {filename} - too large]")
                 continue
             try:
-                file_path = (
-                    self.media_dir / f"{attachment.get('id', 'file')}_{filename.replace('/', '_')}"
-                )
+                safe_name = filename.replace("/", "_").replace("\\", "_")
+                file_path = self.media_dir / f"{attachment.get('id', 'file')}_{safe_name}"
                 resp = await self._http.get(url)
                 resp.raise_for_status()
                 file_path.write_bytes(resp.content)

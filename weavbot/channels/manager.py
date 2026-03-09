@@ -17,7 +17,7 @@ class ChannelManager:
     Manages chat channels and coordinates message routing.
 
     Responsibilities:
-    - Initialize enabled channels (Telegram, WhatsApp, etc.)
+    - Initialize enabled channels (Telegram, Discord, etc.)
     - Start/stop channels
     - Route outbound messages
     """
@@ -48,18 +48,6 @@ class ChannelManager:
                 logger.info("Telegram channel enabled")
             except ImportError as e:
                 logger.warning("Telegram channel not available: {}", e)
-
-        # WhatsApp channel
-        if self.config.channels.whatsapp.enabled:
-            try:
-                from weavbot.channels.whatsapp import WhatsAppChannel
-
-                self.channels["whatsapp"] = WhatsAppChannel(
-                    self.config.channels.whatsapp, self.bus, workspace=workspace
-                )
-                logger.info("WhatsApp channel enabled")
-            except ImportError as e:
-                logger.warning("WhatsApp channel not available: {}", e)
 
         # Discord channel
         if self.config.channels.discord.enabled:
