@@ -12,6 +12,7 @@ from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.glob_file import GlobFileTool
 from weavbot.agent.tools.grep_file import GrepFileTool
 from weavbot.agent.tools.list_dir import ListDirTool
+from weavbot.agent.tools.load_media import LoadMediaTool
 from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.registry import ToolRegistry
 from weavbot.agent.tools.shell import ShellTool
@@ -112,6 +113,7 @@ class SubagentManager:
                     path_append=self.exec_config.path_append,
                 )
             )
+            tools.register(LoadMediaTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(WebFetchTool(proxy=self.web_proxy))
 
             system_prompt = self._build_subagent_prompt()

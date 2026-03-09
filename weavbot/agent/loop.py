@@ -20,6 +20,7 @@ from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.glob_file import GlobFileTool
 from weavbot.agent.tools.grep_file import GrepFileTool
 from weavbot.agent.tools.list_dir import ListDirTool
+from weavbot.agent.tools.load_media import LoadMediaTool
 from weavbot.agent.tools.message import MessageTool
 from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.registry import ToolRegistry
@@ -138,6 +139,7 @@ class AgentLoop:
                 path_append=self.exec_config.path_append,
             )
         )
+        self.tools.register(LoadMediaTool(workspace=self.workspace, allowed_dir=allowed_dir))
         self.tools.register(WebFetchTool(proxy=self.web_proxy))
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
@@ -533,6 +535,16 @@ class AgentLoop:
                 and len(content) > self._TOOL_RESULT_MAX_CHARS
             ):
                 entry["content"] = content[: self._TOOL_RESULT_MAX_CHARS] + "\n... (truncated)"
+            elif role == "tool" and isinstance(content, list):
+                filtered = []
+                for c in content:
+                    if c.get("type") == "image_url" and c.get("image_url", {}).get(
+                        "url", ""
+                    ).startswith("data:"):
+                        filtered.append({"type": "text", "text": "[media]"})
+                    else:
+                        filtered.append(c)
+                entry["content"] = filtered
             elif role == "user":
                 if isinstance(content, str) and content.startswith(
                     ContextBuilder._RUNTIME_CONTEXT_TAG
@@ -554,8 +566,8 @@ class AgentLoop:
                             continue  # Strip runtime context from multimodal messages
                         if c.get("type") == "image_url" and c.get("image_url", {}).get(
                             "url", ""
-                        ).startswith("data:image/"):
-                            filtered.append({"type": "text", "text": "[image]"})
+                        ).startswith("data:"):
+                            filtered.append({"type": "text", "text": "[media]"})
                         else:
                             filtered.append(c)
                     if not filtered:
