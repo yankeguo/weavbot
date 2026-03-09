@@ -32,14 +32,9 @@ class BaseChannel(ABC):
         self.config = config
         self.bus = bus
         self.workspace = workspace
+        self.media_dir = workspace / "media"
+        self.media_dir.mkdir(parents=True, exist_ok=True)
         self._running = False
-
-    @property
-    def media_dir(self) -> Path:
-        """Directory for downloaded media files."""
-        d = self.workspace / "media"
-        d.mkdir(parents=True, exist_ok=True)
-        return d
 
     def resolve_media_path(self, path: str) -> Path:
         """Resolve a media file path against workspace. Absolute paths are kept as-is."""
