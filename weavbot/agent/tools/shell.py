@@ -13,7 +13,7 @@ _MAX_OUTPUT_LEN = 30_000
 
 _IS_WINDOWS = sys.platform == "win32"
 
-_DEFAULT_SHELL_PREFIX = (
+_DEFAULT_ENTRYPOINT = (
     "powershell.exe -NoProfile -NonInteractive -Command" if _IS_WINDOWS else "/bin/bash -c"
 )
 
@@ -23,10 +23,10 @@ DO NOT use for file ops—prefer dedicated tools: glob_file (find files), grep_f
 read_file (read), edit_file/write_file (edit/write).
 
 Use workdir instead of cd. Quote paths with spaces (e.g. rm "path with spaces/file.txt").
-Optional: timeout (seconds), workdir, shell (command prefix, default 'powershell.exe -NoProfile -NonInteractive -Command', e.g. 'cmd.exe /c', 'pwsh.exe -NoProfile -Command')."""
+Optional: timeout (seconds), workdir, entrypoint (command prefix, default 'powershell.exe -NoProfile -NonInteractive -Command', e.g. 'cmd.exe /c', 'pwsh.exe -NoProfile -Command')."""
 
-    _SHELL_PARAM_DESC = (
-        "Shell command prefix, e.g. 'powershell.exe -NoProfile -NonInteractive -Command', "
+    _ENTRYPOINT_PARAM_DESC = (
+        "Entrypoint command prefix, e.g. 'powershell.exe -NoProfile -NonInteractive -Command', "
         "'cmd.exe /c'. Default: 'powershell.exe -NoProfile -NonInteractive -Command'."
     )
 else:
@@ -35,10 +35,10 @@ DO NOT use for file ops—prefer dedicated tools: glob_file (find files), grep_f
 read_file (read), edit_file/write_file (edit/write).
 
 Use workdir instead of cd. Quote paths with spaces (e.g. rm "path with spaces/file.txt").
-Optional: timeout (seconds), workdir, shell (command prefix, default '/bin/bash -c', e.g. '/bin/sh -c', '/bin/zsh -c')."""
+Optional: timeout (seconds), workdir, entrypoint (command prefix, default '/bin/bash -c', e.g. '/bin/sh -c', '/bin/zsh -c')."""
 
-    _SHELL_PARAM_DESC = (
-        "Shell command prefix, e.g. '/bin/bash -c', '/bin/sh -c', '/bin/zsh -c'. "
+    _ENTRYPOINT_PARAM_DESC = (
+        "Entrypoint command prefix, e.g. '/bin/bash -c', '/bin/sh -c', '/bin/zsh -c'. "
         "Default: '/bin/bash -c'."
     )
 
@@ -87,9 +87,9 @@ class ShellTool(Tool):
                     "type": "integer",
                     "description": "Timeout in seconds (overrides default)",
                 },
-                "shell": {
+                "entrypoint": {
                     "type": "string",
-                    "description": _SHELL_PARAM_DESC,
+                    "description": _ENTRYPOINT_PARAM_DESC,
                 },
             },
             "required": ["command"],
@@ -100,7 +100,7 @@ class ShellTool(Tool):
         command: str,
         workdir: str | None = None,
         timeout: int | None = None,
-        shell: str | None = None,
+        entrypoint: str | None = None,
         **kwargs: Any,
     ) -> str:
         if workdir:
@@ -119,12 +119,12 @@ class ShellTool(Tool):
         if self.path_append:
             env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
 
-        effective_shell = shell or _DEFAULT_SHELL_PREFIX
-        shell_args = shlex.split(effective_shell, posix=not _IS_WINDOWS) + [command]
+        effective_entrypoint = entrypoint or _DEFAULT_ENTRYPOINT
+        entrypoint_args = shlex.split(effective_entrypoint, posix=not _IS_WINDOWS) + [command]
 
         try:
             process = await asyncio.create_subprocess_exec(
-                *shell_args,
+                *entrypoint_args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
