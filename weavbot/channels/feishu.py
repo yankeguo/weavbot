@@ -6,6 +6,7 @@ import os
 import re
 import threading
 from collections import OrderedDict
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,18 @@ MSG_TYPE_MAP = {
     "file": "[file]",
     "sticker": "[sticker]",
 }
+
+
+def _sanitize_filename(filename: str) -> str:
+    """Sanitize filename: keep letters, digits, CJK characters, hyphens, underscores."""
+    stem, _, ext = filename.rpartition(".")
+    if not stem:
+        stem, ext = ext, ""
+    stem = re.sub(r"[^\w\-\u4e00-\u9fff]", "_", stem)
+    stem = re.sub(r"_+", "_", stem).strip("_")
+    if not stem:
+        stem = "file"
+    return f"{stem}.{ext}" if ext else stem
 
 
 def _extract_share_card_content(content_json: dict, msg_type: str) -> str:
@@ -632,10 +645,13 @@ class FeishuChannel(BaseChannel):
                     filename = f"{file_key[:16]}{ext}"
 
         if data and filename:
-            file_path = self.media_dir / filename
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = _sanitize_filename(filename)
+            file_path = self.media_dir / f"{ts}_{safe_name}"
             file_path.write_bytes(data)
+            rel_path = file_path.relative_to(self.workspace)
             logger.debug("Downloaded {} to {}", msg_type, file_path)
-            return str(file_path), f"[{msg_type}: {filename}]"
+            return str(file_path), f"[{msg_type}: {rel_path}]"
 
         return None, f"[{msg_type}: download failed]"
 
