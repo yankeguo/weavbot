@@ -281,7 +281,7 @@ Usage:
 - The edit fails if old_text matches multiple times: provide more surrounding context to make it unique, or use replace_all to change every occurrence.
 - Use replace_all for renaming variables or replacing across the file."""
 
-    def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path, allowed_dir: Path | None = None):
         self._workspace = workspace
         self._allowed_dir = allowed_dir
 

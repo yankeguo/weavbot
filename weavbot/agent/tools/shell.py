@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from pathlib import Path
 from typing import Any
 
 from weavbot.agent.tools.base import Tool
@@ -21,15 +22,15 @@ class ShellTool(Tool):
 
     def __init__(
         self,
+        workspace: Path,
         timeout: int = 60,
-        working_dir: str | None = None,
         deny_patterns: list[str] | None = None,
         allow_patterns: list[str] | None = None,
         restrict_to_workspace: bool = False,
         path_append: str = "",
     ):
+        self.workspace = workspace
         self.timeout = timeout
-        self.working_dir = working_dir
         self.deny_patterns = deny_patterns or []
         self.allow_patterns = allow_patterns or []
         self.restrict_to_workspace = restrict_to_workspace
@@ -71,7 +72,13 @@ class ShellTool(Tool):
         timeout: int | None = None,
         **kwargs: Any,
     ) -> str:
-        cwd = workdir or self.working_dir or os.getcwd()
+        if workdir:
+            wd = Path(workdir).expanduser()
+            if not wd.is_absolute():
+                wd = self.workspace / wd
+            cwd = str(wd.resolve())
+        else:
+            cwd = str(self.workspace)
         effective_timeout = timeout if timeout is not None and timeout > 0 else self.timeout
         guard_error = self._guard_command(command, cwd)
         if guard_error:

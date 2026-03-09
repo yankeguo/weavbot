@@ -10,7 +10,7 @@ from weavbot.utils import resolve_path
 class ListDirTool(Tool):
     """Tool to list directory contents."""
 
-    def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path, allowed_dir: Path | None = None):
         self._workspace = workspace
         self._allowed_dir = allowed_dir
 

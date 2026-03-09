@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from pathlib import Path
 
 from loguru import logger
 from telegram import BotCommand, ReplyParameters, Update
@@ -122,9 +123,10 @@ class TelegramChannel(BaseChannel):
         self,
         config: TelegramConfig,
         bus: MessageBus,
+        workspace: Path,
         groq_api_key: str = "",
     ):
-        super().__init__(config, bus)
+        super().__init__(config, bus, workspace)
         self.config: TelegramConfig = config
         self.groq_api_key = groq_api_key
         self._app: Application | None = None
@@ -256,6 +258,7 @@ class TelegramChannel(BaseChannel):
         # Send media files
         for media_path in msg.media or []:
             try:
+                resolved = self.resolve_media_path(media_path)
                 media_type = self._get_media_type(media_path)
                 sender = {
                     "photo": self._app.bot.send_photo,
@@ -269,7 +272,7 @@ class TelegramChannel(BaseChannel):
                     if media_type in ("voice", "audio")
                     else "document"
                 )
-                with open(media_path, "rb") as f:
+                with open(resolved, "rb") as f:
                     await sender(chat_id=chat_id, **{param: f}, reply_parameters=reply_params)
             except Exception as e:
                 filename = media_path.rsplit("/", 1)[-1]
@@ -382,13 +385,7 @@ class TelegramChannel(BaseChannel):
                 file = await self._app.bot.get_file(media_file.file_id)
                 ext = self._get_extension(media_type, getattr(media_file, "mime_type", None))
 
-                # Save to workspace/media/
-                from pathlib import Path
-
-                media_dir = Path.home() / ".weavbot" / "media"
-                media_dir.mkdir(parents=True, exist_ok=True)
-
-                file_path = media_dir / f"{media_file.file_id[:16]}{ext}"
+                file_path = self.media_dir / f"{media_file.file_id[:16]}{ext}"
                 await file.download_to_drive(str(file_path))
 
                 media_paths.append(str(file_path))

@@ -46,8 +46,8 @@ class DiscordChannel(BaseChannel):
 
     name = "discord"
 
-    def __init__(self, config: DiscordConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: DiscordConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: DiscordConfig = config
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._seq: int | None = None
@@ -235,7 +235,6 @@ class DiscordChannel(BaseChannel):
 
         content_parts = [content] if content else []
         media_paths: list[str] = []
-        media_dir = Path.home() / ".weavbot" / "media"
 
         for attachment in payload.get("attachments") or []:
             url = attachment.get("url")
@@ -247,9 +246,8 @@ class DiscordChannel(BaseChannel):
                 content_parts.append(f"[attachment: {filename} - too large]")
                 continue
             try:
-                media_dir.mkdir(parents=True, exist_ok=True)
                 file_path = (
-                    media_dir / f"{attachment.get('id', 'file')}_{filename.replace('/', '_')}"
+                    self.media_dir / f"{attachment.get('id', 'file')}_{filename.replace('/', '_')}"
                 )
                 resp = await self._http.get(url)
                 resp.raise_for_status()

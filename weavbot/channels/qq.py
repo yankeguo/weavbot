@@ -2,6 +2,7 @@
 
 import asyncio
 from collections import deque
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -51,8 +52,8 @@ class QQChannel(BaseChannel):
 
     name = "qq"
 
-    def __init__(self, config: QQConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: QQConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: QQConfig = config
         self._client: "botpy.Client | None" = None
         self._processed_ids: deque = deque(maxlen=1000)

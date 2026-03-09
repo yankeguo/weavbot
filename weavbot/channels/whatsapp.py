@@ -3,6 +3,7 @@
 import asyncio
 import json
 from collections import OrderedDict
+from pathlib import Path
 
 from loguru import logger
 
@@ -22,8 +23,8 @@ class WhatsAppChannel(BaseChannel):
 
     name = "whatsapp"
 
-    def __init__(self, config: WhatsAppConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: WhatsAppConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: WhatsAppConfig = config
         self._ws = None
         self._connected = False

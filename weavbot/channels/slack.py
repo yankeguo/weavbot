@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+from pathlib import Path
 
 from loguru import logger
 from slack_sdk.socket_mode.request import SocketModeRequest
@@ -21,8 +22,8 @@ class SlackChannel(BaseChannel):
 
     name = "slack"
 
-    def __init__(self, config: SlackConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: SlackConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: SlackConfig = config
         self._web_client: AsyncWebClient | None = None
         self._socket_client: SocketModeClient | None = None
@@ -93,9 +94,10 @@ class SlackChannel(BaseChannel):
 
             for media_path in msg.media or []:
                 try:
+                    resolved = str(self.resolve_media_path(media_path))
                     await self._web_client.files_upload_v2(
                         channel=msg.chat_id,
-                        file=media_path,
+                        file=resolved,
                         thread_ts=thread_ts_param,
                     )
                 except Exception as e:

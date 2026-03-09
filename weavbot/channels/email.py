@@ -12,6 +12,7 @@ from email.header import decode_header, make_header
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import parseaddr
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -50,8 +51,8 @@ class EmailChannel(BaseChannel):
         "Dec",
     )
 
-    def __init__(self, config: EmailConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: EmailConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: EmailConfig = config
         self._last_subject_by_chat: dict[str, str] = {}
         self._last_message_id_by_chat: dict[str, str] = {}

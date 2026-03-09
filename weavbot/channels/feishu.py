@@ -264,8 +264,8 @@ class FeishuChannel(BaseChannel):
 
     name = "feishu"
 
-    def __init__(self, config: FeishuConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: FeishuConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: FeishuConfig = config
         self._client: Any = None
         self._ws_client: Any = None
@@ -609,8 +609,6 @@ class FeishuChannel(BaseChannel):
             (file_path, content_text) - file_path is None if download failed
         """
         loop = asyncio.get_running_loop()
-        media_dir = Path.home() / ".weavbot" / "media"
-        media_dir.mkdir(parents=True, exist_ok=True)
 
         data, filename = None, None
 
@@ -634,7 +632,7 @@ class FeishuChannel(BaseChannel):
                     filename = f"{file_key[:16]}{ext}"
 
         if data and filename:
-            file_path = media_dir / filename
+            file_path = self.media_dir / filename
             file_path.write_bytes(data)
             logger.debug("Downloaded {} to {}", msg_type, file_path)
             return str(file_path), f"[{msg_type}: {filename}]"
@@ -684,7 +682,8 @@ class FeishuChannel(BaseChannel):
             receive_id_type = "chat_id" if msg.chat_id.startswith("oc_") else "open_id"
             loop = asyncio.get_running_loop()
 
-            for file_path in msg.media:
+            for raw_path in msg.media:
+                file_path = str(self.resolve_media_path(raw_path))
                 if not os.path.isfile(file_path):
                     logger.warning("Media file not found: {}", file_path)
                     continue

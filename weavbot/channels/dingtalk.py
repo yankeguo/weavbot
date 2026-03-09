@@ -104,8 +104,8 @@ class DingTalkChannel(BaseChannel):
     _AUDIO_EXTS = {".amr", ".mp3", ".wav", ".ogg", ".m4a", ".aac"}
     _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
-    def __init__(self, config: DingTalkConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: DingTalkConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: DingTalkConfig = config
         self._client: Any = None
         self._http: httpx.AsyncClient | None = None
@@ -247,7 +247,7 @@ class DingTalkChannel(BaseChannel):
                 parsed = urlparse(media_ref)
                 local_path = Path(unquote(parsed.path))
             else:
-                local_path = Path(os.path.expanduser(media_ref))
+                local_path = self.resolve_media_path(media_ref)
             if not local_path.is_file():
                 logger.warning("DingTalk media file not found: {}", local_path)
                 return None, None, None

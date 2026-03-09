@@ -35,7 +35,7 @@ def _human_size(n: int) -> str:
 class LoadMediaTool(Tool):
     """Tool to load local media files into the chat context as multimodal content."""
 
-    def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path, allowed_dir: Path | None = None):
         self._workspace = workspace
         self._allowed_dir = allowed_dir
 

@@ -16,7 +16,7 @@ from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.config.schema import MochatConfig
-from weavbot.utils.helpers import get_data_path
+from pathlib import Path
 
 try:
     import socketio
@@ -234,14 +234,14 @@ class MochatChannel(BaseChannel):
 
     name = "mochat"
 
-    def __init__(self, config: MochatConfig, bus: MessageBus):
-        super().__init__(config, bus)
+    def __init__(self, config: MochatConfig, bus: MessageBus, workspace: Path):
+        super().__init__(config, bus, workspace)
         self.config: MochatConfig = config
         self._http: httpx.AsyncClient | None = None
         self._socket: Any = None
         self._ws_connected = self._ws_ready = False
 
-        self._state_dir = get_data_path() / "mochat"
+        self._state_dir = self.workspace / "mochat"
         self._cursor_path = self._state_dir / "session_cursors.json"
         self._session_cursor: dict[str, int] = {}
         self._cursor_save_task: asyncio.Task | None = None

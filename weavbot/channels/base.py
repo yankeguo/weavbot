@@ -1,6 +1,7 @@
 """Base channel interface for chat platforms."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -19,17 +20,33 @@ class BaseChannel(ABC):
 
     name: str = "base"
 
-    def __init__(self, config: Any, bus: MessageBus):
+    def __init__(self, config: Any, bus: MessageBus, workspace: Path):
         """
         Initialize the channel.
 
         Args:
             config: Channel-specific configuration.
             bus: The message bus for communication.
+            workspace: The workspace root directory.
         """
         self.config = config
         self.bus = bus
+        self.workspace = workspace
         self._running = False
+
+    @property
+    def media_dir(self) -> Path:
+        """Directory for downloaded media files."""
+        d = self.workspace / "media"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def resolve_media_path(self, path: str) -> Path:
+        """Resolve a media file path against workspace. Absolute paths are kept as-is."""
+        p = Path(path).expanduser()
+        if not p.is_absolute():
+            p = self.workspace / p
+        return p.resolve()
 
     @abstractmethod
     async def start(self) -> None:

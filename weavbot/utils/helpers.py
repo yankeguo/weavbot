@@ -22,10 +22,10 @@ def get_workspace_path(workspace: str | None = None) -> Path:
     return ensure_dir(path)
 
 
-def resolve_path(path: str, workspace: Path | None = None, allowed_dir: Path | None = None) -> Path:
+def resolve_path(path: str, workspace: Path, allowed_dir: Path | None = None) -> Path:
     """Resolve path against workspace (if relative) and enforce directory restriction."""
     p = Path(path).expanduser()
-    if not p.is_absolute() and workspace:
+    if not p.is_absolute():
         p = workspace / p
     resolved = p.resolve()
     if allowed_dir:
