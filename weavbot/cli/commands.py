@@ -207,7 +207,7 @@ def onboard():
     console.print("     Get one at: https://openrouter.ai/keys")
     console.print('  2. Chat: [cyan]weavbot agent -m "Hello!"[/cyan]')
     console.print(
-        "\n[dim]Want Telegram/Discord? See: https://github.com/HKUDS/weavbot#-chat-apps[/dim]"
+        "\n[dim]Want Telegram/Discord? See: https://github.com/yankeguo/weavbot#-chat-apps[/dim]"
     )
 
 
