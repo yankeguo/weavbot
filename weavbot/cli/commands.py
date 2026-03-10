@@ -419,6 +419,11 @@ def gateway(
 
     console.print(f"[green]✓[/green] Heartbeat: every {hb_cfg.interval_s}s")
 
+    def _forward_sigterm_to_sigint(signum, frame):
+        os.kill(os.getpid(), signal.SIGINT)
+
+    signal.signal(signal.SIGTERM, _forward_sigterm_to_sigint)
+
     async def run():
         try:
             await cron.start()
@@ -544,6 +549,7 @@ def agent(
             os._exit(0)
 
         signal.signal(signal.SIGINT, _exit_on_sigint)
+        signal.signal(signal.SIGTERM, _exit_on_sigint)
 
         async def run_interactive():
             bus_task = asyncio.create_task(agent_loop.run())
