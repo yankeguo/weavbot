@@ -637,8 +637,9 @@ class FeishuChannel(BaseChannel):
         elif msg_type in ("audio", "file", "media"):
             file_key = content_json.get("file_key")
             if file_key and message_id:
+                # Feishu API only supports type=image and type=file; audio/media must use "file"
                 data, filename = await loop.run_in_executor(
-                    None, self._download_file_sync, message_id, file_key, msg_type
+                    None, self._download_file_sync, message_id, file_key, "file"
                 )
                 if not filename:
                     ext = {"audio": ".opus", "media": ".mp4"}.get(msg_type, "")
