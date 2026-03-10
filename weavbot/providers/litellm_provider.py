@@ -69,7 +69,7 @@ class LiteLLMProvider(LLMProvider):
         if not spec:
             return
         if not spec.env_key:
-            # OAuth/provider-only specs (for example: openai_codex)
+            # OAuth/provider-only specs (e.g. github_copilot)
             return
 
         # Gateway/local overrides existing env; standard provider doesn't

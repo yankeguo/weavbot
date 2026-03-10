@@ -1101,19 +1101,6 @@ wheels = [
 ]
 
 [[package]]
-name = "oauth-cli-kit"
-version = "0.1.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "platformdirs" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b6/84/c6b1030669266378e2f286a4e3e8c020e7f2d537b711a2ad30a789e97097/oauth_cli_kit-0.1.3.tar.gz", hash = "sha256:6612b3dea1a97c4de4a7d3b828767d42f0a78eae93be56b90c55d3ab668ebfb8", size = 8551, upload-time = "2026-02-13T10:21:19.046Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/55/a4abfc5f9be60ffd7fedf0e808ffd0a1d35f3ecd6f7b2fc782b7948a8329/oauth_cli_kit-0.1.3-py3-none-any.whl", hash = "sha256:09aabde83fbb823b38de3b8c220f6c256df2d771bf31dccdb2680a5fbe383836", size = 11504, upload-time = "2026-02-13T10:21:18.282Z" },
-]
-
-[[package]]
 name = "openai"
 version = "2.24.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1139,15 +1126,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/65/ee/299d360cdc32edc7d2cf530f3accf79c4fca01e96ffc950d8a52213bd8e4/packaging-26.0.tar.gz", hash = "sha256:00243ae351a257117b6a241061796684b084ed1c516a08c48a3f7e147a9d80b4", size = 143416, upload-time = "2026-01-21T20:50:39.064Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/b9/c538f279a4e237a006a2c98387d081e9eb060d203d8ed34467cc0f0b9b53/packaging-26.0-py3-none-any.whl", hash = "sha256:b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529", size = 74366, upload-time = "2026-01-21T20:50:37.788Z" },
-]
-
-[[package]]
-name = "platformdirs"
-version = "4.9.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1b/04/fea538adf7dbbd6d186f551d595961e564a3b6715bdf276b477460858672/platformdirs-4.9.2.tar.gz", hash = "sha256:9a33809944b9db043ad67ca0db94b14bf452cc6aeaac46a88ea55b26e2e9d291", size = 28394, upload-time = "2026-02-16T03:56:10.574Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/48/31/05e764397056194206169869b50cf2fee4dbbbc71b344705b9c0d878d4d8/platformdirs-4.9.2-py3-none-any.whl", hash = "sha256:9170634f126f8efdae22fb58ae8a0eaa86f38365bc57897a6c4f781d1f5875bd", size = 21168, upload-time = "2026-02-16T03:56:08.891Z" },
 ]
 
 [[package]]
@@ -2080,7 +2058,6 @@ dependencies = [
     { name = "markdownify" },
     { name = "mcp" },
     { name = "msgpack" },
-    { name = "oauth-cli-kit" },
     { name = "openai" },
     { name = "prompt-toolkit" },
     { name = "pydantic" },
@@ -2119,7 +2096,6 @@ requires-dist = [
     { name = "markdownify", specifier = ">=1.0.0,<2.0.0" },
     { name = "mcp", specifier = ">=1.26.0,<2.0.0" },
     { name = "msgpack", specifier = ">=1.1.0,<2.0.0" },
-    { name = "oauth-cli-kit", specifier = ">=0.1.3,<1.0.0" },
     { name = "openai", specifier = ">=2.8.0" },
     { name = "prompt-toolkit", specifier = ">=3.0.50,<4.0.0" },
     { name = "pydantic", specifier = ">=2.12.0,<3.0.0" },
