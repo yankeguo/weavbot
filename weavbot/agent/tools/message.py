@@ -42,7 +42,11 @@ class MessageTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Send a message to the user. Use this when you want to communicate something."
+        return (
+            "Send a message to a specific chat channel. Use this only when targeting a different "
+            "channel/chat than the current conversation, or when explicitly asked to send a message. "
+            "For normal replies in the current conversation, respond with text directly."
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:

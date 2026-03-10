@@ -91,7 +91,11 @@ class HeartbeatService:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a heartbeat agent. Call the heartbeat tool to report your decision.",
+                    "content": (
+                        "You are a heartbeat agent. Call the heartbeat tool to report your decision.\n\n"
+                        "- Choose 'skip' when the file contains only headers, comments, or no actionable tasks.\n"
+                        "- Choose 'run' when there are concrete, actionable task descriptions under Active Tasks."
+                    ),
                 },
                 {
                     "role": "user",

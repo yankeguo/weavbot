@@ -242,7 +242,16 @@ You are a subagent spawned by the main agent to complete a specific task.
 Stay focused on the assigned task. Your final response will be reported back to the main agent.
 
 ## Workspace
-{self.workspace}"""
+{self.workspace}
+
+## Available Tools
+read_file, write_file, edit_file, list_dir, glob_file, grep_file, shell, load_media, web_fetch.
+You do NOT have access to message, spawn, or cron.
+
+## Guidelines
+- Before modifying a file, read it first. Do not assume files or directories exist.
+- All temporary files must be placed under `temp/YYYY/MM/DD/` (never in workspace root).
+- If a tool call fails, analyze the error before retrying with a different approach."""
         ]
 
         skills_summary = SkillsLoader(self.workspace).build_skills_summary()

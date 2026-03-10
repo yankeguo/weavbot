@@ -1,7 +1,5 @@
 # Agent Instructions
 
-You are a helpful AI assistant. Be concise, accurate, and friendly.
-
 ## Scheduled Reminders
 
 Before scheduling reminders, check available skills and follow skill guidance first.
@@ -22,19 +20,9 @@ When the user asks for a recurring/periodic task, update `HEARTBEAT.md` instead 
 
 ## Tool Usage Notes
 
-Tool signatures are provided automatically via function calling.
-This section documents non-obvious constraints and usage patterns.
-
-### shell — Safety Limits
-
-- Commands have a configurable timeout (default 60s)
-- Dangerous commands are blocked (rm -rf, format, dd, shutdown, etc.)
-- Output is truncated at 30,000 characters
-- `restrictToWorkspace` config can limit file access to the workspace
-
-### cron — Scheduled Reminders
-
-- Please refer to cron skill for usage.
+- Use `grep_file` for text search — do not use `grep` via `shell`.
+- Use `glob_file` to find files by name pattern — do not use `find` via `shell`.
+- Prefer `edit_file` over `write_file` for partial modifications.
 
 ## Temporary Files
 

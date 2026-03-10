@@ -7,6 +7,7 @@ import json
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -16,7 +17,6 @@ from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.config.schema import MochatConfig
-from pathlib import Path
 
 try:
     import socketio

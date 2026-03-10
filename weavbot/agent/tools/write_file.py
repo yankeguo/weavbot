@@ -20,7 +20,7 @@ class WriteFileTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Write content to a file at the given path. Creates parent directories if needed."
+        return "Write content to a file at the given path. Creates parent directories if needed. For partial modifications to existing files, prefer edit_file."
 
     @property
     def parameters(self) -> dict[str, Any]:

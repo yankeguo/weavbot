@@ -18,8 +18,7 @@ Supports full regex syntax (e.g. "log.*Error", "function\\s+\\w+", etc.).
 Filter files by pattern with the glob parameter (e.g. "*.js", "*.{ts,tsx}").
 Returns file paths and line numbers with at least one match sorted by modification time.
 Use this tool when you need to find files containing specific patterns.
-If you need to identify/count the number of matches within files, use the shell tool with `rg` (ripgrep) directly. Do NOT use grep.
-When you are doing an open-ended search that may require multiple rounds of globbing and grepping, use the spawn tool instead."""
+If you need to identify/count the number of matches within files, use the shell tool with `rg` (ripgrep) directly. Do NOT use grep."""
 
 
 class GrepFileTool(Tool):

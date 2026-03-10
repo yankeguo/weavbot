@@ -9,15 +9,15 @@ always: true
 ## Structure
 
 - `MEMORY.md` — Long-term facts (preferences, project context, relationships). Always loaded into your context.
-- `memory/YYYY-MM-DD.md` — Daily history logs. NOT loaded into context. Search with grep. Each entry starts with [YYYY-MM-DD HH:MM].
+- `memory/YYYY-MM-DD.md` — Daily history logs. NOT loaded into context. Search with `grep_file`. Each entry starts with [YYYY-MM-DD HH:MM].
 
 ## Search Past Events
 
-```bash
-grep -i "keyword" memory/*.md
+```
+grep_file(pattern="keyword", path="memory")
 ```
 
-Use the `shell` tool to run grep. Combine patterns: `grep -iE "meeting|deadline" memory/*.md`
+Use the `grep_file` tool (regex-based). Combine patterns with regex: `grep_file(pattern="meeting|deadline", path="memory")`
 
 ## When to Update MEMORY.md
 

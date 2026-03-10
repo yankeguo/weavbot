@@ -18,13 +18,13 @@ Use the `cron` tool to schedule reminders or recurring tasks.
 Fixed reminder:
 
 ```
-cron(action="add", message="Time to take a break!", every_seconds=1200)
+cron(action="add", message="Time to take a break!", interval=1200)
 ```
 
 Dynamic task (agent executes each time):
 
 ```
-cron(action="add", message="Check HKUDS/weavbot GitHub stars and report", every_seconds=600)
+cron(action="add", message="Check HKUDS/weavbot GitHub stars and report", interval=600)
 ```
 
 One-time scheduled task (compute ISO datetime from current time):
@@ -36,7 +36,7 @@ cron(action="add", message="Remind me about the meeting", at="<ISO datetime>")
 Timezone-aware cron:
 
 ```
-cron(action="add", message="Morning standup", cron_expr="0 9 * * 1-5", tz="America/Vancouver")
+cron(action="add", message="Morning standup", expr="0 9 * * 1-5", tz="America/Vancouver")
 ```
 
 List/remove:
@@ -50,13 +50,13 @@ cron(action="remove", job_id="abc123")
 
 | User says | Parameters |
 |-----------|------------|
-| every 20 minutes | every_seconds: 1200 |
-| every hour | every_seconds: 3600 |
-| every day at 8am | cron_expr: "0 8 ** *" |
-| weekdays at 5pm | cron_expr: "0 17 ** 1-5" |
-| 9am Vancouver time daily | cron_expr: "0 9 ** *", tz: "America/Vancouver" |
+| every 20 minutes | interval: 1200 |
+| every hour | interval: 3600 |
+| every day at 8am | expr: "0 8 ** *" |
+| weekdays at 5pm | expr: "0 17 ** 1-5" |
+| 9am Vancouver time daily | expr: "0 9 ** *", tz: "America/Vancouver" |
 | at a specific time | at: ISO datetime string (compute from current time) |
 
 ## Timezone
 
-Use `tz` with `cron_expr` to schedule in a specific IANA timezone. Without `tz`, the server's local timezone is used.
+Use `tz` with `expr` to schedule in a specific IANA timezone. Without `tz`, the server's local timezone is used.

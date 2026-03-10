@@ -32,7 +32,8 @@ class SpawnTool(Tool):
         return (
             "Spawn a subagent to handle a task in the background. "
             "Use this for complex or time-consuming tasks that can run independently. "
-            "The subagent will complete the task and report back when done."
+            "The subagent has access to file tools, shell, and web_fetch, but NOT message, spawn, or cron. "
+            "It will complete the task and report back when done."
         )
 
     @property

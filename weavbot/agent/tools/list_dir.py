@@ -20,7 +20,7 @@ class ListDirTool(Tool):
 
     @property
     def description(self) -> str:
-        return "List the contents of a directory."
+        return "List the contents of a directory. For finding files by name pattern across directories, use glob_file instead."
 
     @property
     def parameters(self) -> dict[str, Any]:
