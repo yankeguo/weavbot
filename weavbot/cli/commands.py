@@ -258,9 +258,10 @@ def onboard(
         console.print(f"  [cyan]{_t('add_api_key')}[/cyan]")
         console.print(f"     {_t('get_api_key')}")
         console.print(f"  [cyan]{_t('chat_example')}[/cyan]")
+        console.print(f"  [cyan]{_t('gateway_example')}[/cyan]")
     else:
         console.print(f"  [cyan]{_t('chat_example_single')}[/cyan]")
-    console.print(f"\n[dim]{_t('chat_apps_hint')}[/dim]")
+        console.print(f"  [cyan]{_t('gateway_example_single')}[/cyan]")
 
 
 def _make_provider(config: Config):
