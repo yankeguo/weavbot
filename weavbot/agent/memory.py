@@ -33,9 +33,10 @@ _SAVE_MEMORY_TOOL = [
                     },
                     "long_term_memory": {
                         "type": "string",
-                        "description": "Complete long-term memory (MEMORY.md) as markdown. Include all existing "
-                        "facts plus any new ones from the conversation. If nothing new to add, return the "
-                        "current memory unchanged.",
+                        "description": "Complete long-term memory (MEMORY.md) as markdown. Keep it concise. "
+                        "Do not include or copy content from SKILL files (usage instructions, structure). "
+                        "Store only factual information: preferences, project context, relationships. "
+                        "Include all existing facts plus any new ones. Return unchanged if nothing new to add.",
                     },
                 },
                 "required": ["daily_log_entry", "long_term_memory"],
@@ -68,7 +69,7 @@ class MemoryStore:
 
     def get_memory_context(self) -> str:
         long_term = self.read_long_term()
-        return f"## Long-term Memory\n{long_term}" if long_term else ""
+        return f"## MEMORY.md\n\n{long_term}" if long_term else ""
 
     async def consolidate(
         self,
@@ -127,7 +128,8 @@ class MemoryStore:
                             "You are a memory consolidation agent. Call the save_memory tool with your consolidation.\n\n"
                             "- daily_log_entry: A chronological summary (2-5 sentences) of what happened — events, decisions, topics discussed. "
                             "Must start with [YYYY-MM-DD HH:MM]. Include concrete details for grep search.\n"
-                            "- long_term_memory: Persistent facts — user preferences, project context, relationships, recurring topics. "
+                            "- long_term_memory: Keep it concise. Do not repeat content from SKILL files (usage instructions, structure descriptions). "
+                            "Store only factual knowledge: preferences, project context, relationships. "
                             "Merge new facts into the existing memory. Remove outdated facts. Return unchanged if nothing new to add."
                         ),
                     },
