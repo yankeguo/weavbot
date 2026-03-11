@@ -232,6 +232,10 @@ def onboard(
         config = Config.model_validate(data)
         for item in set_values:
             console.print(f"[green]✓[/green] Set {item}")
+    else:
+        from weavbot.cli.interactive_setup import interactive_provider_setup
+
+        config = interactive_provider_setup(config, console)
 
     save_config(config)
 
