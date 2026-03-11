@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import io
 import json as _json
 import os
@@ -688,9 +689,9 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                             )
 
     # --- Channel setup ---
-    prev_channels = data.get("channels", {}).copy()
+    prev_channels = copy.deepcopy(data.get("channels", {}))
     _configure_channels(data, console)
-    if data.get("channels") != prev_channels:
+    if data.get("channels", {}) != prev_channels:
         changed = True
 
     if changed:
