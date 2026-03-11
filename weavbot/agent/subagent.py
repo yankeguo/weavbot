@@ -83,7 +83,11 @@ class SubagentManager:
         bg_task.add_done_callback(_cleanup)
 
         logger.info("Spawned subagent [{}]: {}", task_id, display_label)
-        return f"Subagent [{display_label}] started (id: {task_id}). I'll notify you when it completes."
+        return (
+            f"Subagent [{display_label}] started (id: {task_id}). "
+            "It runs in-process, not as a separate OS process—you cannot check it via ps/top. "
+            "I'll notify you via a message here when it completes."
+        )
 
     async def _run_subagent(
         self,

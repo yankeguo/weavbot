@@ -30,10 +30,11 @@ class SpawnTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Spawn a subagent to handle a task in the background. "
+            "Spawn an in-process subagent to handle a task in the background. "
             "Use this for complex or time-consuming tasks that can run independently. "
             "The subagent has access to file tools, shell, and web_fetch, but NOT message, spawn, or cron. "
-            "It will complete the task and report back when done."
+            "It runs as an async task in the same process (not a separate OS process—do not use ps/top to check). "
+            "Wait for the completion message in this chat to know when it finishes."
         )
 
     @property
