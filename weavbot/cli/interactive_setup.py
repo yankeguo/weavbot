@@ -656,6 +656,10 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                         provider_id: str = provider["id"]
                         mode = _NPM_TO_MODE[provider["npm"]]
                         api_base: str | None = provider.get("api") or None
+                        if mode == "anthropic" and api_base:
+                            api_base = api_base.rstrip("/")
+                            if api_base.endswith("/v1"):
+                                api_base = api_base[:-3] or None
                         limit = model_data.get("limit") or {}
                         max_tokens: int = limit.get("output", 8192)
 
