@@ -171,83 +171,230 @@ def _select_model(provider: dict[str, Any], console: Console) -> tuple[str, dict
     return model_id, mdata
 
 
+_CHANNEL_DEFS: list[dict[str, Any]] = [
+    {
+        "key": "telegram",
+        "name": "Telegram",
+        "fields": [
+            {"key": "token", "label": "Bot Token", "secret": True},
+        ],
+    },
+    {
+        "key": "discord",
+        "name": "Discord",
+        "fields": [
+            {"key": "token", "label": "Bot Token", "secret": True},
+        ],
+    },
+    {
+        "key": "feishu",
+        "name": "Feishu",
+        "fields": [
+            {"key": "appId", "label": "App ID", "secret": False},
+            {"key": "appSecret", "label": "App Secret", "secret": True},
+        ],
+    },
+    {
+        "key": "dingtalk",
+        "name": "DingTalk",
+        "fields": [
+            {"key": "clientId", "label": "Client ID (AppKey)", "secret": False},
+            {"key": "clientSecret", "label": "Client Secret (AppSecret)", "secret": True},
+        ],
+    },
+    {
+        "key": "slack",
+        "name": "Slack",
+        "fields": [
+            {"key": "botToken", "label": "Bot Token (xoxb-...)", "secret": True},
+            {"key": "appToken", "label": "App Token (xapp-...)", "secret": True},
+        ],
+    },
+    {
+        "key": "qq",
+        "name": "QQ",
+        "fields": [
+            {"key": "appId", "label": "App ID", "secret": False},
+            {"key": "secret", "label": "App Secret", "secret": True},
+        ],
+    },
+    {
+        "key": "email",
+        "name": "Email",
+        "fields": [
+            {"key": "imapHost", "label": "IMAP Host", "secret": False},
+            {"key": "imapUsername", "label": "IMAP Username", "secret": False},
+            {"key": "imapPassword", "label": "IMAP Password", "secret": True},
+            {"key": "smtpHost", "label": "SMTP Host", "secret": False},
+            {"key": "smtpUsername", "label": "SMTP Username", "secret": False},
+            {"key": "smtpPassword", "label": "SMTP Password", "secret": True},
+            {"key": "fromAddress", "label": "From Address", "secret": False},
+        ],
+        "extra": {"consentGranted": True},
+    },
+    {
+        "key": "mochat",
+        "name": "Mochat",
+        "fields": [
+            {"key": "clawToken", "label": "Claw Token", "secret": True},
+            {"key": "agentUserId", "label": "Agent User ID", "secret": False},
+        ],
+    },
+]
+
+
+def _configure_channels(data: dict, console: Console) -> dict:
+    """Run the interactive channel configuration wizard.
+
+    Mutates and returns the config *data* dict. If the user declines or
+    cancels, the dict is returned unchanged.
+    """
+    console.print()
+    if not typer.confirm("Configure channels?", default=False):
+        return data
+
+    table = Table(title="Available Channels", show_lines=False)
+    table.add_column("#", style="dim", width=4, justify="right")
+    table.add_column("Channel", style="cyan")
+    table.add_column("Fields")
+
+    for idx, ch in enumerate(_CHANNEL_DEFS, 1):
+        field_names = ", ".join(f["label"] for f in ch["fields"])
+        table.add_row(str(idx), ch["name"], field_names)
+
+    console.print()
+    console.print(table)
+
+    raw = typer.prompt("Select channels (comma-separated, e.g. 1,3)", default="")
+    if not raw.strip():
+        return data
+
+    selected_indices: list[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            n = int(part)
+        except ValueError:
+            console.print(f"[yellow]Skipping invalid input: {part}[/yellow]")
+            continue
+        if 1 <= n <= len(_CHANNEL_DEFS):
+            selected_indices.append(n - 1)
+        else:
+            console.print(f"[yellow]Skipping out-of-range: {part}[/yellow]")
+
+    if not selected_indices:
+        return data
+
+    channels_data = data.setdefault("channels", {})
+    configured: list[str] = []
+
+    for idx in selected_indices:
+        ch_def = _CHANNEL_DEFS[idx]
+        console.print(f"\n[bold]--- {ch_def['name']} ---[/bold]")
+
+        values: dict[str, Any] = {}
+        cancelled = False
+        for field in ch_def["fields"]:
+            value: str = typer.prompt(f"  {field['label']}", hide_input=field["secret"], default="")
+            if not value.strip():
+                console.print(f"[dim]Skipping {ch_def['name']} (empty {field['label']}).[/dim]")
+                cancelled = True
+                break
+            values[field["key"]] = value.strip()
+
+        if cancelled:
+            continue
+
+        ch_data = channels_data.setdefault(ch_def["key"], {})
+        ch_data["enabled"] = True
+        ch_data.update(values)
+        if "extra" in ch_def:
+            ch_data.update(ch_def["extra"])
+
+        configured.append(ch_def["name"])
+        console.print(f"[green]✓[/green] {ch_def['name']} configured")
+
+    if configured:
+        console.print(f"\n[green]✓[/green] Channels configured: {', '.join(configured)}")
+
+    return data
+
+
 def interactive_provider_setup(config: Config, console: Console) -> Config:
-    """Run the interactive provider setup wizard.
+    """Run the interactive setup wizard (provider + channels).
 
     Returns the (possibly modified) config. If the user cancels at any step
     the original config is returned unchanged.
     """
-    console.print("\n[bold]Interactive Provider Setup[/bold]")
+    console.print("\n[bold]Interactive Setup[/bold]")
 
-    raw = _fetch_providers(console)
-    if raw is None:
-        return config
-
-    providers = _compatible_providers(raw)
-    if not providers:
-        console.print("[red]No compatible providers found.[/red]")
-        return config
-
-    # Step 1: select provider
-    provider = _select_provider(providers, console)
-    if provider is None:
-        console.print("[dim]Setup cancelled.[/dim]")
-        return config
-
-    # Step 2: select model
-    result = _select_model(provider, console)
-    if result is None:
-        console.print("[dim]Setup cancelled.[/dim]")
-        return config
-    model_id, model_data = result
-
-    # Step 3: API key
-    console.print()
-    if provider.get("doc"):
-        console.print(f"[dim]Docs: {provider['doc']}[/dim]")
-    api_key: str = typer.prompt("API Key", hide_input=True)
-    if not api_key.strip():
-        console.print("[dim]Setup cancelled.[/dim]")
-        return config
-    api_key = api_key.strip()
-
-    # Derive configuration values
-    provider_id: str = provider["id"]
-    mode = _NPM_TO_MODE[provider["npm"]]
-    api_base: str | None = provider.get("api") or None
-    limit = model_data.get("limit") or {}
-    max_tokens: int = limit.get("output", 8192)
-
-    # Summary
-    console.print()
-    console.print("[bold]Configuration summary:[/bold]")
-    console.print(f"  Provider:   [cyan]{provider_id}[/cyan] ({provider['name']})")
-    console.print(f"  Mode:       [green]{mode}[/green]")
-    if api_base:
-        console.print(f"  API Base:   {api_base}")
-    console.print(f"  Model:      [cyan]{model_id}[/cyan]")
-    console.print(f"  Max Tokens: {max_tokens}")
-    console.print(f"  API Key:    {api_key[:8]}{'*' * max(0, len(api_key) - 8)}")
-
-    if not typer.confirm("\nApply this configuration?", default=True):
-        console.print("[dim]Setup cancelled.[/dim]")
-        return config
-
-    # Apply to config
     data = config.model_dump(by_alias=True)
+    changed = False
 
-    data.setdefault("providers", {})[provider_id] = {
-        "mode": mode,
-        "apiKey": api_key,
-        **({"apiBase": api_base} if api_base else {}),
-    }
+    # --- Provider setup ---
+    raw = _fetch_providers(console)
+    if raw is not None:
+        providers = _compatible_providers(raw)
+        if not providers:
+            console.print("[red]No compatible providers found.[/red]")
+        else:
+            provider = _select_provider(providers, console)
+            if provider is not None:
+                result = _select_model(provider, console)
+                if result is not None:
+                    model_id, model_data = result
 
-    defaults = data.setdefault("agents", {}).setdefault("defaults", {})
-    defaults["provider"] = provider_id
-    defaults["model"] = model_id
-    defaults["maxTokens"] = max_tokens
+                    console.print()
+                    if provider.get("doc"):
+                        console.print(f"[dim]Docs: {provider['doc']}[/dim]")
+                    api_key: str = typer.prompt("API Key", hide_input=True)
 
-    config = Config.model_validate(data)
+                    if api_key.strip():
+                        api_key = api_key.strip()
+                        provider_id: str = provider["id"]
+                        mode = _NPM_TO_MODE[provider["npm"]]
+                        api_base: str | None = provider.get("api") or None
+                        limit = model_data.get("limit") or {}
+                        max_tokens: int = limit.get("output", 8192)
 
-    console.print(f"[green]✓[/green] Provider [cyan]{provider_id}[/cyan] configured")
+                        console.print()
+                        console.print("[bold]Provider summary:[/bold]")
+                        console.print(
+                            f"  Provider:   [cyan]{provider_id}[/cyan] ({provider['name']})"
+                        )
+                        console.print(f"  Mode:       [green]{mode}[/green]")
+                        if api_base:
+                            console.print(f"  API Base:   {api_base}")
+                        console.print(f"  Model:      [cyan]{model_id}[/cyan]")
+                        console.print(f"  Max Tokens: {max_tokens}")
+                        console.print(
+                            f"  API Key:    {api_key[:8]}{'*' * max(0, len(api_key) - 8)}"
+                        )
+
+                        if typer.confirm("\nApply provider configuration?", default=True):
+                            data.setdefault("providers", {})[provider_id] = {
+                                "mode": mode,
+                                "apiKey": api_key,
+                                **({"apiBase": api_base} if api_base else {}),
+                            }
+                            defaults = data.setdefault("agents", {}).setdefault("defaults", {})
+                            defaults["provider"] = provider_id
+                            defaults["model"] = model_id
+                            defaults["maxTokens"] = max_tokens
+                            changed = True
+                            console.print(
+                                f"[green]✓[/green] Provider [cyan]{provider_id}[/cyan] configured"
+                            )
+
+    # --- Channel setup ---
+    prev_channels = data.get("channels", {}).copy()
+    _configure_channels(data, console)
+    if data.get("channels") != prev_channels:
+        changed = True
+
+    if changed:
+        config = Config.model_validate(data)
+
     return config
