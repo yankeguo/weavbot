@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import json as _json
-import locale
 import os
 import platform
 import shutil
@@ -22,184 +21,13 @@ from rich.console import Console
 from rich.table import Table
 
 from weavbot.config.schema import Config
+from weavbot.i18n import t
 
 MODELS_DEV_URL = "https://models.dev/api.json"
 
 
-def _detect_locale() -> str:
-    """Detect user locale from env or system (cross-platform)."""
-    override = os.environ.get("WB_LANG", "").strip()
-    if override:
-        return override.split(".")[0].split("_")[0].split(":")[0].lower()
-    for name in ("LC_ALL", "LANG", "LANGUAGE"):
-        val = os.environ.get(name, "")
-        if val and val != "C":
-            return val.split(".")[0].split("_")[0].split(":")[0].lower()
-    try:
-        loc = locale.getlocale()[0]
-        if loc:
-            return loc.split("_")[0].lower()
-    except Exception:
-        pass
-    return "en"
-
-
-_LOCALE = _detect_locale()
-
-_TRANSLATIONS: dict[str, dict[str, str]] = {
-    "en": {
-        "fetching": "Fetching providers from models.dev...",
-        "fetch_failed": "Failed to fetch provider list",
-        "fetch_fallback": "You can configure providers manually with --set instead.",
-        "available_providers": "Available Providers",
-        "provider_hint": "Enter a number to select, text to search, or empty to cancel.",
-        "provider": "Provider",
-        "no_match": "No providers matching '{0}'. Showing all.",
-        "models_title": "Models — {0}",
-        "context": "Context",
-        "max_output": "Max Output",
-        "reasoning": "Reasoning",
-        "model": "Model",
-        "model_range": "Model [1-{0}]",
-        "api_key": "API Key",
-        "provider_summary": "Provider summary",
-        "provider_label": "Provider",
-        "mode": "Mode",
-        "api_base": "API Base",
-        "max_tokens": "Max Tokens",
-        "apply_provider": "Apply provider configuration?",
-        "provider_configured": "Provider {0} configured",
-        "no_compatible": "No compatible providers found.",
-        "interactive_setup": "Interactive Setup",
-        "configure_channels": "Configure channels?",
-        "available_channels": "Available Channels",
-        "channel": "Channel",
-        "fields": "Fields",
-        "select_channels": "Select channels (comma-separated, e.g. 1,3)",
-        "skip_invalid": "Skipping invalid input: {0}",
-        "skip_out_of_range": "Skipping out-of-range: {0}",
-        "skipping_channel": "Skipping {0} (empty {1}).",
-        "configured": "configured",
-        "channels_configured": "Channels configured: {0}",
-        "enter_number": "Please enter a number between 1 and {0}.",
-        "setup_cancelled": "Setup cancelled.",
-        "field_bot_token": "Bot Token",
-        "field_app_id": "App ID",
-        "field_app_secret": "App Secret",
-        "field_client_id": "Client ID (AppKey)",
-        "field_client_secret": "Client Secret (AppSecret)",
-        "field_bot_token_xoxb": "Bot Token (xoxb-...)",
-        "field_app_token": "App Token (xapp-...)",
-        "field_imap_host": "IMAP Host",
-        "field_imap_username": "IMAP Username",
-        "field_imap_password": "IMAP Password",
-        "field_smtp_host": "SMTP Host",
-        "field_smtp_username": "SMTP Username",
-        "field_smtp_password": "SMTP Password",
-        "field_from_address": "From Address",
-        "field_claw_token": "Claw Token",
-        "field_agent_user_id": "Agent User ID",
-        "configure_autostart": "Configure auto-start?",
-        "detecting_exe": "Detecting weavbot executable...",
-        "exe_not_found": "weavbot executable not found in PATH. Skipping auto-start.",
-        "exe_found": "Found: {0}",
-        "autostart_linux": "Writing systemd user service...",
-        "autostart_macos": "Writing launchd agent...",
-        "autostart_windows": "Setting up traycli for Windows...",
-        "downloading_traycli": "Downloading traycli...",
-        "download_failed": "Failed to download traycli: {0}",
-        "autostart_configured": "Auto-start configured",
-        "autostart_unsupported": "Auto-start not supported on this platform.",
-        "service_started": "Service started",
-        "install_ripgrep": "ripgrep (rg) not found. Install it?",
-        "rg_found": "ripgrep found: {0}",
-        "downloading_rg": "Downloading ripgrep...",
-        "rg_download_failed": "Failed to download ripgrep: {0}",
-        "rg_installed": "ripgrep installed to {0}",
-    },
-    "zh": {
-        "fetching": "正在从 models.dev 获取服务商列表...",
-        "fetch_failed": "获取服务商列表失败",
-        "fetch_fallback": "也可使用 --set 手动配置服务商。",
-        "available_providers": "可用服务商",
-        "provider_hint": "输入序号选择，输入文字搜索，留空取消。",
-        "provider": "服务商",
-        "no_match": "未找到匹配「{0}」的服务商，显示全部。",
-        "models_title": "模型 — {0}",
-        "context": "上下文",
-        "max_output": "最大输出",
-        "reasoning": "推理",
-        "model": "模型",
-        "model_range": "模型 [1-{0}]",
-        "api_key": "API 密钥",
-        "provider_summary": "服务商摘要",
-        "provider_label": "服务商",
-        "mode": "模式",
-        "api_base": "API 地址",
-        "max_tokens": "最大 Token 数",
-        "apply_provider": "应用该服务商配置？",
-        "provider_configured": "服务商 {0} 已配置",
-        "no_compatible": "未找到兼容的服务商。",
-        "interactive_setup": "交互式配置",
-        "configure_channels": "配置渠道？",
-        "available_channels": "可用渠道",
-        "channel": "渠道",
-        "fields": "字段",
-        "select_channels": "选择渠道（逗号分隔，如 1,3）",
-        "skip_invalid": "跳过无效输入: {0}",
-        "skip_out_of_range": "跳过超出范围: {0}",
-        "skipping_channel": "跳过 {0}（{1} 为空）。",
-        "configured": "已配置",
-        "channels_configured": "渠道已配置: {0}",
-        "enter_number": "请输入 1 到 {0} 之间的数字。",
-        "setup_cancelled": "配置已取消。",
-        "field_bot_token": "Bot 令牌",
-        "field_app_id": "App ID",
-        "field_app_secret": "App Secret",
-        "field_client_id": "Client ID (AppKey)",
-        "field_client_secret": "Client Secret (AppSecret)",
-        "field_bot_token_xoxb": "Bot Token (xoxb-...)",
-        "field_app_token": "App Token (xapp-...)",
-        "field_imap_host": "IMAP 主机",
-        "field_imap_username": "IMAP 用户名",
-        "field_imap_password": "IMAP 密码",
-        "field_smtp_host": "SMTP 主机",
-        "field_smtp_username": "SMTP 用户名",
-        "field_smtp_password": "SMTP 密码",
-        "field_from_address": "发件地址",
-        "field_claw_token": "Claw Token",
-        "field_agent_user_id": "Agent User ID",
-        "configure_autostart": "配置开机自启？",
-        "detecting_exe": "正在检测 weavbot 可执行文件...",
-        "exe_not_found": "未在 PATH 中找到 weavbot 可执行文件，跳过自启配置。",
-        "exe_found": "找到: {0}",
-        "autostart_linux": "正在写入 systemd 用户服务...",
-        "autostart_macos": "正在写入 launchd 代理...",
-        "autostart_windows": "正在配置 Windows traycli...",
-        "downloading_traycli": "正在下载 traycli...",
-        "download_failed": "下载 traycli 失败: {0}",
-        "autostart_configured": "自启已配置",
-        "autostart_unsupported": "当前平台不支持自启配置。",
-        "service_started": "服务已启动",
-        "install_ripgrep": "未找到 ripgrep (rg)，是否安装？",
-        "rg_found": "已找到 ripgrep: {0}",
-        "downloading_rg": "正在下载 ripgrep...",
-        "rg_download_failed": "下载 ripgrep 失败: {0}",
-        "rg_installed": "ripgrep 已安装到 {0}",
-    },
-}
-
-
 def _t(key: str, *args: Any) -> str:
-    """Look up translation for key; fallback to en. Format with args if provided."""
-    trans = _TRANSLATIONS.get(_LOCALE) or _TRANSLATIONS.get("en") or {}
-    s = trans.get(key) or _TRANSLATIONS.get("en", {}).get(key) or key
-    if args:
-        try:
-            return s.format(*args)
-        except (IndexError, KeyError):
-            return s
-    return s
+    return t(f"cli.setup.{key}", *args)
 
 
 _NPM_TO_MODE: dict[str, str] = {
@@ -282,10 +110,10 @@ def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[
     while True:
         table = Table(title=_t("available_providers"), show_lines=False)
         table.add_column("#", style="dim", width=4, justify="right")
-        table.add_column("ID", style="cyan")
-        table.add_column("Name")
-        table.add_column("Mode", style="green")
-        table.add_column("Models", justify="right")
+        table.add_column(_t("table_id"), style="cyan")
+        table.add_column(_t("table_name"))
+        table.add_column(_t("table_mode"), style="green")
+        table.add_column(_t("table_models"), justify="right")
 
         for idx, p in enumerate(filtered, 1):
             mode = _NPM_TO_MODE.get(p["npm"], "?")
@@ -331,8 +159,8 @@ def _select_model(provider: dict[str, Any], console: Console) -> tuple[str, dict
 
     table = Table(title=_t("models_title", provider["name"]), show_lines=False)
     table.add_column("#", style="dim", width=4, justify="right")
-    table.add_column("ID", style="cyan")
-    table.add_column("Name")
+    table.add_column(_t("table_id"), style="cyan")
+    table.add_column(_t("table_name"))
     table.add_column(_t("context"), justify="right")
     table.add_column(_t("max_output"), justify="right")
     table.add_column(_t("reasoning"), justify="center")
@@ -659,10 +487,8 @@ def _setup_traycli(exe_path: str, console: Console) -> None:
             check=True,
         )
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        console.print(f"[yellow]Failed to create startup shortcut: {exc}[/yellow]")
-        console.print(
-            f"[dim]You can manually place a shortcut to {traycli_path} in {startup_dir}[/dim]"
-        )
+        console.print(f"[yellow]{_t('shortcut_create_failed', exc)}[/yellow]")
+        console.print(f"[dim]{_t('shortcut_manual_hint', traycli_path, startup_dir)}[/dim]")
         return
 
     console.print(f"[green]✓[/green] {_t('autostart_configured')}")
@@ -705,9 +531,7 @@ def _install_ripgrep(console: Console) -> None:
     machine = platform.machine().lower()
     target = _RG_TARGETS.get((plat, machine))
     if not target:
-        console.print(
-            f"[yellow]{_t('rg_download_failed', f'unsupported platform: {plat}/{machine}')}[/yellow]"
-        )
+        console.print(f"[yellow]{_t('rg_download_failed_platform', plat, machine)}[/yellow]")
         return
 
     version = _RG_FALLBACK_VERSION
@@ -747,7 +571,7 @@ def _install_ripgrep(console: Console) -> None:
                         break
                 else:
                     console.print(
-                        f"[red]{_t('rg_download_failed', 'rg.exe not found in archive')}[/red]"
+                        f"[red]{_t('rg_download_failed', _t('rg_download_missing_exe'))}[/red]"
                     )
                     return
         else:
@@ -760,7 +584,7 @@ def _install_ripgrep(console: Console) -> None:
                             break
                 else:
                     console.print(
-                        f"[red]{_t('rg_download_failed', 'rg not found in archive')}[/red]"
+                        f"[red]{_t('rg_download_failed', _t('rg_download_missing_bin'))}[/red]"
                     )
                     return
             local_rg.chmod(local_rg.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -794,7 +618,7 @@ def _configure_autostart(console: Console) -> None:
         else:
             console.print(f"[yellow]{_t('autostart_unsupported')}[/yellow]")
     except (subprocess.CalledProcessError, OSError) as exc:
-        console.print(f"[red]Auto-start setup failed: {exc}[/red]")
+        console.print(f"[red]{_t('autostart_setup_failed', exc)}[/red]")
 
 
 def interactive_provider_setup(config: Config, console: Console) -> Config:
@@ -823,7 +647,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
 
                     console.print()
                     if provider.get("doc"):
-                        console.print(f"[dim]Docs: {provider['doc']}[/dim]")
+                        console.print(f"[dim]{_t('docs')}: {provider['doc']}[/dim]")
                     api_key: str = typer.prompt(_t("api_key"), hide_input=True)
 
                     if api_key.strip():

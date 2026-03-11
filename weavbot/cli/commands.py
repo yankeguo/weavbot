@@ -19,6 +19,7 @@ from rich.text import Text
 
 from weavbot import __logo__, __version__
 from weavbot.config.schema import Config
+from weavbot.i18n import t
 from weavbot.utils.helpers import sync_workspace_templates
 
 app = typer.Typer(
@@ -36,6 +37,10 @@ EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q"}
 
 _PROMPT_SESSION: PromptSession | None = None
 _SAVED_TERM_ATTRS = None  # original termios settings, restored on exit
+
+
+def _t(key: str, *args: object) -> str:
+    return t(f"cli.commands.{key}", *args)
 
 
 def _flush_pending_tty_input() -> None:
@@ -174,10 +179,10 @@ def _apply_config_overrides(data: dict, overrides: list[str]) -> dict:
 
     for item in overrides:
         if "=" not in item:
-            raise typer.BadParameter(f"Invalid --set format (expected key=value): {item}")
+            raise typer.BadParameter(_t("invalid_set_format", item))
         key, raw_value = item.split("=", 1)
         if not key:
-            raise typer.BadParameter(f"Empty key in --set: {item}")
+            raise typer.BadParameter(_t("empty_set_key", item))
 
         try:
             value = _json.loads(raw_value)
@@ -209,29 +214,25 @@ def onboard(
     config_path = get_config_path()
 
     if config_path.exists():
-        console.print(f"[yellow]Config already exists at {config_path}[/yellow]")
-        console.print("  [bold]y[/bold] = overwrite with defaults (existing values will be lost)")
-        console.print(
-            "  [bold]N[/bold] = refresh config, keeping existing values and adding new fields"
-        )
-        if typer.confirm("Overwrite?"):
+        console.print(f"[yellow]{_t('config_exists', config_path)}[/yellow]")
+        console.print(f"  [bold]y[/bold] = {_t('overwrite_yes')}")
+        console.print(f"  [bold]N[/bold] = {_t('overwrite_no')}")
+        if typer.confirm(_t("overwrite_confirm")):
             config = Config()
-            console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
+            console.print(f"[green]✓[/green] {_t('config_reset', config_path)}")
         else:
             config = load_config()
-            console.print(
-                f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)"
-            )
+            console.print(f"[green]✓[/green] {_t('config_refreshed', config_path)}")
     else:
         config = Config()
-        console.print(f"[green]✓[/green] Created config at {config_path}")
+        console.print(f"[green]✓[/green] {_t('config_created', config_path)}")
 
     if set_values:
         data = config.model_dump(by_alias=True)
         _apply_config_overrides(data, set_values)
         config = Config.model_validate(data)
         for item in set_values:
-            console.print(f"[green]✓[/green] Set {item}")
+            console.print(f"[green]✓[/green] {_t('config_set', item)}")
     else:
         from weavbot.cli.interactive_setup import interactive_provider_setup
 
@@ -244,24 +245,22 @@ def onboard(
 
     if not workspace.exists():
         workspace.mkdir(parents=True, exist_ok=True)
-        console.print(f"[green]✓[/green] Created workspace at {workspace}")
+        console.print(f"[green]✓[/green] {_t('workspace_created', workspace)}")
 
     sync_workspace_templates(workspace)
 
-    console.print(f"\n{__logo__} weavbot is ready!")
+    console.print(f"\n{__logo__} {_t('ready')}")
 
     has_any_key = any(p.api_key for p in config.providers.values())
 
-    console.print("\nNext steps:")
+    console.print(f"\n{_t('next_steps')}")
     if not has_any_key:
-        console.print("  1. Add your API key to [cyan]~/.weavbot/config.json[/cyan]")
-        console.print("     Get one at: https://openrouter.ai/keys")
-        console.print('  2. Chat: [cyan]weavbot agent -m "Hello!"[/cyan]')
+        console.print(f"  [cyan]{_t('add_api_key')}[/cyan]")
+        console.print(f"     {_t('get_api_key')}")
+        console.print(f"  [cyan]{_t('chat_example')}[/cyan]")
     else:
-        console.print('  1. Chat: [cyan]weavbot agent -m "Hello!"[/cyan]')
-    console.print(
-        "\n[dim]Want Telegram/Discord? See: https://github.com/yankeguo/weavbot#-chat-apps[/dim]"
-    )
+        console.print(f"  [cyan]{_t('chat_example_single')}[/cyan]")
+    console.print(f"\n[dim]{_t('chat_apps_hint')}[/dim]")
 
 
 def _make_provider(config: Config):
@@ -273,14 +272,12 @@ def _make_provider(config: Config):
     p = config.get_provider()
 
     if not p:
-        console.print("[red]Error: No provider configured.[/red]")
-        console.print(
-            "Set agents.defaults.provider to a key in providers dict in ~/.weavbot/config.json"
-        )
+        console.print(f"[red]{_t('error_no_provider')}[/red]")
+        console.print(_t("error_set_provider_hint"))
         raise typer.Exit(1)
 
     if not p.api_key:
-        console.print("[red]Error: No API key configured for the selected provider.[/red]")
+        console.print(f"[red]{_t('error_no_api_key')}[/red]")
         raise typer.Exit(1)
 
     if p.mode == "anthropic":
@@ -324,7 +321,7 @@ def gateway(
 
         logging.basicConfig(level=logging.DEBUG)
 
-    console.print(f"{__logo__} Starting weavbot gateway on port {port}...")
+    console.print(f"{__logo__} {_t('gateway_starting', port)}")
 
     config = load_config()
     sync_workspace_templates(config.workspace_path)
@@ -458,15 +455,17 @@ def gateway(
     )
 
     if channels.enabled_channels:
-        console.print(f"[green]✓[/green] Channels enabled: {', '.join(channels.enabled_channels)}")
+        console.print(
+            f"[green]✓[/green] {_t('channels_enabled', ', '.join(channels.enabled_channels))}"
+        )
     else:
-        console.print("[yellow]Warning: No channels enabled[/yellow]")
+        console.print(f"[yellow]{_t('channels_warning_none')}[/yellow]")
 
     cron_status = cron.status()
     if cron_status["jobs"] > 0:
-        console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
+        console.print(f"[green]✓[/green] {_t('cron_jobs', cron_status['jobs'])}")
 
-    console.print(f"[green]✓[/green] Heartbeat: every {hb_cfg.interval_s}s")
+    console.print(f"[green]✓[/green] {_t('heartbeat_every', hb_cfg.interval_s)}")
 
     def _forward_sigterm_to_sigint(signum, frame):
         os.kill(os.getpid(), signal.SIGINT)
@@ -482,7 +481,7 @@ def gateway(
                 channels.start_all(),
             )
         except KeyboardInterrupt:
-            console.print("\nShutting down...")
+            console.print(f"\n{_t('shutting_down')}")
         finally:
             await agent.close_mcp()
             heartbeat.stop()
@@ -557,7 +556,7 @@ def agent(
 
             return nullcontext()
         # Animated spinner is safe to use with prompt_toolkit input handling
-        return console.status("[dim]weavbot is thinking...[/dim]", spinner="dots")
+        return console.status(f"[dim]{_t('thinking')}[/dim]", spinner="dots")
 
     async def _cli_progress(content: str, *, tool_hint: bool = False) -> None:
         ch = agent_loop.channels_config
@@ -583,9 +582,7 @@ def agent(
         from weavbot.bus.events import InboundMessage
 
         _init_prompt_session()
-        console.print(
-            f"{__logo__} Interactive mode (type [bold]exit[/bold] or [bold]Ctrl+C[/bold] to quit)\n"
-        )
+        console.print(f"{__logo__} {_t('interactive_mode')}\n")
 
         if ":" in session_id:
             cli_channel, cli_chat_id = session_id.split(":", 1)
@@ -594,7 +591,7 @@ def agent(
 
         def _exit_on_sigint(signum, frame):
             _restore_terminal()
-            console.print("\nGoodbye!")
+            console.print(f"\n{_t('goodbye')}")
             os._exit(0)
 
         signal.signal(signal.SIGINT, _exit_on_sigint)
@@ -644,7 +641,7 @@ def agent(
 
                         if _is_exit_command(command):
                             _restore_terminal()
-                            console.print("\nGoodbye!")
+                            console.print(f"\n{_t('goodbye')}")
                             break
 
                         turn_done.clear()
@@ -666,11 +663,11 @@ def agent(
                             _print_agent_response(turn_response[0], render_markdown=markdown)
                     except KeyboardInterrupt:
                         _restore_terminal()
-                        console.print("\nGoodbye!")
+                        console.print(f"\n{_t('goodbye')}")
                         break
                     except EOFError:
                         _restore_terminal()
-                        console.print("\nGoodbye!")
+                        console.print(f"\n{_t('goodbye')}")
                         break
             finally:
                 agent_loop.stop()
@@ -697,49 +694,59 @@ def channels_status():
 
     config = load_config()
 
-    table = Table(title="Channel Status")
-    table.add_column("Channel", style="cyan")
-    table.add_column("Enabled", style="green")
-    table.add_column("Configuration", style="yellow")
+    table = Table(title=_t("channel_status"))
+    table.add_column(_t("column_channel"), style="cyan")
+    table.add_column(_t("column_enabled"), style="green")
+    table.add_column(_t("column_configuration"), style="yellow")
 
     dc = config.channels.discord
     table.add_row("Discord", "✓" if dc.enabled else "✗", dc.gateway_url)
 
     # Feishu
     fs = config.channels.feishu
-    fs_config = f"app_id: {fs.app_id[:10]}..." if fs.app_id else "[dim]not configured[/dim]"
+    fs_config = (
+        f"app_id: {fs.app_id[:10]}..." if fs.app_id else f"[dim]{_t('not_configured')}[/dim]"
+    )
     table.add_row("Feishu", "✓" if fs.enabled else "✗", fs_config)
 
     # Mochat
     mc = config.channels.mochat
-    mc_base = mc.base_url or "[dim]not configured[/dim]"
+    mc_base = mc.base_url or f"[dim]{_t('not_configured')}[/dim]"
     table.add_row("Mochat", "✓" if mc.enabled else "✗", mc_base)
 
     # Telegram
     tg = config.channels.telegram
-    tg_config = f"token: {tg.token[:10]}..." if tg.token else "[dim]not configured[/dim]"
+    tg_config = f"token: {tg.token[:10]}..." if tg.token else f"[dim]{_t('not_configured')}[/dim]"
     table.add_row("Telegram", "✓" if tg.enabled else "✗", tg_config)
 
     # Slack
     slack = config.channels.slack
-    slack_config = "socket" if slack.app_token and slack.bot_token else "[dim]not configured[/dim]"
+    slack_config = (
+        _t("socket")
+        if slack.app_token and slack.bot_token
+        else f"[dim]{_t('not_configured')}[/dim]"
+    )
     table.add_row("Slack", "✓" if slack.enabled else "✗", slack_config)
 
     # DingTalk
     dt = config.channels.dingtalk
     dt_config = (
-        f"client_id: {dt.client_id[:10]}..." if dt.client_id else "[dim]not configured[/dim]"
+        f"client_id: {dt.client_id[:10]}..."
+        if dt.client_id
+        else f"[dim]{_t('not_configured')}[/dim]"
     )
     table.add_row("DingTalk", "✓" if dt.enabled else "✗", dt_config)
 
     # QQ
     qq = config.channels.qq
-    qq_config = f"app_id: {qq.app_id[:10]}..." if qq.app_id else "[dim]not configured[/dim]"
+    qq_config = (
+        f"app_id: {qq.app_id[:10]}..." if qq.app_id else f"[dim]{_t('not_configured')}[/dim]"
+    )
     table.add_row("QQ", "✓" if qq.enabled else "✗", qq_config)
 
     # Email
     em = config.channels.email
-    em_config = em.imap_host if em.imap_host else "[dim]not configured[/dim]"
+    em_config = em.imap_host if em.imap_host else f"[dim]{_t('not_configured')}[/dim]"
     table.add_row("Email", "✓" if em.enabled else "✗", em_config)
 
     console.print(table)
@@ -759,26 +766,23 @@ def status():
     config = load_config()
     workspace = config.workspace_path
 
-    console.print(f"{__logo__} weavbot Status\n")
+    console.print(f"{__logo__} {_t('status_title')}\n")
 
-    console.print(
-        f"Config: {config_path} {'[green]✓[/green]' if config_path.exists() else '[red]✗[/red]'}"
-    )
-    console.print(
-        f"Workspace: {workspace} {'[green]✓[/green]' if workspace.exists() else '[red]✗[/red]'}"
-    )
+    config_mark = "[green]✓[/green]" if config_path.exists() else "[red]✗[/red]"
+    workspace_mark = "[green]✓[/green]" if workspace.exists() else "[red]✗[/red]"
+    console.print(_t("status_config", config_path, config_mark))
+    console.print(_t("status_workspace", workspace, workspace_mark))
 
     if config_path.exists():
-        console.print(f"Model: {config.agents.defaults.model}")
-        console.print(f"Provider: {config.agents.defaults.provider or '[dim]not set[/dim]'}")
+        console.print(_t("status_model", config.agents.defaults.model))
+        provider = config.agents.defaults.provider or f"[dim]{_t('not_set')}[/dim]"
+        console.print(_t("status_provider", provider))
 
         for name, p in config.providers.items():
             has_key = bool(p.api_key)
             base_info = f" ({p.api_base})" if p.api_base else ""
-            console.print(
-                f"{name} [dim][{p.mode}][/dim]: "
-                f"{'[green]✓[/green]' if has_key else '[dim]not set[/dim]'}{base_info}"
-            )
+            key_mark = "[green]✓[/green]" if has_key else f"[dim]{_t('not_set')}[/dim]"
+            console.print(f"{name} [dim][{p.mode}][/dim]: {key_mark}{base_info}")
 
 
 if __name__ == "__main__":

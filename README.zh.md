@@ -32,6 +32,7 @@ weavbot onboard
 4. **开机自启** — 配置网关在登录后自动启动（Linux 用 systemd，macOS 用 launchd，Windows 用 [traycli](https://github.com/yankeguo/traycli)）
 
 向导会根据系统语言自动选择提示语言，必要时显示中文。可通过 `WB_LANG=en` 或 `WB_LANG=zh` 覆盖。
+CLI 翻译已拆分到独立的 `weavbot.i18n` 包，当前采用 `cli.setup.*` 与 `cli.commands.*` 这类 key 命名空间，便于后续扩展。
 
 也可使用 `--set` 在命令行内联配置（可重复，类似 Helm）：
 
@@ -118,7 +119,7 @@ weavbot gateway
 
 ## 配置
 
-配置文件：`~/.weavbot/config.json`。键均为 camelCase（如 `apiKey`、`allowFrom`）。环境变量以 `WB_` 前缀和 `__` 嵌套分隔符覆盖配置（如 `WB_AGENTS__DEFAULTS__MODEL`）。设置 `WB_LANG` 可覆盖交互式向导语言（`zh` 或 `en`）。
+配置文件：`~/.weavbot/config.json`。键均为 camelCase（如 `apiKey`、`allowFrom`）。环境变量以 `WB_` 前缀和 `__` 嵌套分隔符覆盖配置（如 `WB_AGENTS__DEFAULTS__MODEL`）。设置 `WB_LANG` 可通过 `weavbot.i18n` 覆盖 CLI 语言（`zh` 或 `en`）。
 
 | 路径 | 说明 |
 | --- | --- |

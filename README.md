@@ -32,6 +32,7 @@ This creates `~/.weavbot/config.json` and `~/.weavbot/workspace/`, then launches
 4. **Auto-start setup** — configures the gateway to start automatically on login (systemd on Linux, launchd on macOS, [traycli](https://github.com/yankeguo/traycli) on Windows)
 
 The wizard auto-detects your system language and displays prompts in Chinese when appropriate. Override with `WB_LANG=en` or `WB_LANG=zh`.
+CLI translations are now provided by the standalone `weavbot.i18n` package, with key namespaces such as `cli.setup.*` and `cli.commands.*` for future extension.
 
 Alternatively, use `--set` to configure values inline (repeatable, Helm-style):
 
@@ -118,7 +119,7 @@ The wizard downloads [traycli](https://github.com/yankeguo/traycli) to `~/.weavb
 
 ## Configuration
 
-Config file: `~/.weavbot/config.json`. All keys use camelCase (e.g. `apiKey`, `allowFrom`). Environment variables override config with the `WB_` prefix and `__` as the nesting delimiter (e.g. `WB_AGENTS__DEFAULTS__MODEL`). Set `WB_LANG` to override the interactive setup language (`zh` or `en`).
+Config file: `~/.weavbot/config.json`. All keys use camelCase (e.g. `apiKey`, `allowFrom`). Environment variables override config with the `WB_` prefix and `__` as the nesting delimiter (e.g. `WB_AGENTS__DEFAULTS__MODEL`). Set `WB_LANG` to override CLI language (`zh` or `en`) via `weavbot.i18n`.
 
 | Path | Description |
 | --- | --- |
