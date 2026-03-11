@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import locale
+import os
 from typing import Any
 
 import httpx
@@ -13,6 +15,149 @@ from weavbot.config.schema import Config
 
 MODELS_DEV_URL = "https://models.dev/api.json"
 
+
+def _detect_locale() -> str:
+    """Detect user locale from env or system (cross-platform)."""
+    override = os.environ.get("WB_LANG", "").strip()
+    if override:
+        return override.split(".")[0].split("_")[0].split(":")[0].lower()
+    for name in ("LC_ALL", "LANG", "LANGUAGE"):
+        val = os.environ.get(name, "")
+        if val and val != "C":
+            return val.split(".")[0].split("_")[0].split(":")[0].lower()
+    try:
+        loc = locale.getlocale()[0]
+        if loc:
+            return loc.split("_")[0].lower()
+    except Exception:
+        pass
+    return "en"
+
+
+_LOCALE = _detect_locale()
+
+_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "en": {
+        "fetching": "Fetching providers from models.dev...",
+        "fetch_failed": "Failed to fetch provider list",
+        "fetch_fallback": "You can configure providers manually with --set instead.",
+        "available_providers": "Available Providers",
+        "provider_hint": "Enter a number to select, text to search, or empty to cancel.",
+        "provider": "Provider",
+        "no_match": "No providers matching '{0}'. Showing all.",
+        "models_title": "Models — {0}",
+        "context": "Context",
+        "max_output": "Max Output",
+        "reasoning": "Reasoning",
+        "model": "Model",
+        "model_range": "Model [1-{0}]",
+        "api_key": "API Key",
+        "provider_summary": "Provider summary",
+        "provider_label": "Provider",
+        "mode": "Mode",
+        "api_base": "API Base",
+        "max_tokens": "Max Tokens",
+        "apply_provider": "Apply provider configuration?",
+        "provider_configured": "Provider {0} configured",
+        "no_compatible": "No compatible providers found.",
+        "interactive_setup": "Interactive Setup",
+        "configure_channels": "Configure channels?",
+        "available_channels": "Available Channels",
+        "channel": "Channel",
+        "fields": "Fields",
+        "select_channels": "Select channels (comma-separated, e.g. 1,3)",
+        "skip_invalid": "Skipping invalid input: {0}",
+        "skip_out_of_range": "Skipping out-of-range: {0}",
+        "skipping_channel": "Skipping {0} (empty {1}).",
+        "configured": "configured",
+        "channels_configured": "Channels configured: {0}",
+        "enter_number": "Please enter a number between 1 and {0}.",
+        "setup_cancelled": "Setup cancelled.",
+        "field_bot_token": "Bot Token",
+        "field_app_id": "App ID",
+        "field_app_secret": "App Secret",
+        "field_client_id": "Client ID (AppKey)",
+        "field_client_secret": "Client Secret (AppSecret)",
+        "field_bot_token_xoxb": "Bot Token (xoxb-...)",
+        "field_app_token": "App Token (xapp-...)",
+        "field_imap_host": "IMAP Host",
+        "field_imap_username": "IMAP Username",
+        "field_imap_password": "IMAP Password",
+        "field_smtp_host": "SMTP Host",
+        "field_smtp_username": "SMTP Username",
+        "field_smtp_password": "SMTP Password",
+        "field_from_address": "From Address",
+        "field_claw_token": "Claw Token",
+        "field_agent_user_id": "Agent User ID",
+    },
+    "zh": {
+        "fetching": "正在从 models.dev 获取服务商列表...",
+        "fetch_failed": "获取服务商列表失败",
+        "fetch_fallback": "也可使用 --set 手动配置服务商。",
+        "available_providers": "可用服务商",
+        "provider_hint": "输入序号选择，输入文字搜索，留空取消。",
+        "provider": "服务商",
+        "no_match": "未找到匹配「{0}」的服务商，显示全部。",
+        "models_title": "模型 — {0}",
+        "context": "上下文",
+        "max_output": "最大输出",
+        "reasoning": "推理",
+        "model": "模型",
+        "model_range": "模型 [1-{0}]",
+        "api_key": "API 密钥",
+        "provider_summary": "服务商摘要",
+        "provider_label": "服务商",
+        "mode": "模式",
+        "api_base": "API 地址",
+        "max_tokens": "最大 Token 数",
+        "apply_provider": "应用该服务商配置？",
+        "provider_configured": "服务商 {0} 已配置",
+        "no_compatible": "未找到兼容的服务商。",
+        "interactive_setup": "交互式配置",
+        "configure_channels": "配置渠道？",
+        "available_channels": "可用渠道",
+        "channel": "渠道",
+        "fields": "字段",
+        "select_channels": "选择渠道（逗号分隔，如 1,3）",
+        "skip_invalid": "跳过无效输入: {0}",
+        "skip_out_of_range": "跳过超出范围: {0}",
+        "skipping_channel": "跳过 {0}（{1} 为空）。",
+        "configured": "已配置",
+        "channels_configured": "渠道已配置: {0}",
+        "enter_number": "请输入 1 到 {0} 之间的数字。",
+        "setup_cancelled": "配置已取消。",
+        "field_bot_token": "Bot 令牌",
+        "field_app_id": "App ID",
+        "field_app_secret": "App Secret",
+        "field_client_id": "Client ID (AppKey)",
+        "field_client_secret": "Client Secret (AppSecret)",
+        "field_bot_token_xoxb": "Bot Token (xoxb-...)",
+        "field_app_token": "App Token (xapp-...)",
+        "field_imap_host": "IMAP 主机",
+        "field_imap_username": "IMAP 用户名",
+        "field_imap_password": "IMAP 密码",
+        "field_smtp_host": "SMTP 主机",
+        "field_smtp_username": "SMTP 用户名",
+        "field_smtp_password": "SMTP 密码",
+        "field_from_address": "发件地址",
+        "field_claw_token": "Claw Token",
+        "field_agent_user_id": "Agent User ID",
+    },
+}
+
+
+def _t(key: str, *args: Any) -> str:
+    """Look up translation for key; fallback to en. Format with args if provided."""
+    trans = _TRANSLATIONS.get(_LOCALE) or _TRANSLATIONS.get("en") or {}
+    s = trans.get(key) or _TRANSLATIONS.get("en", {}).get(key) or key
+    if args:
+        try:
+            return s.format(*args)
+        except (IndexError, KeyError):
+            return s
+    return s
+
+
 _NPM_TO_MODE: dict[str, str] = {
     "@ai-sdk/anthropic": "anthropic",
     "@ai-sdk/openai": "openai",
@@ -22,15 +167,15 @@ _NPM_TO_MODE: dict[str, str] = {
 
 def _fetch_providers(console: Console) -> dict[str, Any] | None:
     """Fetch the models.dev provider catalogue. Returns None on failure."""
-    with console.status("[dim]Fetching providers from models.dev...[/dim]", spinner="dots"):
+    with console.status(f"[dim]{_t('fetching')}[/dim]", spinner="dots"):
         try:
             with httpx.Client(timeout=30, follow_redirects=True) as client:
                 resp = client.get(MODELS_DEV_URL)
                 resp.raise_for_status()
                 return resp.json()
         except (httpx.HTTPError, ValueError) as exc:
-            console.print(f"[red]Failed to fetch provider list:[/red] {exc}")
-            console.print("[dim]You can configure providers manually with --set instead.[/dim]")
+            console.print(f"[red]{_t('fetch_failed')}:[/red] {exc}")
+            console.print(f"[dim]{_t('fetch_fallback')}[/dim]")
             return None
 
 
@@ -79,11 +224,11 @@ def _prompt_number(prompt_text: str, max_val: int) -> int | None:
         try:
             n = int(raw)
         except ValueError:
-            typer.echo(f"Please enter a number between 1 and {max_val}.")
+            typer.echo(_t("enter_number", max_val))
             continue
         if 1 <= n <= max_val:
             return n
-        typer.echo(f"Please enter a number between 1 and {max_val}.")
+        typer.echo(_t("enter_number", max_val))
 
 
 def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[str, Any] | None:
@@ -91,7 +236,7 @@ def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[
     filtered = providers
 
     while True:
-        table = Table(title="Available Providers", show_lines=False)
+        table = Table(title=_t("available_providers"), show_lines=False)
         table.add_column("#", style="dim", width=4, justify="right")
         table.add_column("ID", style="cyan")
         table.add_column("Name")
@@ -110,9 +255,9 @@ def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[
 
         console.print()
         console.print(table)
-        console.print("[dim]Enter a number to select, text to search, or empty to cancel.[/dim]")
+        console.print(f"[dim]{_t('provider_hint')}[/dim]")
 
-        raw = typer.prompt("Provider", default="")
+        raw = typer.prompt(_t("provider"), default="")
         if not raw:
             return None
 
@@ -128,7 +273,7 @@ def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[
         query = raw.lower()
         filtered = [p for p in providers if query in p["name"].lower() or query in p["id"].lower()]
         if not filtered:
-            console.print(f"[yellow]No providers matching '{raw}'. Showing all.[/yellow]")
+            console.print(f"[yellow]{_t('no_match', raw)}[/yellow]")
             filtered = providers
         elif len(filtered) == 1:
             return filtered[0]
@@ -140,13 +285,13 @@ def _select_model(provider: dict[str, Any], console: Console) -> tuple[str, dict
     entries = list(models.items())
     entries.sort(key=lambda e: e[1].get("name", e[0]).lower())
 
-    table = Table(title=f"Models — {provider['name']}", show_lines=False)
+    table = Table(title=_t("models_title", provider["name"]), show_lines=False)
     table.add_column("#", style="dim", width=4, justify="right")
     table.add_column("ID", style="cyan")
     table.add_column("Name")
-    table.add_column("Context", justify="right")
-    table.add_column("Max Output", justify="right")
-    table.add_column("Reasoning", justify="center")
+    table.add_column(_t("context"), justify="right")
+    table.add_column(_t("max_output"), justify="right")
+    table.add_column(_t("reasoning"), justify="center")
 
     for idx, (mid, mdata) in enumerate(entries, 1):
         limit = mdata.get("limit") or {}
@@ -162,7 +307,7 @@ def _select_model(provider: dict[str, Any], console: Console) -> tuple[str, dict
     console.print()
     console.print(table)
 
-    choice = _prompt_number(f"Model [1-{len(entries)}]", len(entries))
+    choice = _prompt_number(_t("model_range", len(entries)), len(entries))
     if choice is None:
         return None
 
@@ -176,59 +321,59 @@ _CHANNEL_DEFS: list[dict[str, Any]] = [
         "key": "telegram",
         "name": "Telegram",
         "fields": [
-            {"key": "token", "label": "Bot Token", "secret": True},
+            {"key": "token", "label_key": "field_bot_token", "secret": True},
         ],
     },
     {
         "key": "discord",
         "name": "Discord",
         "fields": [
-            {"key": "token", "label": "Bot Token", "secret": True},
+            {"key": "token", "label_key": "field_bot_token", "secret": True},
         ],
     },
     {
         "key": "feishu",
         "name": "Feishu",
         "fields": [
-            {"key": "appId", "label": "App ID", "secret": False},
-            {"key": "appSecret", "label": "App Secret", "secret": True},
+            {"key": "appId", "label_key": "field_app_id", "secret": False},
+            {"key": "appSecret", "label_key": "field_app_secret", "secret": True},
         ],
     },
     {
         "key": "dingtalk",
         "name": "DingTalk",
         "fields": [
-            {"key": "clientId", "label": "Client ID (AppKey)", "secret": False},
-            {"key": "clientSecret", "label": "Client Secret (AppSecret)", "secret": True},
+            {"key": "clientId", "label_key": "field_client_id", "secret": False},
+            {"key": "clientSecret", "label_key": "field_client_secret", "secret": True},
         ],
     },
     {
         "key": "slack",
         "name": "Slack",
         "fields": [
-            {"key": "botToken", "label": "Bot Token (xoxb-...)", "secret": True},
-            {"key": "appToken", "label": "App Token (xapp-...)", "secret": True},
+            {"key": "botToken", "label_key": "field_bot_token_xoxb", "secret": True},
+            {"key": "appToken", "label_key": "field_app_token", "secret": True},
         ],
     },
     {
         "key": "qq",
         "name": "QQ",
         "fields": [
-            {"key": "appId", "label": "App ID", "secret": False},
-            {"key": "secret", "label": "App Secret", "secret": True},
+            {"key": "appId", "label_key": "field_app_id", "secret": False},
+            {"key": "secret", "label_key": "field_app_secret", "secret": True},
         ],
     },
     {
         "key": "email",
         "name": "Email",
         "fields": [
-            {"key": "imapHost", "label": "IMAP Host", "secret": False},
-            {"key": "imapUsername", "label": "IMAP Username", "secret": False},
-            {"key": "imapPassword", "label": "IMAP Password", "secret": True},
-            {"key": "smtpHost", "label": "SMTP Host", "secret": False},
-            {"key": "smtpUsername", "label": "SMTP Username", "secret": False},
-            {"key": "smtpPassword", "label": "SMTP Password", "secret": True},
-            {"key": "fromAddress", "label": "From Address", "secret": False},
+            {"key": "imapHost", "label_key": "field_imap_host", "secret": False},
+            {"key": "imapUsername", "label_key": "field_imap_username", "secret": False},
+            {"key": "imapPassword", "label_key": "field_imap_password", "secret": True},
+            {"key": "smtpHost", "label_key": "field_smtp_host", "secret": False},
+            {"key": "smtpUsername", "label_key": "field_smtp_username", "secret": False},
+            {"key": "smtpPassword", "label_key": "field_smtp_password", "secret": True},
+            {"key": "fromAddress", "label_key": "field_from_address", "secret": False},
         ],
         "extra": {"consentGranted": True},
     },
@@ -236,8 +381,8 @@ _CHANNEL_DEFS: list[dict[str, Any]] = [
         "key": "mochat",
         "name": "Mochat",
         "fields": [
-            {"key": "clawToken", "label": "Claw Token", "secret": True},
-            {"key": "agentUserId", "label": "Agent User ID", "secret": False},
+            {"key": "clawToken", "label_key": "field_claw_token", "secret": True},
+            {"key": "agentUserId", "label_key": "field_agent_user_id", "secret": False},
         ],
     },
 ]
@@ -250,22 +395,22 @@ def _configure_channels(data: dict, console: Console) -> dict:
     cancels, the dict is returned unchanged.
     """
     console.print()
-    if not typer.confirm("Configure channels?", default=False):
+    if not typer.confirm(_t("configure_channels"), default=False):
         return data
 
-    table = Table(title="Available Channels", show_lines=False)
+    table = Table(title=_t("available_channels"), show_lines=False)
     table.add_column("#", style="dim", width=4, justify="right")
-    table.add_column("Channel", style="cyan")
-    table.add_column("Fields")
+    table.add_column(_t("channel"), style="cyan")
+    table.add_column(_t("fields"))
 
     for idx, ch in enumerate(_CHANNEL_DEFS, 1):
-        field_names = ", ".join(f["label"] for f in ch["fields"])
+        field_names = ", ".join(_t(f["label_key"]) for f in ch["fields"])
         table.add_row(str(idx), ch["name"], field_names)
 
     console.print()
     console.print(table)
 
-    raw = typer.prompt("Select channels (comma-separated, e.g. 1,3)", default="")
+    raw = typer.prompt(_t("select_channels"), default="")
     if not raw.strip():
         return data
 
@@ -277,12 +422,12 @@ def _configure_channels(data: dict, console: Console) -> dict:
         try:
             n = int(part)
         except ValueError:
-            console.print(f"[yellow]Skipping invalid input: {part}[/yellow]")
+            console.print(f"[yellow]{_t('skip_invalid', part)}[/yellow]")
             continue
         if 1 <= n <= len(_CHANNEL_DEFS):
             selected_indices.append(n - 1)
         else:
-            console.print(f"[yellow]Skipping out-of-range: {part}[/yellow]")
+            console.print(f"[yellow]{_t('skip_out_of_range', part)}[/yellow]")
 
     if not selected_indices:
         return data
@@ -297,9 +442,10 @@ def _configure_channels(data: dict, console: Console) -> dict:
         values: dict[str, Any] = {}
         cancelled = False
         for field in ch_def["fields"]:
-            value: str = typer.prompt(f"  {field['label']}", hide_input=field["secret"], default="")
+            label = _t(field["label_key"])
+            value: str = typer.prompt(f"  {label}", hide_input=field["secret"], default="")
             if not value.strip():
-                console.print(f"[dim]Skipping {ch_def['name']} (empty {field['label']}).[/dim]")
+                console.print(f"[dim]{_t('skipping_channel', ch_def['name'], label)}[/dim]")
                 cancelled = True
                 break
             values[field["key"]] = value.strip()
@@ -314,10 +460,10 @@ def _configure_channels(data: dict, console: Console) -> dict:
             ch_data.update(ch_def["extra"])
 
         configured.append(ch_def["name"])
-        console.print(f"[green]✓[/green] {ch_def['name']} configured")
+        console.print(f"[green]✓[/green] {ch_def['name']} {_t('configured')}")
 
     if configured:
-        console.print(f"\n[green]✓[/green] Channels configured: {', '.join(configured)}")
+        console.print(f"\n[green]✓[/green] {_t('channels_configured', ', '.join(configured))}")
 
     return data
 
@@ -328,7 +474,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
     Returns the (possibly modified) config. If the user cancels at any step
     the original config is returned unchanged.
     """
-    console.print("\n[bold]Interactive Setup[/bold]")
+    console.print(f"\n[bold]{_t('interactive_setup')}[/bold]")
 
     data = config.model_dump(by_alias=True)
     changed = False
@@ -338,7 +484,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
     if raw is not None:
         providers = _compatible_providers(raw)
         if not providers:
-            console.print("[red]No compatible providers found.[/red]")
+            console.print(f"[red]{_t('no_compatible')}[/red]")
         else:
             provider = _select_provider(providers, console)
             if provider is not None:
@@ -349,7 +495,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                     console.print()
                     if provider.get("doc"):
                         console.print(f"[dim]Docs: {provider['doc']}[/dim]")
-                    api_key: str = typer.prompt("API Key", hide_input=True)
+                    api_key: str = typer.prompt(_t("api_key"), hide_input=True)
 
                     if api_key.strip():
                         api_key = api_key.strip()
@@ -360,20 +506,20 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                         max_tokens: int = limit.get("output", 8192)
 
                         console.print()
-                        console.print("[bold]Provider summary:[/bold]")
+                        console.print(f"[bold]{_t('provider_summary')}:[/bold]")
                         console.print(
-                            f"  Provider:   [cyan]{provider_id}[/cyan] ({provider['name']})"
+                            f"  {_t('provider_label')}:   [cyan]{provider_id}[/cyan] ({provider['name']})"
                         )
-                        console.print(f"  Mode:       [green]{mode}[/green]")
+                        console.print(f"  {_t('mode')}:       [green]{mode}[/green]")
                         if api_base:
-                            console.print(f"  API Base:   {api_base}")
-                        console.print(f"  Model:      [cyan]{model_id}[/cyan]")
-                        console.print(f"  Max Tokens: {max_tokens}")
+                            console.print(f"  {_t('api_base')}:   {api_base}")
+                        console.print(f"  {_t('model')}:      [cyan]{model_id}[/cyan]")
+                        console.print(f"  {_t('max_tokens')}: {max_tokens}")
                         console.print(
-                            f"  API Key:    {api_key[:8]}{'*' * max(0, len(api_key) - 8)}"
+                            f"  {_t('api_key')}:    {api_key[:8]}{'*' * max(0, len(api_key) - 8)}"
                         )
 
-                        if typer.confirm("\nApply provider configuration?", default=True):
+                        if typer.confirm(f"\n{_t('apply_provider')}", default=True):
                             data.setdefault("providers", {})[provider_id] = {
                                 "mode": mode,
                                 "apiKey": api_key,
@@ -385,7 +531,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                             defaults["maxTokens"] = max_tokens
                             changed = True
                             console.print(
-                                f"[green]✓[/green] Provider [cyan]{provider_id}[/cyan] configured"
+                                f"[green]✓[/green] {_t('provider_configured', provider_id)}"
                             )
 
     # --- Channel setup ---
