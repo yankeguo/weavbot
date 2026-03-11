@@ -1,6 +1,7 @@
 """Tool to search file contents using ripgrep (regex)."""
 
 import asyncio
+import os
 import re
 import sys
 from pathlib import Path
@@ -11,6 +12,8 @@ from weavbot.utils import resolve_path
 
 _LIMIT = 100
 _MAX_LINE_LENGTH = 2000
+
+_WEAVBOT_BIN = str(Path.home() / ".weavbot" / "bin")
 
 _DESCRIPTION = """Fast content search tool that works with any codebase size.
 Searches file contents using regular expressions.
@@ -90,12 +93,16 @@ class GrepFileTool(Tool):
                 args.extend(["--glob", glob])
             args.append(search_path)
 
+            env = os.environ.copy()
+            env["PATH"] = env.get("PATH", "") + os.pathsep + _WEAVBOT_BIN
+
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *args,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=search_path,
+                    env=env,
                 )
                 stdout, stderr = await proc.communicate()
             except FileNotFoundError:

@@ -13,6 +13,8 @@ _MAX_OUTPUT_LEN = 30_000
 
 _IS_WINDOWS = sys.platform == "win32"
 
+_WEAVBOT_BIN = str(Path.home() / ".weavbot" / "bin")
+
 _DEFAULT_ENTRYPOINT = (
     "powershell.exe -NoProfile -NonInteractive -Command" if _IS_WINDOWS else "/bin/bash -c"
 )
@@ -116,8 +118,9 @@ class ShellTool(Tool):
             return guard_error
 
         env = os.environ.copy()
-        if self.path_append:
-            env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
+        extra = os.pathsep.join(filter(None, [_WEAVBOT_BIN, self.path_append]))
+        if extra:
+            env["PATH"] = env.get("PATH", "") + os.pathsep + extra
 
         effective_entrypoint = entrypoint or _DEFAULT_ENTRYPOINT
         entrypoint_args = shlex.split(effective_entrypoint, posix=not _IS_WINDOWS) + [command]

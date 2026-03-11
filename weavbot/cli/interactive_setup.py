@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import io
 import json as _json
 import locale
 import os
+import platform
 import shutil
+import stat
 import subprocess
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +111,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "autostart_configured": "Auto-start configured",
         "autostart_unsupported": "Auto-start not supported on this platform.",
         "service_started": "Service started",
+        "install_ripgrep": "ripgrep (rg) not found. Install it?",
+        "rg_found": "ripgrep found: {0}",
+        "downloading_rg": "Downloading ripgrep...",
+        "rg_download_failed": "Failed to download ripgrep: {0}",
+        "rg_installed": "ripgrep installed to {0}",
     },
     "zh": {
         "fetching": "正在从 models.dev 获取服务商列表...",
@@ -171,6 +181,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "autostart_configured": "自启已配置",
         "autostart_unsupported": "当前平台不支持自启配置。",
         "service_started": "服务已启动",
+        "install_ripgrep": "未找到 ripgrep (rg)，是否安装？",
+        "rg_found": "已找到 ripgrep: {0}",
+        "downloading_rg": "正在下载 ripgrep...",
+        "rg_download_failed": "下载 ripgrep 失败: {0}",
+        "rg_installed": "ripgrep 已安装到 {0}",
     },
 }
 
@@ -653,6 +668,109 @@ def _setup_traycli(exe_path: str, console: Console) -> None:
     console.print(f"[green]✓[/green] {_t('autostart_configured')}")
 
 
+_WEAVBOT_BIN = Path.home() / ".weavbot" / "bin"
+
+_RG_FALLBACK_VERSION = "15.1.0"
+
+_RG_TARGETS: dict[tuple[str, str], str] = {
+    ("linux", "x86_64"): "x86_64-unknown-linux-musl",
+    ("linux", "aarch64"): "aarch64-unknown-linux-gnu",
+    ("darwin", "x86_64"): "x86_64-apple-darwin",
+    ("darwin", "arm64"): "aarch64-apple-darwin",
+    ("win32", "amd64"): "x86_64-pc-windows-msvc",
+    ("win32", "x86_64"): "x86_64-pc-windows-msvc",
+    ("win32", "arm64"): "aarch64-pc-windows-msvc",
+}
+
+
+def _install_ripgrep(console: Console) -> None:
+    """Detect ripgrep and offer to install it to ~/.weavbot/bin/ if missing."""
+    rg_name = "rg.exe" if sys.platform == "win32" else "rg"
+
+    existing = shutil.which("rg") or shutil.which("rg.exe")
+    if existing:
+        console.print(f"[green]✓[/green] {_t('rg_found', existing)}")
+        return
+
+    local_rg = _WEAVBOT_BIN / rg_name
+    if local_rg.is_file():
+        console.print(f"[green]✓[/green] {_t('rg_found', local_rg)}")
+        return
+
+    console.print()
+    if not typer.confirm(_t("install_ripgrep"), default=True):
+        return
+
+    plat = "linux" if sys.platform.startswith("linux") else sys.platform
+    machine = platform.machine().lower()
+    target = _RG_TARGETS.get((plat, machine))
+    if not target:
+        console.print(
+            f"[yellow]{_t('rg_download_failed', f'unsupported platform: {plat}/{machine}')}[/yellow]"
+        )
+        return
+
+    version = _RG_FALLBACK_VERSION
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True) as client:
+            resp = client.get("https://api.github.com/repos/BurntSushi/ripgrep/releases/latest")
+            if resp.status_code == 200:
+                version = resp.json().get("tag_name", version)
+    except Exception:
+        pass
+
+    is_windows = sys.platform == "win32"
+    ext = "zip" if is_windows else "tar.gz"
+    archive_name = f"ripgrep-{version}-{target}.{ext}"
+    download_url = (
+        f"https://github.com/BurntSushi/ripgrep/releases/download/{version}/{archive_name}"
+    )
+
+    console.print(f"[dim]{_t('downloading_rg')} ({version})[/dim]")
+    try:
+        with httpx.Client(timeout=120, follow_redirects=True) as client:
+            resp = client.get(download_url)
+            resp.raise_for_status()
+            archive_bytes = resp.content
+    except (httpx.HTTPError, OSError) as exc:
+        console.print(f"[red]{_t('rg_download_failed', exc)}[/red]")
+        return
+
+    _WEAVBOT_BIN.mkdir(parents=True, exist_ok=True)
+
+    try:
+        if is_windows:
+            with zipfile.ZipFile(io.BytesIO(archive_bytes)) as zf:
+                for name in zf.namelist():
+                    if name.endswith("/rg.exe"):
+                        local_rg.write_bytes(zf.read(name))
+                        break
+                else:
+                    console.print(
+                        f"[red]{_t('rg_download_failed', 'rg.exe not found in archive')}[/red]"
+                    )
+                    return
+        else:
+            with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as tf:
+                for member in tf.getmembers():
+                    if member.name.endswith("/rg") and member.isfile():
+                        data = tf.extractfile(member)
+                        if data:
+                            local_rg.write_bytes(data.read())
+                            break
+                else:
+                    console.print(
+                        f"[red]{_t('rg_download_failed', 'rg not found in archive')}[/red]"
+                    )
+                    return
+            local_rg.chmod(local_rg.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    except (tarfile.TarError, zipfile.BadZipFile, OSError) as exc:
+        console.print(f"[red]{_t('rg_download_failed', exc)}[/red]")
+        return
+
+    console.print(f"[green]✓[/green] {_t('rg_installed', local_rg)}")
+
+
 def _configure_autostart(console: Console) -> None:
     """Offer to configure platform-specific auto-start for weavbot gateway."""
     console.print()
@@ -753,6 +871,9 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
 
     if changed:
         config = Config.model_validate(data)
+
+    # --- Ripgrep install (needed by grep_file agent tool) ---
+    _install_ripgrep(console)
 
     # --- Auto-start setup (independent of config changes) ---
     _configure_autostart(console)
