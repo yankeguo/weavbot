@@ -2,6 +2,8 @@
 
 A lightweight personal AI assistant framework.
 
+[中文](README.zh.md)
+
 ## Installation
 
 ```bash
