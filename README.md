@@ -24,12 +24,16 @@ weavbot --version
 weavbot onboard
 ```
 
-This creates:
+This creates `~/.weavbot/config.json` and `~/.weavbot/workspace/`, then launches an **interactive setup wizard** that walks you through:
 
-- `~/.weavbot/config.json` — configuration file
-- `~/.weavbot/workspace/` — workspace directory with template files
+1. **Provider selection** — fetches known providers and models from [models.dev](https://models.dev), lets you pick a provider, model, and enter your API key
+2. **Channel configuration** — configure chat channels (Telegram, Discord, Feishu, DingTalk, Slack, QQ, Email, Mochat) by entering credentials
+3. **Dependency install** — detects and offers to install [ripgrep](https://github.com/BurntSushi/ripgrep) (required by the agent's file search tool) to `~/.weavbot/bin/`
+4. **Auto-start setup** — configures the gateway to start automatically on login (systemd on Linux, launchd on macOS, [traycli](https://github.com/yankeguo/traycli) on Windows)
 
-Use `--set` to configure values inline during setup (repeatable, Helm-style):
+The wizard auto-detects your system language and displays prompts in Chinese when appropriate. Override with `WB_LANG=en` or `WB_LANG=zh`.
+
+Alternatively, use `--set` to configure values inline (repeatable, Helm-style):
 
 ```bash
 weavbot onboard \
@@ -85,23 +89,21 @@ weavbot gateway
 
 This starts the long-running gateway that manages the agent, channels, scheduled tasks, and heartbeat.
 
-## Windows: Tray Mode with traycli
+## Auto-Start
 
-On Windows, use [traycli](https://github.com/yankeguo/traycli) to keep `weavbot gateway` running as a system tray application.
+The interactive setup (`weavbot onboard`) can configure auto-start for you. You can also set it up manually:
 
-Create `%USERPROFILE%\.traycli\config.json`:
+### Linux (systemd)
 
-```json
-{
-  "cmd": ["weavbot", "gateway"]
-}
-```
+The wizard writes a user-level service to `~/.config/systemd/user/weavbot.service` and enables it with `systemctl --user enable --now weavbot.service`.
 
-To start traycli automatically on login, place a shortcut to `traycli.exe` in the Start Menu Startup folder:
+### macOS (launchd)
 
-```
-%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
-```
+The wizard writes a LaunchAgent to `~/Library/LaunchAgents/com.weavbot.gateway.plist` and loads it with `launchctl load`.
+
+### Windows (traycli)
+
+The wizard downloads [traycli](https://github.com/yankeguo/traycli) to `~/.weavbot/bin/traycli.exe`, writes `~/.traycli/config.json`, and creates a startup shortcut. traycli keeps `weavbot gateway` running as a system tray application with no console window.
 
 ## CLI Reference
 
@@ -121,10 +123,14 @@ To start traycli automatically on login, place a shortcut to `traycli.exe` in th
 | Config file | `~/.weavbot/config.json` |
 | Workspace | `~/.weavbot/workspace/` |
 | Data directory | `~/.weavbot/` |
+| Built-in bin | `~/.weavbot/bin/` (always in agent tool PATH) |
+| Logs | `~/.weavbot/logs/` |
 
 Config keys use camelCase (e.g. `apiKey`, `allowFrom`, `mcpServers`).
 
 Environment variables can override config values with the `WB_` prefix and `__` as the nesting delimiter, for example `WB_AGENTS__DEFAULTS__MODEL`.
+
+Set `WB_LANG` to override the interactive setup language (e.g. `WB_LANG=zh` or `WB_LANG=en`).
 
 ## Credits
 
