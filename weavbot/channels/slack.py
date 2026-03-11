@@ -202,12 +202,18 @@ class SlackChannel(BaseChannel):
             if not self.config.dm.enabled:
                 return False
             if self.config.dm.policy == "allowlist":
-                return sender_id in self.config.dm.allow_from
+                allow_list = self.config.dm.allow_from
+                if not allow_list:
+                    return True
+                return sender_id in allow_list
             return True
 
         # Group / channel messages
         if self.config.group_policy == "allowlist":
-            return chat_id in self.config.group_allow_from
+            allow_list = self.config.group_allow_from
+            if not allow_list:
+                return True
+            return chat_id in allow_list
         return True
 
     def _should_respond_in_channel(self, event_type: str, text: str, chat_id: str) -> bool:
@@ -218,7 +224,10 @@ class SlackChannel(BaseChannel):
                 return True
             return self._bot_user_id is not None and f"<@{self._bot_user_id}>" in text
         if self.config.group_policy == "allowlist":
-            return chat_id in self.config.group_allow_from
+            allow_list = self.config.group_allow_from
+            if not allow_list:
+                return True
+            return chat_id in allow_list
         return False
 
     def _strip_bot_mention(self, text: str) -> str:
