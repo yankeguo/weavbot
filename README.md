@@ -29,9 +29,20 @@ This creates:
 - `~/.weavbot/config.json` — configuration file
 - `~/.weavbot/workspace/` — workspace directory with template files
 
+Use `--set` to configure values inline during setup (repeatable, Helm-style):
+
+```bash
+weavbot onboard \
+  --set providers.openrouter.apiKey=sk-or-v1-xxx \
+  --set agents.defaults.model=anthropic/claude-sonnet-4-6 \
+  --set agents.defaults.provider=openrouter
+```
+
+Keys are dot-separated camelCase paths matching the JSON config structure. Values are auto-coerced (numbers, booleans, null) or treated as strings.
+
 ### 2. Configure
 
-Edit `~/.weavbot/config.json` to set your API key and model.
+You can also edit `~/.weavbot/config.json` directly to set your API key and model.
 
 Set your API key (e.g. OpenRouter):
 
@@ -90,7 +101,7 @@ To start traycli automatically on login, place a shortcut to `traycli.exe` in th
 
 | Command | Description |
 | --- | --- |
-| `weavbot onboard` | Initialize config and workspace |
+| `weavbot onboard [--set key=value]` | Initialize config and workspace |
 | `weavbot gateway` | Start the gateway |
 | `weavbot agent` | Interactive chat mode |
 | `weavbot agent -m "..."` | Send a single message |

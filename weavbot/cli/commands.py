@@ -163,8 +163,44 @@ def main(
 # ============================================================================
 
 
+def _apply_config_overrides(data: dict, overrides: list[str]) -> dict:
+    """Apply ``--set key=value`` overrides to a config dict.
+
+    Keys are dot-separated camelCase paths (e.g. ``providers.custom.apiBase``).
+    Values are coerced via ``json.loads`` first (int, bool, float, null, list);
+    if that fails the raw string is used as-is.
+    """
+    import json as _json
+
+    for item in overrides:
+        if "=" not in item:
+            raise typer.BadParameter(f"Invalid --set format (expected key=value): {item}")
+        key, raw_value = item.split("=", 1)
+        if not key:
+            raise typer.BadParameter(f"Empty key in --set: {item}")
+
+        try:
+            value = _json.loads(raw_value)
+        except (ValueError, _json.JSONDecodeError):
+            value = raw_value
+
+        parts = key.split(".")
+        target = data
+        for part in parts[:-1]:
+            if part not in target or not isinstance(target[part], dict):
+                target[part] = {}
+            target = target[part]
+        target[parts[-1]] = value
+
+    return data
+
+
 @app.command()
-def onboard():
+def onboard(
+    set_values: list[str] = typer.Option(
+        [], "--set", help="Set config value (dot path), e.g. --set providers.custom.apiKey=sk-xxx"
+    ),
+):
     """Initialize weavbot configuration and workspace."""
     from weavbot.config.loader import get_config_path, load_config, save_config
     from weavbot.config.schema import Config
@@ -180,17 +216,24 @@ def onboard():
         )
         if typer.confirm("Overwrite?"):
             config = Config()
-            save_config(config)
             console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
         else:
             config = load_config()
-            save_config(config)
             console.print(
                 f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)"
             )
     else:
-        save_config(Config())
+        config = Config()
         console.print(f"[green]✓[/green] Created config at {config_path}")
+
+    if set_values:
+        data = config.model_dump(by_alias=True)
+        _apply_config_overrides(data, set_values)
+        config = Config.model_validate(data)
+        for item in set_values:
+            console.print(f"[green]✓[/green] Set {item}")
+
+    save_config(config)
 
     # Create workspace
     workspace = get_workspace_path()
@@ -202,10 +245,19 @@ def onboard():
     sync_workspace_templates(workspace)
 
     console.print(f"\n{__logo__} weavbot is ready!")
+
+    has_any_key = any(
+        getattr(getattr(config.providers, field, None), "api_key", None)
+        for field in config.providers.model_fields
+    )
+
     console.print("\nNext steps:")
-    console.print("  1. Add your API key to [cyan]~/.weavbot/config.json[/cyan]")
-    console.print("     Get one at: https://openrouter.ai/keys")
-    console.print('  2. Chat: [cyan]weavbot agent -m "Hello!"[/cyan]')
+    if not has_any_key:
+        console.print("  1. Add your API key to [cyan]~/.weavbot/config.json[/cyan]")
+        console.print("     Get one at: https://openrouter.ai/keys")
+        console.print('  2. Chat: [cyan]weavbot agent -m "Hello!"[/cyan]')
+    else:
+        console.print('  1. Chat: [cyan]weavbot agent -m "Hello!"[/cyan]')
     console.print(
         "\n[dim]Want Telegram/Discord? See: https://github.com/yankeguo/weavbot#-chat-apps[/dim]"
     )
