@@ -333,7 +333,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         model_overrides=(),
     ),
     # === Auxiliary (not a primary LLM provider) ============================
-    # Groq: mainly used for Whisper voice transcription, also usable for LLM.
+    # Groq: usable for LLM (e.g. llama3-8b-8192).
     # Needs "groq/" prefix for LiteLLM routing. Placed last — it rarely wins fallback.
     ProviderSpec(
         name="groq",
