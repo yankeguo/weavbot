@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json as _json
 import locale
 import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -89,6 +94,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "field_from_address": "From Address",
         "field_claw_token": "Claw Token",
         "field_agent_user_id": "Agent User ID",
+        "configure_autostart": "Configure auto-start?",
+        "detecting_exe": "Detecting weavbot executable...",
+        "exe_not_found": "weavbot executable not found in PATH. Skipping auto-start.",
+        "exe_found": "Found: {0}",
+        "autostart_linux": "Writing systemd user service...",
+        "autostart_macos": "Writing launchd agent...",
+        "autostart_windows": "Setting up traycli for Windows...",
+        "downloading_traycli": "Downloading traycli...",
+        "download_failed": "Failed to download traycli: {0}",
+        "autostart_configured": "Auto-start configured",
+        "autostart_unsupported": "Auto-start not supported on this platform.",
+        "service_started": "Service started",
     },
     "zh": {
         "fetching": "正在从 models.dev 获取服务商列表...",
@@ -142,6 +159,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "field_from_address": "发件地址",
         "field_claw_token": "Claw Token",
         "field_agent_user_id": "Agent User ID",
+        "configure_autostart": "配置开机自启？",
+        "detecting_exe": "正在检测 weavbot 可执行文件...",
+        "exe_not_found": "未在 PATH 中找到 weavbot 可执行文件，跳过自启配置。",
+        "exe_found": "找到: {0}",
+        "autostart_linux": "正在写入 systemd 用户服务...",
+        "autostart_macos": "正在写入 launchd 代理...",
+        "autostart_windows": "正在配置 Windows traycli...",
+        "downloading_traycli": "正在下载 traycli...",
+        "download_failed": "下载 traycli 失败: {0}",
+        "autostart_configured": "自启已配置",
+        "autostart_unsupported": "当前平台不支持自启配置。",
+        "service_started": "服务已启动",
     },
 }
 
@@ -468,6 +497,188 @@ def _configure_channels(data: dict, console: Console) -> dict:
     return data
 
 
+_TRAYCLI_REPO = "yankeguo/traycli"
+_TRAYCLI_FALLBACK_TAG = "v0.1.1"
+
+
+def _setup_systemd(exe_path: str, console: Console) -> None:
+    """Write a systemd user service and enable it."""
+    console.print(f"[dim]{_t('autostart_linux')}[/dim]")
+
+    unit_dir = Path.home() / ".config" / "systemd" / "user"
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    unit_file = unit_dir / "weavbot.service"
+
+    unit_file.write_text(
+        f"""\
+[Unit]
+Description=weavbot gateway
+After=network-online.target
+
+[Service]
+ExecStart={exe_path} gateway
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+""",
+        encoding="utf-8",
+    )
+
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+    subprocess.run(["systemctl", "--user", "enable", "weavbot.service"], check=True)
+    subprocess.run(["systemctl", "--user", "start", "weavbot.service"], check=True)
+
+    console.print(f"[green]✓[/green] {_t('autostart_configured')}")
+    console.print(f"[green]✓[/green] {_t('service_started')}")
+
+
+def _setup_launchd(exe_path: str, console: Console) -> None:
+    """Write a launchd LaunchAgent plist and load it."""
+    console.print(f"[dim]{_t('autostart_macos')}[/dim]")
+
+    log_dir = Path.home() / ".weavbot" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    agents_dir = Path.home() / "Library" / "LaunchAgents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    plist_path = agents_dir / "com.weavbot.gateway.plist"
+
+    stdout_log = str(log_dir / "stdout.log")
+    stderr_log = str(log_dir / "stderr.log")
+
+    plist_content = f"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.weavbot.gateway</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{exe_path}</string>
+        <string>gateway</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{stdout_log}</string>
+    <key>StandardErrorPath</key>
+    <string>{stderr_log}</string>
+</dict>
+</plist>
+"""
+    plist_path.write_text(plist_content, encoding="utf-8")
+
+    subprocess.run(["launchctl", "load", str(plist_path)], check=True)
+
+    console.print(f"[green]✓[/green] {_t('autostart_configured')}")
+    console.print(f"[green]✓[/green] {_t('service_started')}")
+
+
+def _setup_traycli(exe_path: str, console: Console) -> None:
+    """Download traycli, write config, and create a Startup shortcut on Windows."""
+    console.print(f"[dim]{_t('autostart_windows')}[/dim]")
+
+    bin_dir = Path.home() / ".weavbot" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    traycli_path = bin_dir / "traycli.exe"
+
+    # --- Download traycli.exe ---
+    tag = _TRAYCLI_FALLBACK_TAG
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True) as client:
+            resp = client.get(f"https://api.github.com/repos/{_TRAYCLI_REPO}/releases/latest")
+            if resp.status_code == 200:
+                tag = resp.json().get("tag_name", tag)
+    except Exception:
+        pass
+
+    download_url = (
+        f"https://github.com/{_TRAYCLI_REPO}/releases/download/{tag}/traycli-windows-amd64.exe"
+    )
+
+    console.print(f"[dim]{_t('downloading_traycli')} ({tag})[/dim]")
+    try:
+        with httpx.Client(timeout=120, follow_redirects=True) as client:
+            resp = client.get(download_url)
+            resp.raise_for_status()
+            traycli_path.write_bytes(resp.content)
+    except (httpx.HTTPError, OSError) as exc:
+        console.print(f"[red]{_t('download_failed', exc)}[/red]")
+        return
+
+    # --- Write traycli config ---
+    traycli_config_dir = Path.home() / ".traycli"
+    traycli_config_dir.mkdir(parents=True, exist_ok=True)
+    config_file = traycli_config_dir / "config.json"
+    config_data = {
+        "cmd": [exe_path, "gateway"],
+        "env": {"PYTHONUTF8": "1"},
+    }
+    config_file.write_text(_json.dumps(config_data, indent=2), encoding="utf-8")
+
+    # --- Create .lnk shortcut in Startup folder ---
+    appdata = os.environ.get("APPDATA", "")
+    if not appdata:
+        appdata = str(Path.home() / "AppData" / "Roaming")
+    startup_dir = Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    startup_dir.mkdir(parents=True, exist_ok=True)
+    lnk_path = startup_dir / "weavbot.lnk"
+
+    try:
+        traycli_str = str(traycli_path).replace("'", "''")
+        lnk_str = str(lnk_path).replace("'", "''")
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                f"$s=(New-Object -COM WScript.Shell).CreateShortcut('{lnk_str}');"
+                f"$s.TargetPath='{traycli_str}';$s.Save()",
+            ],
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        console.print(f"[yellow]Failed to create startup shortcut: {exc}[/yellow]")
+        console.print(
+            f"[dim]You can manually place a shortcut to {traycli_path} in {startup_dir}[/dim]"
+        )
+        return
+
+    console.print(f"[green]✓[/green] {_t('autostart_configured')}")
+
+
+def _configure_autostart(console: Console) -> None:
+    """Offer to configure platform-specific auto-start for weavbot gateway."""
+    console.print()
+    if not typer.confirm(_t("configure_autostart"), default=False):
+        return
+
+    exe = shutil.which("weavbot") or shutil.which("weavbot.exe")
+    if not exe:
+        console.print(f"[yellow]{_t('exe_not_found')}[/yellow]")
+        return
+
+    console.print(f"[green]✓[/green] {_t('exe_found', exe)}")
+
+    try:
+        if sys.platform.startswith("linux"):
+            _setup_systemd(exe, console)
+        elif sys.platform == "darwin":
+            _setup_launchd(exe, console)
+        elif sys.platform == "win32":
+            _setup_traycli(exe, console)
+        else:
+            console.print(f"[yellow]{_t('autostart_unsupported')}[/yellow]")
+    except (subprocess.CalledProcessError, OSError) as exc:
+        console.print(f"[red]Auto-start setup failed: {exc}[/red]")
+
+
 def interactive_provider_setup(config: Config, console: Console) -> Config:
     """Run the interactive setup wizard (provider + channels).
 
@@ -542,5 +753,8 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
 
     if changed:
         config = Config.model_validate(data)
+
+    # --- Auto-start setup (independent of config changes) ---
+    _configure_autostart(console)
 
     return config
