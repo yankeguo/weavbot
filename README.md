@@ -33,9 +33,10 @@ Use `--set` to configure values inline during setup (repeatable, Helm-style):
 
 ```bash
 weavbot onboard \
-  --set providers.openrouter.apiKey=sk-or-v1-xxx \
-  --set agents.defaults.model=anthropic/claude-sonnet-4-6 \
-  --set agents.defaults.provider=openrouter
+  --set providers.anthropic.apiKey=sk-ant-xxx \
+  --set providers.anthropic.mode=anthropic \
+  --set agents.defaults.model=claude-sonnet-4-20250514 \
+  --set agents.defaults.provider=anthropic
 ```
 
 Keys are dot-separated camelCase paths matching the JSON config structure. Values are auto-coerced (numbers, booleans, null) or treated as strings.
@@ -44,32 +45,37 @@ Keys are dot-separated camelCase paths matching the JSON config structure. Value
 
 You can also edit `~/.weavbot/config.json` directly to set your API key and model.
 
-Set your API key (e.g. OpenRouter):
+Providers are a flat dictionary — the key is a free-form name you choose, and each entry specifies a `mode` (`"openai"` or `"anthropic"`) plus credentials:
 
 ```json
 {
   "providers": {
+    "anthropic": {
+      "mode": "anthropic",
+      "apiKey": "sk-ant-xxx"
+    },
     "openrouter": {
-      "apiKey": "sk-or-v1-xxx"
+      "apiKey": "sk-or-v1-xxx",
+      "apiBase": "https://openrouter.ai/api/v1"
+    },
+    "deepseek": {
+      "apiKey": "sk-xxx",
+      "apiBase": "https://api.deepseek.com/v1"
     }
-  }
-}
-```
-
-Set your model:
-
-```json
-{
+  },
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-sonnet-4-6",
-      "provider": "openrouter"
+      "model": "claude-sonnet-4-20250514",
+      "provider": "anthropic"
     }
   }
 }
 ```
 
-For the full list of supported providers, channel configurations (Telegram, Discord, Feishu, Slack, etc.), and MCP setup, refer to the [upstream nanobot documentation](https://github.com/HKUDS/nanobot).
+- `mode` defaults to `"openai"` (OpenAI-compatible API). Set `"anthropic"` for native Anthropic API.
+- `agents.defaults.provider` must match a key in the `providers` dict.
+
+For channel configurations (Telegram, Discord, Feishu, Slack, etc.) and MCP setup, refer to the [upstream nanobot documentation](https://github.com/HKUDS/nanobot).
 
 ### 3. Run
 

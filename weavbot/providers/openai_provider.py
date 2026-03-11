@@ -1,4 +1,4 @@
-"""Direct OpenAI-compatible provider — bypasses LiteLLM."""
+"""OpenAI-compatible provider using the openai SDK directly."""
 
 from __future__ import annotations
 
@@ -10,16 +10,21 @@ from openai import AsyncOpenAI
 from weavbot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 
-class CustomProvider(LLMProvider):
+class OpenAIProvider(LLMProvider):
     def __init__(
         self,
         api_key: str = "no-key",
         api_base: str = "http://localhost:8000/v1",
         default_model: str = "default",
+        extra_headers: dict[str, str] | None = None,
     ):
         super().__init__(api_key, api_base)
         self.default_model = default_model
-        self._client = AsyncOpenAI(api_key=api_key, base_url=api_base)
+        self._client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=api_base,
+            default_headers=extra_headers or {},
+        )
 
     async def chat(
         self,
