@@ -42,6 +42,7 @@ dependencies = [
     "openai>=2.8.0",
     # Pin chardet for requests compatibility (requests expects chardet<6)
     "chardet>=3.0.2,<6",
+    "anthropic>=0.84.0",
 ]
 
 [project.optional-dependencies]
