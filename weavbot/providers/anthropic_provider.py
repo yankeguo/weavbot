@@ -206,7 +206,8 @@ class AnthropicProvider(LLMProvider):
             kwargs["tool_choice"] = {"type": "auto"}
 
         try:
-            response = await self._client.messages.create(**kwargs)
+            async with self._client.messages.stream(**kwargs) as stream:
+                response = await stream.get_final_message()
             return self._parse_response(response)
         except Exception as e:
             return LLMResponse(content=f"Error: {e}", finish_reason="error")
