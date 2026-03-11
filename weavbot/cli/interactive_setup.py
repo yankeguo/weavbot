@@ -513,7 +513,7 @@ def _configure_channels(data: dict, console: Console) -> dict:
 
 
 _TRAYCLI_REPO = "yankeguo/traycli"
-_TRAYCLI_FALLBACK_TAG = "v0.1.1"
+_TRAYCLI_FALLBACK_TAG = "v0.1.2"
 
 
 def _setup_systemd(exe_path: str, console: Console) -> None:
