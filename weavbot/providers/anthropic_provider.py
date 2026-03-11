@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import json_repair
@@ -51,6 +52,30 @@ class AnthropicProvider(LLMProvider):
         if out:
             out[-1]["cache_control"] = {"type": "ephemeral"}
         return out
+
+    @staticmethod
+    def _convert_image_url_to_anthropic(block: dict[str, Any]) -> dict[str, Any]:
+        """Convert OpenAI image_url block to Anthropic image block."""
+        if block.get("type") != "image_url":
+            return block
+        url = (block.get("image_url") or {}).get("url", "")
+        if not url.startswith("data:"):
+            return block
+        match = re.match(r"data:([^;]+);base64,(.+)", url, re.DOTALL)
+        if not match:
+            return {"type": "text", "text": "[image: invalid data URL]"}
+        media_type, b64 = match.group(1), match.group(2)
+        return {
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": b64},
+        }
+
+    @classmethod
+    def _convert_image_blocks(cls, blocks: list[Any]) -> list[Any]:
+        """Convert OpenAI image_url blocks in a list to Anthropic image format."""
+        return [
+            cls._convert_image_url_to_anthropic(b) if isinstance(b, dict) else b for b in blocks
+        ]
 
     @classmethod
     def _convert_messages(
@@ -130,11 +155,14 @@ class AnthropicProvider(LLMProvider):
                 tool_results: list[dict[str, Any]] = []
                 while i < len(messages) and messages[i].get("role") == "tool":
                     tm = messages[i]
+                    raw_content = tm.get("content") or "(empty)"
+                    if isinstance(raw_content, list):
+                        raw_content = cls._convert_image_blocks(raw_content)
                     tool_results.append(
                         {
                             "type": "tool_result",
                             "tool_use_id": tm.get("tool_call_id", ""),
-                            "content": tm.get("content") or "(empty)",
+                            "content": raw_content,
                         }
                     )
                     i += 1
@@ -145,7 +173,7 @@ class AnthropicProvider(LLMProvider):
                 if isinstance(content, str):
                     result.append({"role": "user", "content": content or "(empty)"})
                 elif isinstance(content, list):
-                    result.append({"role": "user", "content": content})
+                    result.append({"role": "user", "content": cls._convert_image_blocks(content)})
                 else:
                     result.append({"role": "user", "content": str(content) or "(empty)"})
                 i += 1
@@ -158,8 +186,12 @@ class AnthropicProvider(LLMProvider):
                 cur = m["content"]
                 if isinstance(prev, str):
                     prev = [{"type": "text", "text": prev}]
+                elif isinstance(prev, list):
+                    prev = cls._convert_image_blocks(prev)
                 if isinstance(cur, str):
                     cur = [{"type": "text", "text": cur}]
+                elif isinstance(cur, list):
+                    cur = cls._convert_image_blocks(cur)
                 merged[-1]["content"] = prev + cur
             else:
                 merged.append(m)
