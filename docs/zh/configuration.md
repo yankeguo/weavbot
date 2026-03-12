@@ -2,6 +2,8 @@
 layout: default
 title: 配置
 permalink: /zh/configuration/
+parent: 中文
+nav_order: 5
 ---
 
 # 配置
@@ -171,4 +173,4 @@ permalink: /zh/configuration/
 | `replyDelayMs` | int | 非 @ 回复延迟（毫秒） |
 | Socket/重试选项 | — | `socketReconnectDelayMs`、`socketMaxReconnectDelayMs`、`socketConnectTimeoutMs`、`refreshIntervalMs`、`watchTimeoutMs`、`watchLimit`、`retryDelayMs`、`maxRetryAttempts` |
 
-[命令参考](cli) | [快速开始](quick-start)
+[命令参考]({{ site.baseurl }}/zh/cli/) | [快速开始]({{ site.baseurl }}/zh/quick-start/)

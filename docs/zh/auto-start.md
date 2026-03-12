@@ -2,6 +2,8 @@
 layout: default
 title: 开机自启
 permalink: /zh/auto-start/
+parent: 中文
+nav_order: 3
 ---
 
 # 开机自启
@@ -20,4 +22,4 @@ permalink: /zh/auto-start/
 
 向导会下载 [traycli](https://github.com/yankeguo/traycli) 到 `~/.weavbot/bin/traycli.exe`，写入 `~/.traycli/config.json` 并创建启动快捷方式。traycli 以系统托盘应用形式运行 `weavbot gateway`，无控制台窗口。
 
-[快速开始](quick-start) | [命令参考](cli)
+[快速开始]({{ site.baseurl }}/zh/quick-start/) | [命令参考]({{ site.baseurl }}/zh/cli/)

@@ -2,6 +2,7 @@
 layout: default
 title: weavbot
 permalink: /
+nav_order: 1
 ---
 
 # weavbot

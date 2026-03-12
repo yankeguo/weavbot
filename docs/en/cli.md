@@ -2,6 +2,8 @@
 layout: default
 title: CLI Reference
 permalink: /en/cli/
+parent: English
+nav_order: 4
 ---
 
 # CLI Reference
@@ -15,4 +17,4 @@ permalink: /en/cli/
 | `weavbot status` | Show status |
 | `weavbot channels status` | Show channel status |
 
-[Quick Start](quick-start) | [Configuration](configuration)
+[Quick Start]({{ site.baseurl }}/en/quick-start/) | [Configuration]({{ site.baseurl }}/en/configuration/)

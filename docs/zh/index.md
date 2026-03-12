@@ -1,7 +1,9 @@
 ---
 layout: default
-title: weavbot
+title: 中文
 permalink: /zh/
+nav_order: 3
+has_children: true
 ---
 
 # weavbot
@@ -12,11 +14,11 @@ permalink: /zh/
 
 ## 快速导航
 
-- [安装](install) — 安装与验证
-- [快速开始](quick-start) — 初始化、配置与运行
-- [开机自启](auto-start) — 登录后自动运行（Linux、macOS、Windows）
-- [命令参考](cli) — 命令一览
-- [配置](configuration) — 完整配置说明
+- [安装]({{ site.baseurl }}/zh/install/) — 安装与验证
+- [快速开始]({{ site.baseurl }}/zh/quick-start/) — 初始化、配置与运行
+- [开机自启]({{ site.baseurl }}/zh/auto-start/) — 登录后自动运行（Linux、macOS、Windows）
+- [命令参考]({{ site.baseurl }}/zh/cli/) — 命令一览
+- [配置]({{ site.baseurl }}/zh/configuration/) — 完整配置说明
 
 ## 致谢
 

@@ -2,6 +2,8 @@
 layout: default
 title: Configuration
 permalink: /en/configuration/
+parent: English
+nav_order: 5
 ---
 
 # Configuration
@@ -171,4 +173,4 @@ Object. Key = provider name (e.g. `anthropic`, `openrouter`). Each entry:
 | `replyDelayMs` | int | Delay for non-mention replies |
 | Socket/retry options | — | `socketReconnectDelayMs`, `socketMaxReconnectDelayMs`, `socketConnectTimeoutMs`, `refreshIntervalMs`, `watchTimeoutMs`, `watchLimit`, `retryDelayMs`, `maxRetryAttempts` |
 
-[CLI Reference](cli) | [Quick Start](quick-start)
+[CLI Reference]({{ site.baseurl }}/en/cli/) | [Quick Start]({{ site.baseurl }}/en/quick-start/)
