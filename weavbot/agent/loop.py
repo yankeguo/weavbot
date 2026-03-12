@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
+from weavbot.agent.compact import ContextCompactor
 from weavbot.agent.context import ContextBuilder
 from weavbot.agent.memory import MemoryStore
 from weavbot.agent.subagent import SubagentManager
@@ -62,6 +63,7 @@ class AgentLoop:
         max_iterations: int = 40,
         temperature: float = 0.1,
         max_tokens: int = 4096,
+        max_context: int = 131072,
         memory_window: int = 100,
         reasoning_effort: str | None = None,
         web_proxy: str | None = None,
@@ -82,6 +84,7 @@ class AgentLoop:
         self.max_iterations = max_iterations
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.max_context = max_context
         self.memory_window = memory_window
         self.reasoning_effort = reasoning_effort
         self.web_proxy = web_proxy
@@ -90,6 +93,7 @@ class AgentLoop:
         self.restrict_to_workspace = restrict_to_workspace
 
         self.context = ContextBuilder(workspace)
+        self.compactor = ContextCompactor()
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -255,6 +259,90 @@ class AgentLoop:
         )
         session.metadata["token_usage"] = token_usage
 
+    async def _build_initial_messages_with_compaction(
+        self,
+        session: Session,
+        current_message: str,
+        *,
+        channel: str,
+        chat_id: str,
+        media: list[str] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Build initial messages and compact context when output budget cannot fit."""
+        history = session.get_history(max_messages=self.memory_window)
+        initial_messages = self.context.build_messages(
+            history=history,
+            current_message=current_message,
+            media=media,
+            channel=channel,
+            chat_id=chat_id,
+        )
+
+        if self.compactor.can_fit(initial_messages, self.max_context, self.max_tokens):
+            return history, initial_messages
+
+        estimated_before = self.compactor.estimate_tokens(initial_messages)
+        logger.info(
+            "Context budget exceeded before run (est_prompt={}, max_context={}, max_tokens={}), trying compaction",
+            estimated_before,
+            self.max_context,
+            self.max_tokens,
+        )
+
+        compact = await self.compactor.compact_session_to_new_start(
+            session=session,
+            history=history,
+            provider=self.provider,
+            model=self.model,
+            estimated_before_tokens=estimated_before,
+            max_summary_tokens=min(1200, max(256, self.max_tokens // 2)),
+        )
+
+        if compact is None:
+            logger.warning("Context compaction skipped/failed; continuing with original history")
+            return history, initial_messages
+
+        previous_count = len(session.messages)
+        session.clear()
+        session.messages.append(compact.seed_message)
+
+        compaction_meta = session.metadata.get("compaction")
+        compaction_meta = compaction_meta if isinstance(compaction_meta, dict) else {}
+        compaction_meta.update(
+            {
+                "version": 1,
+                "last_at": datetime.now().isoformat(),
+                "covered_messages": compact.covered_messages,
+                "session_messages_before": previous_count,
+                "session_messages_after": len(session.messages),
+                "estimated_prompt_tokens_before": compact.estimated_before_tokens,
+                "estimated_prompt_tokens_after": compact.estimated_after_tokens,
+                "summary_preview": compact.summary[:400],
+            }
+        )
+        session.metadata["compaction"] = compaction_meta
+
+        history = session.get_history(max_messages=self.memory_window)
+        initial_messages = self.context.build_messages(
+            history=history,
+            current_message=current_message,
+            media=media,
+            channel=channel,
+            chat_id=chat_id,
+        )
+        if not self.compactor.can_fit(initial_messages, self.max_context, self.max_tokens):
+            initial_messages = self.compactor.shrink_messages_for_runtime(
+                initial_messages,
+                self.max_context,
+                self.max_tokens,
+            )
+        logger.info(
+            "Context compacted: covered={} messages, rebuilt_history={}",
+            compact.covered_messages,
+            len(history),
+        )
+        return history, initial_messages
+
     async def _run_agent_loop(
         self,
         initial_messages: list[dict],
@@ -269,6 +357,27 @@ class AgentLoop:
 
         while iteration < self.max_iterations:
             iteration += 1
+
+            if not self.compactor.can_fit(messages, self.max_context, self.max_tokens):
+                estimated = self.compactor.estimate_tokens(messages)
+                shrunk = self.compactor.shrink_messages_for_runtime(
+                    messages,
+                    self.max_context,
+                    self.max_tokens,
+                )
+                if shrunk is not messages:
+                    logger.info(
+                        "Applied runtime context shrink before LLM call #{} (est_prompt={})",
+                        iteration,
+                        estimated,
+                    )
+                    messages = shrunk
+                if not self.compactor.can_fit(messages, self.max_context, self.max_tokens):
+                    logger.warning(
+                        "Context still may exceed budget (est_prompt={}, budget={})",
+                        self.compactor.estimate_tokens(messages),
+                        max(0, self.max_context - self.max_tokens),
+                    )
 
             response = await self.provider.chat(
                 messages=messages,
@@ -460,10 +569,9 @@ class AgentLoop:
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
             self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
-            history = session.get_history(max_messages=self.memory_window)
-            messages = self.context.build_messages(
-                history=history,
-                current_message=msg.content,
+            history, messages = await self._build_initial_messages_with_compaction(
+                session,
+                msg.content,
                 channel=channel,
                 chat_id=chat_id,
             )
@@ -546,10 +654,9 @@ class AgentLoop:
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
 
-        history = session.get_history(max_messages=self.memory_window)
-        initial_messages = self.context.build_messages(
-            history=history,
-            current_message=msg.content,
+        history, initial_messages = await self._build_initial_messages_with_compaction(
+            session,
+            msg.content,
             media=msg.media if msg.media else None,
             channel=msg.channel,
             chat_id=msg.chat_id,
