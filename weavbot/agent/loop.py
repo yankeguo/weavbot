@@ -303,8 +303,12 @@ class AgentLoop:
             return history, initial_messages
 
         previous_count = len(session.messages)
-        session.clear()
+        previous_last_consolidated = session.last_consolidated
+        # Keep session append-only: archive old context logically by advancing
+        # last_consolidated, then append a compact seed message as new start.
+        session.last_consolidated = previous_count
         session.messages.append(compact.seed_message)
+        session.updated_at = datetime.now()
 
         compaction_meta = session.metadata.get("compaction")
         compaction_meta = compaction_meta if isinstance(compaction_meta, dict) else {}
@@ -313,6 +317,8 @@ class AgentLoop:
                 "version": 1,
                 "last_at": datetime.now().isoformat(),
                 "covered_messages": compact.covered_messages,
+                "previous_last_consolidated": previous_last_consolidated,
+                "last_consolidated_after": session.last_consolidated,
                 "session_messages_before": previous_count,
                 "session_messages_after": len(session.messages),
                 "estimated_prompt_tokens_before": compact.estimated_before_tokens,

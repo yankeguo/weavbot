@@ -68,6 +68,7 @@ async def test_build_initial_messages_triggers_compaction(tmp_path) -> None:
     session.add_message("user", "U" * 200)
     session.add_message("assistant", "A" * 200)
     session.add_message("user", "B" * 200)
+    before_count = len(session.messages)
 
     history, initial = await loop._build_initial_messages_with_compaction(
         session,
@@ -76,9 +77,10 @@ async def test_build_initial_messages_triggers_compaction(tmp_path) -> None:
         chat_id="direct",
     )
 
-    assert len(session.messages) == 1
-    assert session.messages[0]["role"] == "user"
-    assert session.messages[0]["content"].startswith(ContextCompactor.SEED_PREFIX)
+    assert len(session.messages) == before_count + 1
+    assert session.last_consolidated == before_count
+    assert session.messages[-1]["role"] == "user"
+    assert session.messages[-1]["content"].startswith(ContextCompactor.SEED_PREFIX)
     assert isinstance(session.metadata.get("compaction"), dict)
     assert len(history) == 1
     assert initial[0]["role"] == "system"
