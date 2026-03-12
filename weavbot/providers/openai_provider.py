@@ -7,7 +7,12 @@ from typing import Any
 import json_repair
 from openai import AsyncOpenAI
 
-from weavbot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from weavbot.providers.base import (
+    LLMProvider,
+    LLMResponse,
+    ToolCallRequest,
+    build_provider_headers,
+)
 
 
 class OpenAIProvider(LLMProvider):
@@ -23,7 +28,7 @@ class OpenAIProvider(LLMProvider):
         self._client = AsyncOpenAI(
             api_key=api_key,
             base_url=api_base,
-            default_headers=extra_headers or {},
+            default_headers=build_provider_headers(extra_headers),
         )
 
     async def chat(

@@ -4,6 +4,22 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from weavbot import __version__
+
+DEFAULT_PROVIDER_HEADERS: dict[str, str] = {
+    "User-Agent": f"weavbot/{__version__}",
+    "HTTP-Referer": "https://yankeguo.github.io/weavbot",
+    "X-OpenRouter-Title": "weavbot",
+}
+
+
+def build_provider_headers(extra_headers: dict[str, str] | None = None) -> dict[str, str]:
+    """Build default provider headers with user overrides."""
+    headers = dict(DEFAULT_PROVIDER_HEADERS)
+    if extra_headers:
+        headers.update(extra_headers)
+    return headers
+
 
 @dataclass
 class ToolCallRequest:
