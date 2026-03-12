@@ -1,0 +1,10 @@
+title: weavbot
+description: A lightweight personal AI assistant framework.
+baseurl: "/weavbot"
+url: "https://yankeguo.github.io"
+
+theme: jekyll-theme-minima
+
+markdown: kramdown
+kramdown:
+  input: GFM
