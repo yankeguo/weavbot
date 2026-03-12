@@ -171,6 +171,7 @@ class ContextCompactor:
         seed_message = {
             "role": "user",
             "content": f"{self.SEED_PREFIX}\n\n{summary}",
+            "is_compaction_seed": True,
             "timestamp": datetime.now().isoformat(),
         }
         estimated_after = self.estimate_tokens([seed_message])

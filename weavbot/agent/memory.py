@@ -78,37 +78,59 @@ class MemoryStore:
         model: str,
         *,
         archive_all: bool = False,
-        memory_window: int = 50,
+        up_to_index: int | None = None,
     ) -> bool:
         """Consolidate old messages into MEMORY.md + memory/YYYY-MM-DD.md via LLM tool call.
 
         Returns True on success (including no-op), False on failure.
         """
+        start = session.memory_consolidated_cursor
+        if start < 0:
+            start = 0
+        if start > len(session.messages):
+            start = len(session.messages)
+
         if archive_all:
-            old_messages = session.messages
-            keep_count = 0
-            logger.info("Memory consolidation (archive_all): {} messages", len(session.messages))
-        else:
-            keep_count = memory_window // 2
-            if len(session.messages) <= keep_count:
-                return True
-            if len(session.messages) - session.last_consolidated <= 0:
-                return True
-            old_messages = session.messages[session.last_consolidated : -keep_count]
-            if not old_messages:
-                return True
+            end = len(session.messages)
             logger.info(
-                "Memory consolidation: {} to consolidate, {} keep", len(old_messages), keep_count
+                "Memory consolidation (archive_all): consolidating messages [{}:{})",
+                start,
+                end,
             )
+        else:
+            end = (
+                len(session.messages)
+                if up_to_index is None
+                else min(up_to_index, len(session.messages))
+            )
+            if end < start:
+                end = start
+            if end == start:
+                return True
+            logger.info("Memory consolidation: consolidating messages [{}:{})", start, end)
+
+        old_messages = session.messages[start:end]
+
+        # Do not recursively consolidate compaction seed summaries.
+        raw_messages = [m for m in old_messages if not m.get("is_compaction_seed")]
+
+        if not raw_messages:
+            session.memory_consolidated_cursor = end
+            return True
 
         lines = []
-        for m in old_messages:
+        for m in raw_messages:
             if not m.get("content"):
                 continue
             tools = f" [tools: {', '.join(m['tools_used'])}]" if m.get("tools_used") else ""
-            lines.append(
-                f"[{m.get('timestamp', '?')[:16]}] {m['role'].upper()}{tools}: {m['content']}"
-            )
+            content = m["content"]
+            if not isinstance(content, str):
+                content = json.dumps(content, ensure_ascii=False)
+            lines.append(f"[{m.get('timestamp', '?')[:16]}] {m['role'].upper()}{tools}: {content}")
+
+        if not lines:
+            session.memory_consolidated_cursor = end
+            return True
 
         current_memory = self.read_long_term()
         prompt = f"""Process this conversation and call the save_memory tool with your consolidation.
@@ -163,11 +185,11 @@ class MemoryStore:
                 if update != current_memory:
                     self.write_long_term(update)
 
-            session.last_consolidated = 0 if archive_all else len(session.messages) - keep_count
+            session.memory_consolidated_cursor = end
             logger.info(
-                "Memory consolidation done: {} messages, last_consolidated={}",
+                "Memory consolidation done: {} messages, memory_cursor={}",
                 len(session.messages),
-                session.last_consolidated,
+                session.memory_consolidated_cursor,
             )
             return True
         except Exception:

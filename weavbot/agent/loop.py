@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import weakref
 from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
@@ -64,7 +63,6 @@ class AgentLoop:
         temperature: float = 0.1,
         max_tokens: int = 4096,
         max_context: int = 131072,
-        memory_window: int = 100,
         reasoning_effort: str | None = None,
         web_proxy: str | None = None,
         exec_config: ExecToolConfig | None = None,
@@ -85,7 +83,6 @@ class AgentLoop:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.max_context = max_context
-        self.memory_window = memory_window
         self.reasoning_effort = reasoning_effort
         self.web_proxy = web_proxy
         self.exec_config = exec_config or ExecToolConfig()
@@ -114,11 +111,6 @@ class AgentLoop:
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
         self._mcp_connecting = False
-        self._consolidating: set[str] = set()  # Session keys with consolidation in progress
-        self._consolidation_tasks: set[asyncio.Task] = set()  # Strong refs to in-flight tasks
-        self._consolidation_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = (
-            weakref.WeakValueDictionary()
-        )
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
         self._processing_lock = asyncio.Lock()
         self._register_default_tools()
@@ -269,7 +261,7 @@ class AgentLoop:
         media: list[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Build initial messages and compact context when output budget cannot fit."""
-        history = session.get_history(max_messages=self.memory_window)
+        history = session.get_history()
         initial_messages = self.context.build_messages(
             history=history,
             current_message=current_message,
@@ -289,6 +281,11 @@ class AgentLoop:
             self.max_tokens,
         )
 
+        # Consolidate raw history first so long-term memory is updated before we
+        # compact the active context into a seed summary.
+        if not await self._consolidate_memory(session, up_to_index=len(session.messages)):
+            logger.warning("Memory consolidation failed before context compaction; continuing")
+
         compact = await self.compactor.compact_session_to_new_start(
             session=session,
             history=history,
@@ -303,10 +300,9 @@ class AgentLoop:
             return history, initial_messages
 
         previous_count = len(session.messages)
-        previous_last_consolidated = session.last_consolidated
-        # Keep session append-only: archive old context logically by advancing
-        # last_consolidated, then append a compact seed message as new start.
-        session.last_consolidated = previous_count
+        previous_context_cursor = session.context_compacted_cursor
+        # Keep session append-only: advance context cursor, then append seed message.
+        session.context_compacted_cursor = previous_count
         session.messages.append(compact.seed_message)
         session.updated_at = datetime.now()
 
@@ -317,8 +313,9 @@ class AgentLoop:
                 "version": 1,
                 "last_at": datetime.now().isoformat(),
                 "covered_messages": compact.covered_messages,
-                "previous_last_consolidated": previous_last_consolidated,
-                "last_consolidated_after": session.last_consolidated,
+                "previous_context_cursor": previous_context_cursor,
+                "context_cursor_after": session.context_compacted_cursor,
+                "memory_cursor_after": session.memory_consolidated_cursor,
                 "session_messages_before": previous_count,
                 "session_messages_after": len(session.messages),
                 "estimated_prompt_tokens_before": compact.estimated_before_tokens,
@@ -328,7 +325,7 @@ class AgentLoop:
         )
         session.metadata["compaction"] = compaction_meta
 
-        history = session.get_history(max_messages=self.memory_window)
+        history = session.get_history()
         initial_messages = self.context.build_messages(
             history=history,
             current_message=current_message,
@@ -600,20 +597,14 @@ class AgentLoop:
         # Slash commands
         cmd = msg.content.strip().lower()
         if cmd == "/new":
-            lock = self._consolidation_locks.setdefault(session.key, asyncio.Lock())
-            self._consolidating.add(session.key)
             try:
-                async with lock:
-                    snapshot = session.messages[session.last_consolidated :]
-                    if snapshot:
-                        temp = Session(key=session.key)
-                        temp.messages = list(snapshot)
-                        if not await self._consolidate_memory(temp, archive_all=True):
-                            return OutboundMessage(
-                                channel=msg.channel,
-                                chat_id=msg.chat_id,
-                                content="Memory archival failed, session not cleared. Please try again.",
-                            )
+                # /new keeps memory-only archival semantics; no context compaction.
+                if not await self._consolidate_memory(session, archive_all=True):
+                    return OutboundMessage(
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                        content="Memory archival failed, session not cleared. Please try again.",
+                    )
             except Exception:
                 logger.exception("/new archival failed for {}", session.key)
                 return OutboundMessage(
@@ -621,9 +612,6 @@ class AgentLoop:
                     chat_id=msg.chat_id,
                     content="Memory archival failed, session not cleared. Please try again.",
                 )
-            finally:
-                self._consolidating.discard(session.key)
-
             session.clear()
             self.sessions.save(session)
             self.sessions.invalidate(session.key)
@@ -636,24 +624,6 @@ class AgentLoop:
                 chat_id=msg.chat_id,
                 content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
-
-        unconsolidated = len(session.messages) - session.last_consolidated
-        if unconsolidated >= self.memory_window and session.key not in self._consolidating:
-            self._consolidating.add(session.key)
-            lock = self._consolidation_locks.setdefault(session.key, asyncio.Lock())
-
-            async def _consolidate_and_unlock():
-                try:
-                    async with lock:
-                        await self._consolidate_memory(session)
-                finally:
-                    self._consolidating.discard(session.key)
-                    _task = asyncio.current_task()
-                    if _task is not None:
-                        self._consolidation_tasks.discard(_task)
-
-            _task = asyncio.create_task(_consolidate_and_unlock())
-            self._consolidation_tasks.add(_task)
 
         self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
         if message_tool := self.tools.get("message"):
@@ -754,14 +724,16 @@ class AgentLoop:
             session.messages.append(entry)
         session.updated_at = datetime.now()
 
-    async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
+    async def _consolidate_memory(
+        self, session: Session, archive_all: bool = False, up_to_index: int | None = None
+    ) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
         return await MemoryStore(self.workspace).consolidate(
             session,
             self.provider,
             self.model,
             archive_all=archive_all,
-            memory_window=self.memory_window,
+            up_to_index=up_to_index,
         )
 
     async def process_direct(
