@@ -7,8 +7,9 @@ import json
 import re
 import weakref
 from contextlib import AsyncExitStack
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
@@ -202,16 +203,69 @@ class AgentLoop:
 
         return ", ".join(_fmt(tc) for tc in tool_calls)
 
+    @staticmethod
+    def _normalize_usage(usage: dict[str, Any] | None) -> dict[str, int]:
+        """Normalize provider usage payload to int counters with safe defaults."""
+
+        def _as_int(key: str) -> int:
+            raw = (usage or {}).get(key, 0)
+            if isinstance(raw, bool):
+                return 0
+            if isinstance(raw, int):
+                return max(0, raw)
+            if isinstance(raw, float):
+                return max(0, int(raw))
+            return 0
+
+        prompt = _as_int("prompt_tokens")
+        completion = _as_int("completion_tokens")
+        total = _as_int("total_tokens")
+        if total <= 0:
+            total = prompt + completion
+        return {
+            "prompt_tokens": prompt,
+            "completion_tokens": completion,
+            "total_tokens": total,
+        }
+
+    def _record_session_token_usage(self, session: Session, turn_usage: dict[str, int]) -> None:
+        """Persist token usage stats to session metadata for compact decisions."""
+        usage = self._normalize_usage(turn_usage)
+        token_usage = session.metadata.get("token_usage")
+        token_usage = token_usage if isinstance(token_usage, dict) else {}
+
+        accumulated_prev = token_usage.get("accumulated")
+        accumulated_prev = accumulated_prev if isinstance(accumulated_prev, dict) else {}
+        accumulated_prev = self._normalize_usage(accumulated_prev)
+
+        accumulated = {
+            "prompt_tokens": accumulated_prev["prompt_tokens"] + usage["prompt_tokens"],
+            "completion_tokens": accumulated_prev["completion_tokens"] + usage["completion_tokens"],
+            "total_tokens": accumulated_prev["total_tokens"] + usage["total_tokens"],
+        }
+
+        token_usage.update(
+            {
+                "last_turn": usage,
+                "accumulated": accumulated,
+                "context_prompt_tokens": usage["prompt_tokens"],
+                "last_updated_at": datetime.now().isoformat(),
+                "last_model": self.model,
+            }
+        )
+        session.metadata["token_usage"] = token_usage
+
     async def _run_agent_loop(
         self,
         initial_messages: list[dict],
         on_progress: Callable[..., Awaitable[None]] | None = None,
-    ) -> tuple[str | None, list[str], list[dict]]:
-        """Run the agent iteration loop. Returns (final_content, tools_used, messages)."""
+    ) -> tuple[str | None, list[str], list[dict], dict[str, int]]:
+        """Run the agent iteration loop. Returns (final_content, tools_used, messages, turn_usage)."""
         messages = initial_messages
         iteration = 0
         final_content = None
         tools_used: list[str] = []
+        turn_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -223,6 +277,17 @@ class AgentLoop:
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 reasoning_effort=self.reasoning_effort,
+            )
+            usage = self._normalize_usage(response.usage)
+            turn_usage["prompt_tokens"] += usage["prompt_tokens"]
+            turn_usage["completion_tokens"] += usage["completion_tokens"]
+            turn_usage["total_tokens"] += usage["total_tokens"]
+            logger.debug(
+                "LLM usage call #{}: prompt={}, completion={}, total={}",
+                iteration,
+                usage["prompt_tokens"],
+                usage["completion_tokens"],
+                usage["total_tokens"],
             )
 
             if response.has_tool_calls:
@@ -283,7 +348,13 @@ class AgentLoop:
                 "without completing the task. You can try breaking the task into smaller steps."
             )
 
-        return final_content, tools_used, messages
+        logger.info(
+            "LLM usage turn total: prompt={}, completion={}, total={}",
+            turn_usage["prompt_tokens"],
+            turn_usage["completion_tokens"],
+            turn_usage["total_tokens"],
+        )
+        return final_content, tools_used, messages, turn_usage
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
@@ -396,8 +467,9 @@ class AgentLoop:
                 channel=channel,
                 chat_id=chat_id,
             )
-            final_content, _, all_msgs = await self._run_agent_loop(messages)
+            final_content, _, all_msgs, turn_usage = await self._run_agent_loop(messages)
             self._save_turn(session, all_msgs, 1 + len(history))
+            self._record_session_token_usage(session, turn_usage)
             self.sessions.save(session)
             return OutboundMessage(
                 channel=channel,
@@ -496,7 +568,7 @@ class AgentLoop:
                 )
             )
 
-        final_content, _, all_msgs = await self._run_agent_loop(
+        final_content, _, all_msgs, turn_usage = await self._run_agent_loop(
             initial_messages,
             on_progress=on_progress or _bus_progress,
         )
@@ -505,6 +577,7 @@ class AgentLoop:
             final_content = "I've completed processing but have no response to give."
 
         self._save_turn(session, all_msgs, 1 + len(history))
+        self._record_session_token_usage(session, turn_usage)
         self.sessions.save(session)
 
         if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
@@ -521,8 +594,6 @@ class AgentLoop:
 
     def _save_turn(self, session: Session, messages: list[dict], skip: int) -> None:
         """Save new-turn messages into session, truncating large tool results."""
-        from datetime import datetime
-
         for m in messages[skip:]:
             entry = dict(m)
             role, content = entry.get("role"), entry.get("content")
