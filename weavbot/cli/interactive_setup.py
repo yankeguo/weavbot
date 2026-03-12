@@ -662,6 +662,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                                 api_base = api_base[:-3] or None
                         limit = model_data.get("limit") or {}
                         max_tokens: int = limit.get("output", 8192)
+                        max_context: int = limit.get("context", 131072)
 
                         console.print()
                         console.print(f"[bold]{_t('provider_summary')}:[/bold]")
@@ -673,6 +674,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                             console.print(f"  {_t('api_base')}:   {api_base}")
                         console.print(f"  {_t('model')}:      [cyan]{model_id}[/cyan]")
                         console.print(f"  {_t('max_tokens')}: {max_tokens}")
+                        console.print(f"  {_t('max_context')}: {_format_limit(max_context)}")
                         console.print(
                             f"  {_t('api_key')}:    {api_key[:8]}{'*' * max(0, len(api_key) - 8)}"
                         )
@@ -687,6 +689,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                             defaults["provider"] = provider_id
                             defaults["model"] = model_id
                             defaults["maxTokens"] = max_tokens
+                            defaults["maxContext"] = max_context
                             changed = True
                             console.print(
                                 f"[green]✓[/green] {_t('provider_configured', provider_id)}"

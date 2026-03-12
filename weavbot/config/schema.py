@@ -189,7 +189,8 @@ class AgentDefaults(Base):
     workspace: str = "~/.weavbot/workspace"
     model: str = "anthropic/claude-opus-4-5"
     provider: str = ""  # Provider name — must match a key in the providers dict
-    max_tokens: int = 8192
+    max_tokens: int = 8192  # Max generated tokens (output)
+    max_context: int = 131072  # Context window size (default 128k)
     temperature: float = 0.1
     max_tool_iterations: int = 40
     memory_window: int = 100
