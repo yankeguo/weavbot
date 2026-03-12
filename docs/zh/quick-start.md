@@ -2,6 +2,8 @@
 layout: default
 title: 快速开始
 permalink: /zh/quick-start/
+parent: 中文
+nav_order: 2
 ---
 
 # 快速开始
@@ -68,7 +70,7 @@ weavbot onboard \
 - `mode` 默认为 `"openai"`（OpenAI 兼容 API），设为 `"anthropic"` 使用原生 Anthropic API
 - `agents.defaults.provider` 必须与 `providers` 中的某个键一致
 
-所有渠道与工具配置见[配置说明](configuration)一节。
+所有渠道与工具配置见[配置说明]({{ site.baseurl }}/zh/configuration/)一节。
 
 ## 3. 运行
 
@@ -78,4 +80,4 @@ weavbot gateway
 
 将启动常驻网关，管理代理、渠道、定时任务与心跳。
 
-[安装](install) | [开机自启](auto-start) | [命令参考](cli)
+[安装]({{ site.baseurl }}/zh/install/) | [开机自启]({{ site.baseurl }}/zh/auto-start/) | [命令参考]({{ site.baseurl }}/zh/cli/)

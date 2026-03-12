@@ -1,7 +1,9 @@
 ---
 layout: default
-title: weavbot
+title: English
 permalink: /en/
+nav_order: 2
+has_children: true
 ---
 
 # weavbot
@@ -12,11 +14,11 @@ A lightweight personal AI assistant framework.
 
 ## Get started
 
-- [Install](install) — Install and verify
-- [Quick Start](quick-start) — Initialize, configure, and run
-- [Auto-Start](auto-start) — Run on login (Linux, macOS, Windows)
-- [CLI Reference](cli) — Command overview
-- [Configuration](configuration) — Full config reference
+- [Install]({{ site.baseurl }}/en/install/) — Install and verify
+- [Quick Start]({{ site.baseurl }}/en/quick-start/) — Initialize, configure, and run
+- [Auto-Start]({{ site.baseurl }}/en/auto-start/) — Run on login (Linux, macOS, Windows)
+- [CLI Reference]({{ site.baseurl }}/en/cli/) — Command overview
+- [Configuration]({{ site.baseurl }}/en/configuration/) — Full config reference
 
 ## Credits
 

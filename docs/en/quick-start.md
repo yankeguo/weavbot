@@ -2,6 +2,8 @@
 layout: default
 title: Quick Start
 permalink: /en/quick-start/
+parent: English
+nav_order: 2
 ---
 
 # Quick Start
@@ -68,7 +70,7 @@ Providers are a flat dictionary — the key is a free-form name you choose, and 
 - `mode` defaults to `"openai"` (OpenAI-compatible API). Set `"anthropic"` for native Anthropic API.
 - `agents.defaults.provider` must match a key in the `providers` dict.
 
-All channel and tool options are documented in the [Configuration](configuration) section.
+All channel and tool options are documented in the [Configuration]({{ site.baseurl }}/en/configuration/) section.
 
 ## 3. Run
 
@@ -78,4 +80,4 @@ weavbot gateway
 
 This starts the long-running gateway that manages the agent, channels, scheduled tasks, and heartbeat.
 
-[Install](install) | [Auto-Start](auto-start) | [CLI Reference](cli)
+[Install]({{ site.baseurl }}/en/install/) | [Auto-Start]({{ site.baseurl }}/en/auto-start/) | [CLI Reference]({{ site.baseurl }}/en/cli/)

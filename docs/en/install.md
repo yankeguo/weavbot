@@ -2,6 +2,8 @@
 layout: default
 title: Install
 permalink: /en/install/
+parent: English
+nav_order: 1
 ---
 
 # Installation
@@ -16,4 +18,4 @@ Verify:
 weavbot --version
 ```
 
-[Quick Start](quick-start) | [CLI Reference](cli)
+[Quick Start]({{ site.baseurl }}/en/quick-start/) | [CLI Reference]({{ site.baseurl }}/en/cli/)

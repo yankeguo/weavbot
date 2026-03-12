@@ -2,6 +2,8 @@
 layout: default
 title: 命令参考
 permalink: /zh/cli/
+parent: 中文
+nav_order: 4
 ---
 
 # 命令参考
@@ -15,4 +17,4 @@ permalink: /zh/cli/
 | `weavbot status` | 查看状态 |
 | `weavbot channels status` | 查看渠道状态 |
 
-[快速开始](quick-start) | [配置](configuration)
+[快速开始]({{ site.baseurl }}/zh/quick-start/) | [配置]({{ site.baseurl }}/zh/configuration/)

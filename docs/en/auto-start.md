@@ -2,6 +2,8 @@
 layout: default
 title: Auto-Start
 permalink: /en/auto-start/
+parent: English
+nav_order: 3
 ---
 
 # Auto-Start
@@ -20,4 +22,4 @@ The wizard writes a LaunchAgent to `~/Library/LaunchAgents/com.weavbot.gateway.p
 
 The wizard downloads [traycli](https://github.com/yankeguo/traycli) to `~/.weavbot/bin/traycli.exe`, writes `~/.traycli/config.json`, and creates a startup shortcut. traycli keeps `weavbot gateway` running as a system tray application with no console window.
 
-[Quick Start](quick-start) | [CLI Reference](cli)
+[Quick Start]({{ site.baseurl }}/en/quick-start/) | [CLI Reference]({{ site.baseurl }}/en/cli/)
