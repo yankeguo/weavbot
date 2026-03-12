@@ -132,6 +132,7 @@ class ContextCompactor:
         max_summary_tokens: int = 1200,
     ) -> CompactResult | None:
         """Summarize current history and return a seed message for a logical new session."""
+        logger.debug("Compacting history for session: {session}", session=session)
         if not history:
             return None
 
