@@ -50,7 +50,6 @@ class AgentLoop:
     5. Sends responses back
     """
 
-    _TOOL_RESULT_MAX_CHARS = 500
     _PARAM_MAX_CHARS = 80  # Max chars per param for channel display; longer values are truncated
 
     def __init__(
@@ -529,13 +528,7 @@ class AgentLoop:
             role, content = entry.get("role"), entry.get("content")
             if role == "assistant" and not content and not entry.get("tool_calls"):
                 continue  # skip empty assistant messages — they poison session context
-            if (
-                role == "tool"
-                and isinstance(content, str)
-                and len(content) > self._TOOL_RESULT_MAX_CHARS
-            ):
-                entry["content"] = content[: self._TOOL_RESULT_MAX_CHARS] + "\n... (truncated)"
-            elif role == "tool" and isinstance(content, list):
+            if role == "tool" and isinstance(content, list):
                 filtered = []
                 for c in content:
                     if c.get("type") == "image_url" and c.get("image_url", {}).get(
