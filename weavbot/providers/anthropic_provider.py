@@ -8,7 +8,12 @@ from typing import Any
 import json_repair
 from anthropic import AsyncAnthropic
 
-from weavbot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from weavbot.providers.base import (
+    LLMProvider,
+    LLMResponse,
+    ToolCallRequest,
+    build_provider_headers,
+)
 
 _THINKING_BUDGET: dict[str, int] = {
     "low": 4096,
@@ -30,8 +35,7 @@ class AnthropicProvider(LLMProvider):
         kwargs: dict[str, Any] = {"api_key": api_key}
         if api_base:
             kwargs["base_url"] = api_base
-        if extra_headers:
-            kwargs["default_headers"] = extra_headers
+        kwargs["default_headers"] = build_provider_headers(extra_headers)
         self._client = AsyncAnthropic(**kwargs)
 
     # ------------------------------------------------------------------
