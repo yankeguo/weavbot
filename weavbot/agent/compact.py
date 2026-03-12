@@ -24,6 +24,8 @@ Focus on information that would be helpful for continuing the conversation, incl
 - What needs to be done next
 - Key user requests, constraints, or preferences that should persist
 - Important technical decisions and why they were made
+- Do NOT copy or summarize SKILL.md contents into the compact summary.
+- If a future turn needs a skill, re-read the relevant SKILL.md on demand instead of relying on this summary.
 
 Your summary should be comprehensive enough to provide context but concise enough to be quickly understood.
 
