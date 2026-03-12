@@ -342,7 +342,7 @@ def _configure_channels(data: dict, console: Console) -> dict:
 
 
 _TRAYCLI_REPO = "yankeguo/traycli"
-_TRAYCLI_FALLBACK_TAG = "v0.1.2"
+_TRAYCLI_FALLBACK_TAG = "v0.1.3"
 
 
 def _setup_systemd(exe_path: str, console: Console) -> None:
@@ -493,6 +493,17 @@ def _setup_traycli(exe_path: str, console: Console) -> None:
         return
 
     console.print(f"[green]✓[/green] {_t('autostart_configured')}")
+
+    # --- Launch traycli.exe immediately (detached) ---
+    try:
+        subprocess.Popen(
+            [str(traycli_path)],
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
+        console.print(f"[green]✓[/green] {_t('service_started')}")
+    except (OSError, subprocess.SubprocessError) as exc:
+        console.print(f"[yellow]{_t('traycli_launch_failed', exc)}[/yellow]")
 
 
 _WEAVBOT_BIN = Path.home() / ".weavbot" / "bin"
