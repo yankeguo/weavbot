@@ -3,7 +3,7 @@ description: A lightweight personal AI assistant framework.
 baseurl: "/weavbot"
 url: "https://yankeguo.github.io"
 
-theme: jekyll-theme-minima
+theme: minima
 
 markdown: kramdown
 kramdown:
