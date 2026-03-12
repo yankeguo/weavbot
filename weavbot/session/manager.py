@@ -20,8 +20,8 @@ class Session:
     Stores messages in JSONL format for easy reading and persistence.
 
     Important: Messages are append-only for LLM cache efficiency.
-    The consolidation process writes summaries to MEMORY.md and memory/YYYY-MM-DD.md
-    but does NOT modify the messages list or get_history() output.
+    The consolidation process writes summaries to MEMORY.md and memory/YYYY-MM-DD.md.
+    Context compaction manages active history via a separate cursor.
     """
 
     key: str  # channel:chat_id
@@ -29,7 +29,8 @@ class Session:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
-    last_consolidated: int = 0  # Number of messages already consolidated to files
+    memory_consolidated_cursor: int = 0  # Number of messages archived to memory files
+    context_compacted_cursor: int = 0  # Start index for active context history
 
     def add_message(self, role: str, content: str, **kwargs: Any) -> None:
         """Add a message to the session."""
@@ -38,8 +39,13 @@ class Session:
         self.updated_at = datetime.now()
 
     def get_history(self, max_messages: int = 500) -> list[dict[str, Any]]:
-        """Return unconsolidated messages for LLM input, aligned to a user turn."""
-        unconsolidated = self.messages[self.last_consolidated :]
+        """Return active messages for LLM input, aligned to a user turn."""
+        start = max(self.memory_consolidated_cursor, self.context_compacted_cursor)
+        if start < 0:
+            start = 0
+        if start > len(self.messages):
+            start = len(self.messages)
+        unconsolidated = self.messages[start:]
         sliced = unconsolidated[-max_messages:]
 
         # Drop leading non-user messages to avoid orphaned tool_result blocks
@@ -60,7 +66,8 @@ class Session:
     def clear(self) -> None:
         """Clear all messages and reset session to initial state."""
         self.messages = []
-        self.last_consolidated = 0
+        self.memory_consolidated_cursor = 0
+        self.context_compacted_cursor = 0
         self.updated_at = datetime.now()
 
 
@@ -126,7 +133,8 @@ class SessionManager:
             messages = []
             metadata = {}
             created_at = None
-            last_consolidated = 0
+            memory_cursor = 0
+            context_cursor = 0
 
             with open(path, encoding="utf-8") as f:
                 for line in f:
@@ -143,7 +151,16 @@ class SessionManager:
                             if data.get("created_at")
                             else None
                         )
-                        last_consolidated = data.get("last_consolidated", 0)
+                        raw_memory_cursor = data.get("memory_consolidated_cursor", 0)
+                        raw_context_cursor = data.get("context_compacted_cursor", 0)
+                        # Legacy "last_consolidated" is intentionally not migrated.
+                        # We only ensure malformed/missing values won't crash loading.
+                        memory_cursor = (
+                            raw_memory_cursor if isinstance(raw_memory_cursor, int) else 0
+                        )
+                        context_cursor = (
+                            raw_context_cursor if isinstance(raw_context_cursor, int) else 0
+                        )
                     else:
                         messages.append(data)
 
@@ -152,7 +169,8 @@ class SessionManager:
                 messages=messages,
                 created_at=created_at or datetime.now(),
                 metadata=metadata,
-                last_consolidated=last_consolidated,
+                memory_consolidated_cursor=memory_cursor,
+                context_compacted_cursor=context_cursor,
             )
         except Exception as e:
             logger.warning("Failed to load session {}: {}", key, e)
@@ -169,7 +187,8 @@ class SessionManager:
                 "created_at": session.created_at.isoformat(),
                 "updated_at": session.updated_at.isoformat(),
                 "metadata": session.metadata,
-                "last_consolidated": session.last_consolidated,
+                "memory_consolidated_cursor": session.memory_consolidated_cursor,
+                "context_compacted_cursor": session.context_compacted_cursor,
             }
             f.write(json.dumps(metadata_line, ensure_ascii=False) + "\n")
             for msg in session.messages:

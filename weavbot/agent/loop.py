@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import weakref
 from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
+from weavbot.agent.compact import ContextCompactor
 from weavbot.agent.context import ContextBuilder
 from weavbot.agent.memory import MemoryStore
 from weavbot.agent.subagent import SubagentManager
@@ -62,7 +62,7 @@ class AgentLoop:
         max_iterations: int = 40,
         temperature: float = 0.1,
         max_tokens: int = 4096,
-        memory_window: int = 100,
+        max_context: int = 131072,
         reasoning_effort: str | None = None,
         web_proxy: str | None = None,
         exec_config: ExecToolConfig | None = None,
@@ -82,7 +82,7 @@ class AgentLoop:
         self.max_iterations = max_iterations
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self.memory_window = memory_window
+        self.max_context = max_context
         self.reasoning_effort = reasoning_effort
         self.web_proxy = web_proxy
         self.exec_config = exec_config or ExecToolConfig()
@@ -90,6 +90,7 @@ class AgentLoop:
         self.restrict_to_workspace = restrict_to_workspace
 
         self.context = ContextBuilder(workspace)
+        self.compactor = ContextCompactor()
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -110,11 +111,6 @@ class AgentLoop:
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
         self._mcp_connecting = False
-        self._consolidating: set[str] = set()  # Session keys with consolidation in progress
-        self._consolidation_tasks: set[asyncio.Task] = set()  # Strong refs to in-flight tasks
-        self._consolidation_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = (
-            weakref.WeakValueDictionary()
-        )
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
         self._processing_lock = asyncio.Lock()
         self._register_default_tools()
@@ -255,6 +251,101 @@ class AgentLoop:
         )
         session.metadata["token_usage"] = token_usage
 
+    async def _build_initial_messages_with_compaction(
+        self,
+        session: Session,
+        current_message: str,
+        *,
+        channel: str,
+        chat_id: str,
+        media: list[str] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Build initial messages and compact context when output budget cannot fit."""
+        history = session.get_history()
+        initial_messages = self.context.build_messages(
+            history=history,
+            current_message=current_message,
+            media=media,
+            channel=channel,
+            chat_id=chat_id,
+        )
+
+        if self.compactor.can_fit(initial_messages, self.max_context, self.max_tokens):
+            return history, initial_messages
+
+        estimated_before = self.compactor.estimate_tokens(initial_messages)
+        logger.info(
+            "Context budget exceeded before run (est_prompt={}, max_context={}, max_tokens={}), trying compaction",
+            estimated_before,
+            self.max_context,
+            self.max_tokens,
+        )
+
+        # Consolidate raw history first so long-term memory is updated before we
+        # compact the active context into a seed summary.
+        if not await self._consolidate_memory(session, up_to_index=len(session.messages)):
+            logger.warning("Memory consolidation failed before context compaction; continuing")
+
+        compact = await self.compactor.compact_session_to_new_start(
+            session=session,
+            history=history,
+            provider=self.provider,
+            model=self.model,
+            estimated_before_tokens=estimated_before,
+            max_summary_tokens=min(1200, max(256, self.max_tokens // 2)),
+        )
+
+        if compact is None:
+            logger.warning("Context compaction skipped/failed; continuing with original history")
+            return history, initial_messages
+
+        previous_count = len(session.messages)
+        previous_context_cursor = session.context_compacted_cursor
+        # Keep session append-only: advance context cursor, then append seed message.
+        session.context_compacted_cursor = previous_count
+        session.messages.append(compact.seed_message)
+        session.updated_at = datetime.now()
+
+        compaction_meta = session.metadata.get("compaction")
+        compaction_meta = compaction_meta if isinstance(compaction_meta, dict) else {}
+        compaction_meta.update(
+            {
+                "version": 1,
+                "last_at": datetime.now().isoformat(),
+                "covered_messages": compact.covered_messages,
+                "previous_context_cursor": previous_context_cursor,
+                "context_cursor_after": session.context_compacted_cursor,
+                "memory_cursor_after": session.memory_consolidated_cursor,
+                "session_messages_before": previous_count,
+                "session_messages_after": len(session.messages),
+                "estimated_prompt_tokens_before": compact.estimated_before_tokens,
+                "estimated_prompt_tokens_after": compact.estimated_after_tokens,
+                "summary_preview": compact.summary[:400],
+            }
+        )
+        session.metadata["compaction"] = compaction_meta
+
+        history = session.get_history()
+        initial_messages = self.context.build_messages(
+            history=history,
+            current_message=current_message,
+            media=media,
+            channel=channel,
+            chat_id=chat_id,
+        )
+        if not self.compactor.can_fit(initial_messages, self.max_context, self.max_tokens):
+            initial_messages = self.compactor.shrink_messages_for_runtime(
+                initial_messages,
+                self.max_context,
+                self.max_tokens,
+            )
+        logger.info(
+            "Context compacted: covered={} messages, rebuilt_history={}",
+            compact.covered_messages,
+            len(history),
+        )
+        return history, initial_messages
+
     async def _run_agent_loop(
         self,
         initial_messages: list[dict],
@@ -269,6 +360,27 @@ class AgentLoop:
 
         while iteration < self.max_iterations:
             iteration += 1
+
+            if not self.compactor.can_fit(messages, self.max_context, self.max_tokens):
+                estimated = self.compactor.estimate_tokens(messages)
+                shrunk = self.compactor.shrink_messages_for_runtime(
+                    messages,
+                    self.max_context,
+                    self.max_tokens,
+                )
+                if shrunk is not messages:
+                    logger.info(
+                        "Applied runtime context shrink before LLM call #{} (est_prompt={})",
+                        iteration,
+                        estimated,
+                    )
+                    messages = shrunk
+                if not self.compactor.can_fit(messages, self.max_context, self.max_tokens):
+                    logger.warning(
+                        "Context still may exceed budget (est_prompt={}, budget={})",
+                        self.compactor.estimate_tokens(messages),
+                        max(0, self.max_context - self.max_tokens),
+                    )
 
             response = await self.provider.chat(
                 messages=messages,
@@ -460,10 +572,9 @@ class AgentLoop:
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
             self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
-            history = session.get_history(max_messages=self.memory_window)
-            messages = self.context.build_messages(
-                history=history,
-                current_message=msg.content,
+            history, messages = await self._build_initial_messages_with_compaction(
+                session,
+                msg.content,
                 channel=channel,
                 chat_id=chat_id,
             )
@@ -486,20 +597,14 @@ class AgentLoop:
         # Slash commands
         cmd = msg.content.strip().lower()
         if cmd == "/new":
-            lock = self._consolidation_locks.setdefault(session.key, asyncio.Lock())
-            self._consolidating.add(session.key)
             try:
-                async with lock:
-                    snapshot = session.messages[session.last_consolidated :]
-                    if snapshot:
-                        temp = Session(key=session.key)
-                        temp.messages = list(snapshot)
-                        if not await self._consolidate_memory(temp, archive_all=True):
-                            return OutboundMessage(
-                                channel=msg.channel,
-                                chat_id=msg.chat_id,
-                                content="Memory archival failed, session not cleared. Please try again.",
-                            )
+                # /new keeps memory-only archival semantics; no context compaction.
+                if not await self._consolidate_memory(session, archive_all=True):
+                    return OutboundMessage(
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
+                        content="Memory archival failed, session not cleared. Please try again.",
+                    )
             except Exception:
                 logger.exception("/new archival failed for {}", session.key)
                 return OutboundMessage(
@@ -507,9 +612,6 @@ class AgentLoop:
                     chat_id=msg.chat_id,
                     content="Memory archival failed, session not cleared. Please try again.",
                 )
-            finally:
-                self._consolidating.discard(session.key)
-
             session.clear()
             self.sessions.save(session)
             self.sessions.invalidate(session.key)
@@ -523,33 +625,14 @@ class AgentLoop:
                 content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
 
-        unconsolidated = len(session.messages) - session.last_consolidated
-        if unconsolidated >= self.memory_window and session.key not in self._consolidating:
-            self._consolidating.add(session.key)
-            lock = self._consolidation_locks.setdefault(session.key, asyncio.Lock())
-
-            async def _consolidate_and_unlock():
-                try:
-                    async with lock:
-                        await self._consolidate_memory(session)
-                finally:
-                    self._consolidating.discard(session.key)
-                    _task = asyncio.current_task()
-                    if _task is not None:
-                        self._consolidation_tasks.discard(_task)
-
-            _task = asyncio.create_task(_consolidate_and_unlock())
-            self._consolidation_tasks.add(_task)
-
         self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
 
-        history = session.get_history(max_messages=self.memory_window)
-        initial_messages = self.context.build_messages(
-            history=history,
-            current_message=msg.content,
+        history, initial_messages = await self._build_initial_messages_with_compaction(
+            session,
+            msg.content,
             media=msg.media if msg.media else None,
             channel=msg.channel,
             chat_id=msg.chat_id,
@@ -641,14 +724,16 @@ class AgentLoop:
             session.messages.append(entry)
         session.updated_at = datetime.now()
 
-    async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
+    async def _consolidate_memory(
+        self, session: Session, archive_all: bool = False, up_to_index: int | None = None
+    ) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
         return await MemoryStore(self.workspace).consolidate(
             session,
             self.provider,
             self.model,
             archive_all=archive_all,
-            memory_window=self.memory_window,
+            up_to_index=up_to_index,
         )
 
     async def process_direct(
