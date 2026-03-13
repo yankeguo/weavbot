@@ -17,4 +17,14 @@ nav_order: 5
 | `weavbot status` | Show status |
 | `weavbot channels status` | Show channel status |
 
+## Chat Commands
+
+In interactive mode or any chat channel (Telegram, Discord, etc.), you can use slash commands:
+
+| Command | Description |
+| --- | --- |
+| `/new` | Start a new conversation (archive long-term memory first, then clear the session) |
+| `/stop` | Stop the current running task (including subagents) |
+| `/help` | Show available commands |
+
 [Quick Start]({{ site.baseurl }}/en/quick-start/) | [Configuration]({{ site.baseurl }}/en/configuration/)

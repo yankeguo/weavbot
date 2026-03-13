@@ -17,4 +17,14 @@ nav_order: 5
 | `weavbot status` | 查看状态 |
 | `weavbot channels status` | 查看渠道状态 |
 
+## 聊天命令
+
+在交互式对话或任意聊天渠道（Telegram、Discord 等）中可使用斜杠命令：
+
+| 命令 | 说明 |
+| --- | --- |
+| `/new` | 开始新对话（先归档长期记忆，再清空会话） |
+| `/stop` | 停止当前正在执行的任务（含子代理） |
+| `/help` | 显示可用命令 |
+
 [快速开始]({{ site.baseurl }}/zh/quick-start/) | [配置]({{ site.baseurl }}/zh/configuration/)

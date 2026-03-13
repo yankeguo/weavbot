@@ -60,6 +60,8 @@ Channels connect the agent to external chat platforms. The flow: **channel** →
 - **BaseChannel** — abstract interface: `start`, `stop`, `send`, `_handle_message`
 - **Options** — `allowFrom`, proxy, streaming progress, tool hints
 
+**Chat commands** — Slash commands work in any channel (CLI, Telegram, etc.): `/new` (start a new conversation; archive memory first, then clear session), `/stop` (stop the current task and subagents), `/help` (show commands).
+
 ## Tools
 
 Tools are capabilities the agent invokes via function calls. Each tool implements `name`, `description`, `parameters` (JSON Schema), and `execute()`.
