@@ -10,13 +10,19 @@ A lightweight personal AI assistant framework.
 ## Installation
 
 ```bash
-uv tool install git+https://github.com/yankeguo/weavbot.git
+uv tool install weavbot
 ```
 
 Verify:
 
 ```bash
 weavbot --version
+```
+
+To try the latest unreleased features:
+
+```bash
+uv tool install git+https://github.com/yankeguo/weavbot.git
 ```
 
 **Full documentation:** [https://yankeguo.github.io/weavbot/](https://yankeguo.github.io/weavbot/)
