@@ -3,7 +3,7 @@ layout: default
 title: 命令参考
 permalink: /zh/cli/
 parent: 中文
-nav_order: 4
+nav_order: 5
 ---
 
 # 命令参考

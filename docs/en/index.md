@@ -16,6 +16,7 @@ A lightweight personal AI assistant framework.
 
 - [Install]({{ site.baseurl }}/en/install/) — Install and verify
 - [Quick Start]({{ site.baseurl }}/en/quick-start/) — Initialize, configure, and run
+- [Features]({{ site.baseurl }}/en/features/) — Models, channels, tools, subagent, heartbeat, cron, MCP, skills, context compression, memory
 - [Auto-Start]({{ site.baseurl }}/en/auto-start/) — Run on login (Linux, macOS, Windows)
 - [CLI Reference]({{ site.baseurl }}/en/cli/) — Command overview
 - [Configuration]({{ site.baseurl }}/en/configuration/) — Full config reference

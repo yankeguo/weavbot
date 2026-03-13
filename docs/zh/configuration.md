@@ -3,7 +3,7 @@ layout: default
 title: 配置
 permalink: /zh/configuration/
 parent: 中文
-nav_order: 5
+nav_order: 6
 ---
 
 # 配置

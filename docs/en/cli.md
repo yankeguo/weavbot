@@ -3,7 +3,7 @@ layout: default
 title: CLI Reference
 permalink: /en/cli/
 parent: English
-nav_order: 4
+nav_order: 5
 ---
 
 # CLI Reference

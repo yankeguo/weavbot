@@ -3,7 +3,7 @@ layout: default
 title: Configuration
 permalink: /en/configuration/
 parent: English
-nav_order: 5
+nav_order: 6
 ---
 
 # Configuration
