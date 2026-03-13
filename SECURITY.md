@@ -10,9 +10,10 @@ The project is currently in 0.x unstable release. Security updates are applied t
 
 ## Reporting a Vulnerability
 
-Please report security vulnerabilities by email to **<hi@gyk.me>**. Do not open public issues for security-sensitive bugs.
+Please report security vulnerabilities using one of the following private channels (do not open public issues for security-sensitive bugs):
 
-For sensitive reports, you may use GPG encryption. Public key: [keys.openpgp.org/search?q=hi@gyk.me](https://keys.openpgp.org/search?q=hi@gyk.me)
+- **GitHub Private Vulnerability Reporting / Security Advisories**: Use the "Report a vulnerability" option from the repository's **Security** tab on GitHub, if available.
+- **Email**: Send an email to **<hi@gyk.me>**. For sensitive reports, you may use GPG encryption. Public key: [keys.openpgp.org/search?q=hi@gyk.me](https://keys.openpgp.org/search?q=hi@gyk.me)
 
 ### What to expect
 
