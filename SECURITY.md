@@ -2,11 +2,11 @@
 
 ## Supported Versions
 
-The project is currently in 0.x unstable release. Security updates are applied to the latest release line.
+The project is currently in 0.x unstable release. Security updates are applied only to the latest released version in the 0.x series.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.x     | :white_check_mark: |
+| Version    | Supported          |
+| ---------- | ------------------ |
+| Latest 0.x | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
