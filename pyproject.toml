@@ -75,7 +75,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["weavbot/", "README.md", "LICENSE"]
+include = ["weavbot/", "README.md", "LICENSE", "SECURITY.md"]
 
 [tool.ruff]
 line-length = 100
