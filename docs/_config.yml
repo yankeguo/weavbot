@@ -5,6 +5,10 @@ url: "https://yankeguo.github.io"
 
 theme: just-the-docs
 
+# Enable Mermaid diagrams in markdown code blocks (```mermaid)
+mermaid:
+  version: "10.6.1"
+
 markdown: kramdown
 kramdown:
   input: GFM
