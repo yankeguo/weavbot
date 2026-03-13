@@ -60,6 +60,8 @@ flowchart TB
 - **BaseChannel** — 抽象接口：`start`、`stop`、`send`、`_handle_message`
 - **配置项** — `allowFrom`、代理、流式进度、工具调用提示
 
+**聊天命令** — 斜杠命令在任意渠道（CLI、Telegram 等）中可用：`/new`（开始新对话，先归档记忆再清空会话）、`/stop`（停止当前任务及子代理）、`/help`（显示命令说明）。
+
 ## 工具
 
 工具是代理通过 function call 调用的能力，每个工具实现 `name`、`description`、`parameters`（JSON Schema）、`execute()`。
