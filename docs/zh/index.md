@@ -16,6 +16,7 @@ has_children: true
 
 - [安装]({{ site.baseurl }}/zh/install/) — 安装与验证
 - [快速开始]({{ site.baseurl }}/zh/quick-start/) — 初始化、配置与运行
+- [功能概览]({{ site.baseurl }}/zh/features/) — 模型、渠道、工具、子代理、心跳、定时、MCP、技能、context 压缩、内存
 - [开机自启]({{ site.baseurl }}/zh/auto-start/) — 登录后自动运行（Linux、macOS、Windows）
 - [命令参考]({{ site.baseurl }}/zh/cli/) — 命令一览
 - [配置]({{ site.baseurl }}/zh/configuration/) — 完整配置说明

@@ -3,7 +3,7 @@ layout: default
 title: 开机自启
 permalink: /zh/auto-start/
 parent: 中文
-nav_order: 3
+nav_order: 4
 ---
 
 # 开机自启
