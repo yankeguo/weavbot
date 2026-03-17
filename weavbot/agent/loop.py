@@ -52,6 +52,10 @@ class AgentLoop:
     """
 
     _PARAM_MAX_CHARS = 80  # Max chars per param for channel display; longer values are truncated
+    _DEFAULT_ESTIMATE_MULTIPLIER = 1.18
+    _DEFAULT_SAFETY_TOKENS = 1536
+    _DEFAULT_SAFETY_RATIO = 0.02
+    _CALIBRATION_ALPHA = 0.2
 
     def __init__(
         self,
@@ -251,6 +255,95 @@ class AgentLoop:
         )
         session.metadata["token_usage"] = token_usage
 
+    def _get_context_fit_params(self, session: Session) -> dict[str, float | int]:
+        """Get conservative context-fit params, with per-session calibration when available."""
+        base_multiplier = self._DEFAULT_ESTIMATE_MULTIPLIER
+        base_safety = self._DEFAULT_SAFETY_TOKENS
+        estimator_meta = session.metadata.get("token_estimator")
+        estimator_meta = estimator_meta if isinstance(estimator_meta, dict) else {}
+        model_meta = estimator_meta.get(self.model)
+        model_meta = model_meta if isinstance(model_meta, dict) else {}
+        multiplier_raw = model_meta.get("estimate_multiplier", base_multiplier)
+        safety_raw = model_meta.get("safety_tokens", base_safety)
+        try:
+            multiplier = float(multiplier_raw)
+        except (TypeError, ValueError):
+            multiplier = base_multiplier
+        try:
+            safety_tokens = int(safety_raw)
+        except (TypeError, ValueError):
+            safety_tokens = base_safety
+        return {
+            "estimate_multiplier": min(3.0, max(1.0, multiplier)),
+            "safety_tokens": min(32768, max(256, safety_tokens)),
+            "safety_ratio": self._DEFAULT_SAFETY_RATIO,
+        }
+
+    def _record_estimation_error(
+        self,
+        session: Session,
+        *,
+        estimated_prompt_tokens: int,
+        actual_prompt_tokens: int,
+    ) -> None:
+        """Persist estimate-vs-actual telemetry and update estimator calibration."""
+        if estimated_prompt_tokens <= 0 or actual_prompt_tokens <= 0:
+            return
+        token_usage = session.metadata.get("token_usage")
+        token_usage = token_usage if isinstance(token_usage, dict) else {}
+        estimation = token_usage.get("estimation")
+        estimation = estimation if isinstance(estimation, dict) else {}
+        estimation.update(
+            {
+                "last_estimated_prompt_tokens": int(estimated_prompt_tokens),
+                "last_actual_prompt_tokens": int(actual_prompt_tokens),
+                "last_ratio": round(actual_prompt_tokens / max(1, estimated_prompt_tokens), 4),
+                "last_updated_at": datetime.now().isoformat(),
+                "model": self.model,
+            }
+        )
+        token_usage["estimation"] = estimation
+        session.metadata["token_usage"] = token_usage
+
+        estimator_meta = session.metadata.get("token_estimator")
+        estimator_meta = estimator_meta if isinstance(estimator_meta, dict) else {}
+        model_meta = estimator_meta.get(self.model)
+        model_meta = model_meta if isinstance(model_meta, dict) else {}
+        current_multiplier = model_meta.get(
+            "estimate_multiplier", self._DEFAULT_ESTIMATE_MULTIPLIER
+        )
+        current_safety = model_meta.get("safety_tokens", self._DEFAULT_SAFETY_TOKENS)
+        samples = int(model_meta.get("samples", 0) or 0)
+
+        try:
+            current_multiplier_f = float(current_multiplier)
+        except (TypeError, ValueError):
+            current_multiplier_f = self._DEFAULT_ESTIMATE_MULTIPLIER
+        try:
+            current_safety_i = int(current_safety)
+        except (TypeError, ValueError):
+            current_safety_i = self._DEFAULT_SAFETY_TOKENS
+
+        observed_ratio = actual_prompt_tokens / max(1, estimated_prompt_tokens)
+        alpha = self._CALIBRATION_ALPHA
+        calibrated_multiplier = (1.0 - alpha) * current_multiplier_f + alpha * max(
+            1.0, observed_ratio
+        )
+        underestimation = max(0, actual_prompt_tokens - estimated_prompt_tokens)
+        calibrated_safety = int((1.0 - alpha) * current_safety_i + alpha * (underestimation + 512))
+        model_meta.update(
+            {
+                "estimate_multiplier": min(3.0, max(1.0, round(calibrated_multiplier, 4))),
+                "safety_tokens": min(32768, max(256, calibrated_safety)),
+                "samples": samples + 1,
+                "last_estimated_prompt_tokens": int(estimated_prompt_tokens),
+                "last_actual_prompt_tokens": int(actual_prompt_tokens),
+                "last_updated_at": datetime.now().isoformat(),
+            }
+        )
+        estimator_meta[self.model] = model_meta
+        session.metadata["token_estimator"] = estimator_meta
+
     async def _build_initial_messages_with_compaction(
         self,
         session: Session,
@@ -262,6 +355,7 @@ class AgentLoop:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Build initial messages and compact context when output budget cannot fit."""
         history = session.get_history()
+        fit_params = self._get_context_fit_params(session)
         initial_messages = self.context.build_messages(
             history=history,
             current_message=current_message,
@@ -270,10 +364,14 @@ class AgentLoop:
             chat_id=chat_id,
         )
 
-        if self.compactor.can_fit(initial_messages, self.max_context, self.max_tokens):
+        if self.compactor.can_fit(
+            initial_messages, self.max_context, self.max_tokens, **fit_params
+        ):
             return history, initial_messages
 
-        estimated_before = self.compactor.estimate_tokens(initial_messages)
+        estimated_before = self.compactor.estimate_tokens(
+            initial_messages, estimate_multiplier=fit_params["estimate_multiplier"]
+        )
         logger.info(
             "Context budget exceeded before run (est_prompt={}, max_context={}, max_tokens={}), trying compaction",
             estimated_before,
@@ -333,11 +431,14 @@ class AgentLoop:
             channel=channel,
             chat_id=chat_id,
         )
-        if not self.compactor.can_fit(initial_messages, self.max_context, self.max_tokens):
+        if not self.compactor.can_fit(
+            initial_messages, self.max_context, self.max_tokens, **fit_params
+        ):
             initial_messages = self.compactor.shrink_messages_for_runtime(
                 initial_messages,
                 self.max_context,
                 self.max_tokens,
+                **fit_params,
             )
         logger.info(
             "Context compacted: covered={} messages, rebuilt_history={}",
@@ -348,11 +449,13 @@ class AgentLoop:
 
     async def _run_agent_loop(
         self,
+        session: Session,
         initial_messages: list[dict],
         on_progress: Callable[..., Awaitable[None]] | None = None,
     ) -> tuple[str | None, list[str], list[dict], dict[str, int]]:
         """Run the agent iteration loop. Returns (final_content, tools_used, messages, turn_usage)."""
         messages = initial_messages
+        fit_params = self._get_context_fit_params(session)
         iteration = 0
         final_content = None
         tools_used: list[str] = []
@@ -361,12 +464,17 @@ class AgentLoop:
         while iteration < self.max_iterations:
             iteration += 1
 
-            if not self.compactor.can_fit(messages, self.max_context, self.max_tokens):
-                estimated = self.compactor.estimate_tokens(messages)
+            if not self.compactor.can_fit(
+                messages, self.max_context, self.max_tokens, **fit_params
+            ):
+                estimated = self.compactor.estimate_tokens(
+                    messages, estimate_multiplier=fit_params["estimate_multiplier"]
+                )
                 shrunk = self.compactor.shrink_messages_for_runtime(
                     messages,
                     self.max_context,
                     self.max_tokens,
+                    **fit_params,
                 )
                 if shrunk is not messages:
                     logger.info(
@@ -375,12 +483,40 @@ class AgentLoop:
                         estimated,
                     )
                     messages = shrunk
-                if not self.compactor.can_fit(messages, self.max_context, self.max_tokens):
-                    logger.warning(
-                        "Context still may exceed budget (est_prompt={}, budget={})",
-                        self.compactor.estimate_tokens(messages),
+                if not self.compactor.can_fit(
+                    messages, self.max_context, self.max_tokens, **fit_params
+                ):
+                    hard_shrunk = self.compactor.shrink_messages_for_runtime(
+                        messages,
+                        self.max_context,
+                        self.max_tokens,
+                        estimate_multiplier=max(
+                            1.0, float(fit_params["estimate_multiplier"]) * 1.1
+                        ),
+                        safety_tokens=int(fit_params["safety_tokens"]) + 256,
+                        safety_ratio=float(fit_params["safety_ratio"]),
+                    )
+                    if hard_shrunk is not messages:
+                        messages = hard_shrunk
+                if not self.compactor.can_fit(
+                    messages, self.max_context, self.max_tokens, **fit_params
+                ):
+                    logger.error(
+                        "Context exceeds budget after hard shrink (est_prompt={}, budget={}), aborting call",
+                        self.compactor.estimate_tokens(
+                            messages, estimate_multiplier=fit_params["estimate_multiplier"]
+                        ),
                         max(0, self.max_context - self.max_tokens),
                     )
+                    final_content = (
+                        "Sorry, the current context is too large to process safely. "
+                        "Please run /new or reduce the task scope, then try again."
+                    )
+                    break
+
+            estimated_prompt = self.compactor.estimate_tokens(
+                messages, estimate_multiplier=fit_params["estimate_multiplier"]
+            )
 
             response = await self.provider.chat(
                 messages=messages,
@@ -391,6 +527,12 @@ class AgentLoop:
                 reasoning_effort=self.reasoning_effort,
             )
             usage = self._normalize_usage(response.usage)
+            self._record_estimation_error(
+                session,
+                estimated_prompt_tokens=estimated_prompt,
+                actual_prompt_tokens=usage["prompt_tokens"],
+            )
+            fit_params = self._get_context_fit_params(session)
             turn_usage["prompt_tokens"] += usage["prompt_tokens"]
             turn_usage["completion_tokens"] += usage["completion_tokens"]
             turn_usage["total_tokens"] += usage["total_tokens"]
@@ -578,7 +720,7 @@ class AgentLoop:
                 channel=channel,
                 chat_id=chat_id,
             )
-            final_content, _, all_msgs, turn_usage = await self._run_agent_loop(messages)
+            final_content, _, all_msgs, turn_usage = await self._run_agent_loop(session, messages)
             self._save_turn(session, all_msgs, 1 + len(history))
             self._record_session_token_usage(session, turn_usage)
             self.sessions.save(session)
@@ -652,6 +794,7 @@ class AgentLoop:
             )
 
         final_content, _, all_msgs, turn_usage = await self._run_agent_loop(
+            session,
             initial_messages,
             on_progress=on_progress or _bus_progress,
         )
