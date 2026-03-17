@@ -5,6 +5,7 @@ import os
 import select
 import signal
 import sys
+from datetime import date
 from pathlib import Path
 
 import typer
@@ -417,17 +418,22 @@ def gateway(
         # Fallback keeps prior behavior but remains explicit.
         return "cli", "direct"
 
+    def _heartbeat_session_key(channel: str, chat_id: str) -> str:
+        """Rotate heartbeat context daily to avoid unbounded background-session growth."""
+        return f"heartbeat:{channel}:{chat_id}:{date.today().isoformat()}"
+
     # Create heartbeat service
     async def on_heartbeat_execute(tasks: str) -> str:
         """Phase 2: execute heartbeat tasks through the full agent loop."""
         channel, chat_id = _pick_heartbeat_target()
+        session_key = _heartbeat_session_key(channel, chat_id)
 
         async def _silent(*_args, **_kwargs):
             pass
 
         return await agent.process_direct(
             tasks,
-            session_key="heartbeat",
+            session_key=session_key,
             channel=channel,
             chat_id=chat_id,
             on_progress=_silent,
