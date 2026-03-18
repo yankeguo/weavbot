@@ -162,7 +162,7 @@ def _assemble_heartbeat_response(progress_items: list[str], final_content: str) 
         merged.append(final_text)
 
     if not merged:
-        return "Heartbeat task completed."
+        return ""
     return "\n\n".join(merged)
 
 
@@ -474,6 +474,15 @@ def gateway(
             chat_id=chat_id,
             on_progress=_collect_progress,
         )
+        message_tool = agent.tools.get("message")
+        if bool(getattr(message_tool, "_sent_in_turn", False)):
+            logger.info(
+                "Heartbeat execute suppressed notify because message tool already sent in turn: "
+                "channel={}, chat_id={}",
+                channel,
+                chat_id,
+            )
+            return ""
         assembled = _assemble_heartbeat_response(progress_items, final_content)
         logger.info(
             "Heartbeat execute assembled response: channel={}, chat_id={}, "
@@ -569,8 +578,6 @@ def agent(
     ),
 ):
     """Interact with the agent directly."""
-    from loguru import logger
-
     from weavbot.agent.loop import AgentLoop
     from weavbot.bus.queue import MessageBus
     from weavbot.config.loader import load_config

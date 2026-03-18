@@ -30,3 +30,8 @@ def test_heartbeat_progress_deduplicates_adjacent_text() -> None:
     _collect_heartbeat_progress(progress, "步骤 1: 扫描邮箱")
     assembled = _assemble_heartbeat_response(progress, "步骤 2: 汇总完成")
     assert assembled == "步骤 1: 扫描邮箱\n\n步骤 2: 汇总完成"
+
+
+def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
+    assembled = _assemble_heartbeat_response([], "")
+    assert assembled == ""
