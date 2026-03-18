@@ -17,7 +17,7 @@ weavbot onboard
 会创建 `~/.weavbot/config.json` 和 `~/.weavbot/workspace/`，并启动**交互式配置向导**，依次完成：
 
 1. **服务商选择** — 从 [models.dev](https://models.dev) 拉取已知服务商与模型，选择服务商、模型并填写 API 密钥
-2. **渠道配置** — 配置聊天渠道（Telegram、Discord、飞书、钉钉、Slack、QQ、Email、Mochat）的凭证
+2. **渠道配置** — 配置聊天渠道（Telegram、Discord、飞书、钉钉、Slack、QQ、企业微信（WeCom）、Email、Mochat）的凭证
 3. **依赖安装** — 检测并在缺失时安装 [ripgrep](https://github.com/BurntSushi/ripgrep)（代理文件搜索工具所需）到 `~/.weavbot/bin/`
 4. **开机自启** — 配置网关在登录后自动启动（Linux 用 systemd，macOS 用 launchd，Windows 用 [traycli](https://github.com/yankeguo/traycli)）
 

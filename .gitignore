@@ -20,3 +20,4 @@ poetry.lock
 botpy.log
 tests/
 docs/_site/
+/samples

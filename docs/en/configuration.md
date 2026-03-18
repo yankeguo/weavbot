@@ -137,6 +137,27 @@ Object. Key = provider name (e.g. `anthropic`, `openrouter`). Each entry:
 | `secret` | string | Robot secret (AppSecret) |
 | `allowFrom` | string[] | Allowed openids; empty = allow all |
 
+## channels.wecom
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `enabled` | bool | Enable channel |
+| `botId` | string | Bot ID from the WeCom admin console |
+| `secret` | string | Long-connection secret |
+| `wsUrl` | string | WebSocket endpoint (default `wss://openws.work.weixin.qq.com`) |
+| `heartbeatIntervalSec` | int | Heartbeat interval in seconds |
+| `maxMissedPong` | int | Max consecutive missed pong messages before reconnect |
+| `reconnectBaseMs` | int | Base reconnect backoff in milliseconds |
+| `reconnectMaxMs` | int | Max reconnect backoff in milliseconds |
+| `maxReconnectAttempts` | int | Max reconnect attempts; `-1` means unlimited retries |
+| `requestTimeoutSec` | int | Request timeout in seconds |
+| `singleInstanceGuard` | bool | Enable single-instance guard to avoid duplicate connections |
+| `allowFrom` | string[] | Allowed user IDs; empty = allow all |
+| `perChatPerMinute` | int | Per-chat rate limit per minute |
+| `perChatPerHour` | int | Per-chat rate limit per hour |
+| `uploadChunkSize` | int | Media upload chunk size in bytes |
+| `tempMediaDir` | string | Temporary media directory (relative to workspace) |
+
 ## channels.email
 
 | Key | Type | Description |
