@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.wecom import EVENT_ENTER_CHAT, WeComChannel
@@ -109,3 +111,20 @@ def test_send_enter_chat_uses_welcome_command(tmp_path):
     assert captured["req_id"] == "req-2"
     assert captured["cmd"] == "aibot_respond_welcome_msg"
     assert captured["body"]["text"]["content"] == "hello"
+
+
+def test_build_safe_media_path_strips_parent_dirs(tmp_path):
+    channel = _make_channel(tmp_path)
+    safe = channel._build_safe_media_path("../nested/evil.bin")
+    assert safe.parent.resolve() == channel._temp_media_dir.resolve()
+    assert safe.name == "evil.bin"
+
+
+def test_decrypt_media_data_invalid_base64_raises():
+    try:
+        import cryptography  # noqa: F401
+    except ImportError:
+        pytest.skip("cryptography not installed")
+
+    with pytest.raises(ValueError, match="base64"):
+        WeComChannel.decrypt_media_data(b"0123456789abcdef", "%%%bad%%%")

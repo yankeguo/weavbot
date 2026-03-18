@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import hashlib
 import json
 import random
@@ -632,8 +633,8 @@ class WeComChannel(BaseChannel):
             return None
 
         chunk_size = min(max(1, self.config.upload_chunk_size), 512 * 1024)
-        chunks = [data[i : i + chunk_size] for i in range(0, len(data), chunk_size)]
-        if len(chunks) > 100:
+        total_chunks = (len(data) + chunk_size - 1) // chunk_size
+        if total_chunks > 100:
             logger.error("WeCom upload failed: too many chunks (>100) for {}", media_path)
             return None
 
@@ -642,7 +643,7 @@ class WeComChannel(BaseChannel):
             "type": file_type,
             "filename": media_path.name,
             "total_size": len(data),
-            "total_chunks": len(chunks),
+            "total_chunks": total_chunks,
             "md5": file_md5,
         }
         init_ack = await self._send_request(cmd=CMD_UPLOAD_INIT, body=init_body)
@@ -651,7 +652,8 @@ class WeComChannel(BaseChannel):
             logger.error("WeCom upload init returned empty upload_id")
             return None
 
-        for index, chunk in enumerate(chunks):
+        for index, start in enumerate(range(0, len(data), chunk_size)):
+            chunk = data[start : start + chunk_size]
             chunk_body = {
                 "upload_id": upload_id,
                 "chunk_index": index,
@@ -678,9 +680,25 @@ class WeComChannel(BaseChannel):
             encrypted_data = resp.content
 
         decrypted = self.decrypt_media_data(encrypted_data, aeskey)
-        target_name = filename or f"wecom_media_{int(time.time())}"
-        target_path = self._temp_media_dir / target_name
+        target_path = self._build_safe_media_path(filename)
         await asyncio.to_thread(target_path.write_bytes, decrypted)
+        return target_path
+
+    def _build_safe_media_path(self, filename: str | None) -> Path:
+        """Build a safe output path constrained under the temp media directory."""
+        if filename:
+            target_name = Path(filename).name
+            if not target_name:
+                target_name = f"wecom_media_{int(time.time())}"
+        else:
+            target_name = f"wecom_media_{int(time.time())}"
+
+        base_dir = self._temp_media_dir.resolve()
+        target_path = (base_dir / target_name).resolve()
+        try:
+            target_path.relative_to(base_dir)
+        except ValueError as exc:
+            raise ValueError(f"unsafe filename outside media dir: {filename}") from exc
         return target_path
 
     @staticmethod
@@ -699,7 +717,12 @@ class WeComChannel(BaseChannel):
             raise ValueError("aeskey is empty")
 
         padded = aeskey + "=" * ((4 - len(aeskey) % 4) % 4)
-        key = base64.b64decode(padded)
+        try:
+            key = base64.b64decode(padded, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("aeskey is not valid base64") from exc
+        if len(key) != 32:
+            raise ValueError(f"invalid aeskey length: expected 32 bytes, got {len(key)}")
         iv = key[:16]
 
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
