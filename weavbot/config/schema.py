@@ -166,6 +166,27 @@ class QQConfig(Base):
     )  # Allowed user openids (empty = public access)
 
 
+class WeComConfig(Base):
+    """WeCom (WeChat Work) channel configuration using long WebSocket connection."""
+
+    enabled: bool = False
+    bot_id: str = ""  # Bot ID from WeCom admin console
+    secret: str = ""  # Long-connection secret
+    ws_url: str = "wss://openws.work.weixin.qq.com"
+    heartbeat_interval_sec: int = 30
+    max_missed_pong: int = 2
+    reconnect_base_ms: int = 1000
+    reconnect_max_ms: int = 30000
+    max_reconnect_attempts: int = 10  # -1 means unlimited retries
+    request_timeout_sec: int = 10
+    single_instance_guard: bool = True
+    allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs (empty = allow all)
+    per_chat_per_minute: int = 30
+    per_chat_per_hour: int = 1000
+    upload_chunk_size: int = 512 * 1024  # Max 512KB before base64
+    temp_media_dir: str = "media/wecom"
+
+
 class ChannelsConfig(Base):
     """Configuration for chat channels."""
 
@@ -179,6 +200,7 @@ class ChannelsConfig(Base):
     email: EmailConfig = Field(default_factory=EmailConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
+    wecom: WeComConfig = Field(default_factory=WeComConfig)
 
 
 class AgentDefaults(Base):
