@@ -8,11 +8,14 @@ import binascii
 import hashlib
 import json
 import random
+import re
 import string
 import time
 from collections import OrderedDict, deque
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from loguru import logger
 
@@ -106,7 +109,11 @@ class WeComChannel(BaseChannel):
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning("WeCom connection cycle ended with error: {}", exc)
+                logger.opt(exception=exc).warning(
+                    "WeCom connection cycle ended with error type={} detail={!r}",
+                    type(exc).__name__,
+                    exc,
+                )
 
             if not self._running:
                 break
@@ -205,13 +212,16 @@ class WeComChannel(BaseChannel):
             return
 
         if req_id:
-            body = {"msgtype": "text", "text": {"content": content}}
+            stream_id = self._stream_ids_by_req_id.pop(req_id, None) or self._new_stream_id()
+            body = {
+                "msgtype": "stream",
+                "stream": {"id": stream_id, "finish": True, "content": content},
+            }
             await self._send_reply(req_id=req_id, cmd=CMD_RESPOND_MSG, body=body)
             return
 
         proactive_body = {
             "chatid": msg.chat_id,
-            "chat_type": chat_type,
             "msgtype": "markdown",
             "markdown": {"content": content},
         }
@@ -226,8 +236,8 @@ class WeComChannel(BaseChannel):
         self._missed_pong_count = 0
 
         try:
-            await self._subscribe()
             self._receiver_task = asyncio.create_task(self._receiver_loop())
+            await self._subscribe()
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
             await self._disconnect_event.wait()
@@ -326,7 +336,7 @@ class WeComChannel(BaseChannel):
         chat_id = group_chat_id if chat_type == "group" and group_chat_id else sender_id
         msg_type = str(body.get("msgtype", "")).strip()
 
-        content, media = self._parse_inbound_message_body(body, msg_type)
+        content, media = await self._parse_inbound_message_body(body, msg_type)
         if not content and not media:
             content = f"[wecom:{msg_type}]"
 
@@ -348,7 +358,6 @@ class WeComChannel(BaseChannel):
                 "chat_id": group_chat_id,
                 "sender_id": sender_id,
                 "msg_type": msg_type,
-                "raw_body": body,
             },
         }
 
@@ -401,7 +410,6 @@ class WeComChannel(BaseChannel):
                 "chat_id": group_chat_id,
                 "sender_id": sender_id,
                 "event_type": event_type,
-                "raw_body": body,
             },
         }
 
@@ -413,7 +421,7 @@ class WeComChannel(BaseChannel):
             session_key=session_key,
         )
 
-    def _parse_inbound_message_body(
+    async def _parse_inbound_message_body(
         self, body: dict[str, Any], msg_type: str
     ) -> tuple[str, list[str]]:
         """Extract text representation and media list from inbound message body."""
@@ -443,27 +451,80 @@ class WeComChannel(BaseChannel):
                     image = item.get("image", {}) if isinstance(item.get("image"), dict) else {}
                     url = str(image.get("url", "")).strip()
                     aeskey = str(image.get("aeskey", "")).strip()
-                    if url:
-                        parts.append(f"[image:{url}]")
-                        media.append(url)
-                        if aeskey:
-                            parts.append(f"[image_aeskey:{aeskey[:8]}...]")
+                    local_ref = await self._download_inbound_media(
+                        url=url, aeskey=aeskey, msg_type="image"
+                    )
+                    if local_ref:
+                        media.append(local_ref)
+                        parts.append("[image]")
+                    elif url:
+                        parts.append("[image:download_failed]")
             return "\n".join(p for p in parts if p), media
 
         if msg_type in {"image", "file", "video"}:
             data = body.get(msg_type, {}) if isinstance(body.get(msg_type), dict) else {}
             url = str(data.get("url", "")).strip()
             aeskey = str(data.get("aeskey", "")).strip()
-            if url:
-                media.append(url)
+            local_ref = await self._download_inbound_media(
+                url=url, aeskey=aeskey, msg_type=msg_type
+            )
+            if local_ref:
+                media.append(local_ref)
             marker = f"[{msg_type}]"
-            if url:
-                marker = f"[{msg_type}:{url}]"
-            if aeskey:
-                marker += f" [aeskey:{aeskey[:8]}...]"
+            if url and not local_ref:
+                marker = f"[{msg_type}:download_failed]"
             return marker, media
 
         return f"[wecom:{msg_type}]", media
+
+    async def _download_inbound_media(self, url: str, aeskey: str, msg_type: str) -> str | None:
+        """Download inbound WeCom media and return local file path."""
+        if not url:
+            return None
+        fallback_filename = self._build_inbound_media_filename(url=url, msg_type=msg_type)
+        try:
+            if aeskey:
+                local_path = await self.download_media_resource(
+                    url=url, aeskey=aeskey, filename=fallback_filename, msg_type=msg_type
+                )
+            else:
+                local_path = await self._download_media_resource_raw(
+                    url=url, filename=fallback_filename, msg_type=msg_type
+                )
+            logger.info("Downloaded WeCom inbound {} to {}", msg_type, local_path)
+            return str(local_path)
+        except Exception as exc:
+            logger.warning("Failed to download WeCom inbound {} from {}: {}", msg_type, url, exc)
+            return None
+
+    async def _download_media_resource_raw(
+        self, url: str, filename: str | None = None, msg_type: str = "file"
+    ) -> Path:
+        """Download media as-is when no aeskey is provided."""
+        import httpx
+
+        async with httpx.AsyncClient(timeout=self.config.request_timeout_sec) as client:
+            resp = await client.get(url, follow_redirects=True)
+            resp.raise_for_status()
+            raw_data = resp.content
+            header_filename = self._extract_filename_from_content_disposition(
+                resp.headers.get("Content-Disposition", "")
+            )
+
+        target_path = self._build_safe_media_path(
+            filename=header_filename or filename, msg_type=msg_type
+        )
+        await asyncio.to_thread(target_path.write_bytes, raw_data)
+        return target_path
+
+    @staticmethod
+    def _build_inbound_media_filename(url: str, msg_type: str) -> str:
+        """Build fallback filename from URL basename or type defaults."""
+        basename = unquote(Path(urlparse(url).path).name).strip()
+        if basename:
+            return basename
+        suffix = WeComChannel._default_media_suffix(msg_type)
+        return f"wecom_{msg_type}_{int(time.time() * 1000)}{suffix}"
 
     async def _send_stream_progress(
         self, content: str, req_id: str | None, chat_id: str, chat_type: int
@@ -483,7 +544,6 @@ class WeComChannel(BaseChannel):
 
         proactive_body = {
             "chatid": chat_id,
-            "chat_type": chat_type,
             "msgtype": "markdown",
             "markdown": {"content": content},
         }
@@ -539,7 +599,7 @@ class WeComChannel(BaseChannel):
             await self._send_reply(req_id=req_id, cmd=CMD_RESPOND_MSG, body=body)
             return
 
-        proactive_body = {"chatid": chat_id, "chat_type": chat_type, **body}
+        proactive_body = {"chatid": chat_id, **body}
         await self._send_request(cmd=CMD_SEND_MSG, body=proactive_body)
 
     async def _send_custom_command(
@@ -557,7 +617,7 @@ class WeComChannel(BaseChannel):
                     "WeCom custom command {} requires callback req_id, fallback to send_msg", cmd
                 )
                 if isinstance(body, dict):
-                    proactive_body = {"chatid": chat_id, "chat_type": chat_type, **body}
+                    proactive_body = {"chatid": chat_id, **body}
                     await self._send_request(cmd=CMD_SEND_MSG, body=proactive_body)
                 return
             await self._send_reply(req_id=req_id, cmd=cmd, body=body)
@@ -565,7 +625,7 @@ class WeComChannel(BaseChannel):
 
         if cmd == CMD_SEND_MSG:
             if isinstance(body, dict):
-                payload = {"chatid": chat_id, "chat_type": chat_type, **body}
+                payload = {"chatid": chat_id, **body}
                 await self._send_request(cmd=CMD_SEND_MSG, body=payload)
             return
 
@@ -612,7 +672,15 @@ class WeComChannel(BaseChannel):
             ack = await asyncio.wait_for(future, timeout=float(timeout_s))
             errcode = int(ack.get("errcode", -1))
             if errcode != 0:
-                raise RuntimeError(f"wecom ack error errcode={errcode} errmsg={ack.get('errmsg')}")
+                msgtype = None
+                body = frame.get("body")
+                if isinstance(body, dict):
+                    msgtype = body.get("msgtype")
+                raise RuntimeError(
+                    "wecom ack error cmd={} msgtype={} errcode={} errmsg={}".format(
+                        frame.get("cmd"), msgtype, errcode, ack.get("errmsg")
+                    )
+                )
             return ack
         finally:
             self._pending_acks.pop(req_id, None)
@@ -669,7 +737,7 @@ class WeComChannel(BaseChannel):
         return media_id
 
     async def download_media_resource(
-        self, url: str, aeskey: str, filename: str | None = None
+        self, url: str, aeskey: str, filename: str | None = None, msg_type: str = "file"
     ) -> Path:
         """Download encrypted media and decrypt with AES-256-CBC (requires cryptography)."""
         import httpx
@@ -678,28 +746,88 @@ class WeComChannel(BaseChannel):
             resp = await client.get(url, follow_redirects=True)
             resp.raise_for_status()
             encrypted_data = resp.content
+            header_filename = self._extract_filename_from_content_disposition(
+                resp.headers.get("Content-Disposition", "")
+            )
 
         decrypted = self.decrypt_media_data(encrypted_data, aeskey)
-        target_path = self._build_safe_media_path(filename)
+        target_path = self._build_safe_media_path(
+            filename=header_filename or filename, msg_type=msg_type
+        )
         await asyncio.to_thread(target_path.write_bytes, decrypted)
         return target_path
 
-    def _build_safe_media_path(self, filename: str | None) -> Path:
+    def _build_safe_media_path(self, filename: str | None, msg_type: str = "file") -> Path:
         """Build a safe output path constrained under the temp media directory."""
-        if filename:
-            target_name = Path(filename).name
-            if not target_name:
-                target_name = f"wecom_media_{int(time.time())}"
-        else:
-            target_name = f"wecom_media_{int(time.time())}"
+        target_name = self._sanitize_inbound_filename(filename=filename, msg_type=msg_type)
 
         base_dir = self._temp_media_dir.resolve()
-        target_path = (base_dir / target_name).resolve()
+        target_path = self._ensure_unique_media_path((base_dir / target_name).resolve())
         try:
             target_path.relative_to(base_dir)
         except ValueError as exc:
             raise ValueError(f"unsafe filename outside media dir: {filename}") from exc
         return target_path
+
+    def _ensure_unique_media_path(self, path: Path) -> Path:
+        """Use datetime prefix when file already exists to avoid collisions."""
+        if not path.exists():
+            return path
+        parent = path.parent
+
+        ts_prefix = datetime.now().strftime("%Y%m%d%H%M%S")
+        candidate = parent / f"{ts_prefix}_{path.name}"
+        if not candidate.exists():
+            return candidate
+
+        for idx in range(1, 10000):
+            candidate = parent / f"{ts_prefix}_{idx}_{path.name}"
+            if not candidate.exists():
+                return candidate
+        raise RuntimeError(f"unable to allocate unique media filename for {path.name}")
+
+    @staticmethod
+    def _extract_filename_from_content_disposition(header: str) -> str | None:
+        """Extract filename from Content-Disposition header."""
+        if not header:
+            return None
+        utf8_match = re.search(r"filename\*=UTF-8''([^;\s]+)", header, re.IGNORECASE)
+        if utf8_match:
+            return unquote(utf8_match.group(1))
+        plain_match = re.search(r'filename="?([^";\s]+)"?', header, re.IGNORECASE)
+        if plain_match:
+            return unquote(plain_match.group(1))
+        return None
+
+    def _sanitize_inbound_filename(self, filename: str | None, msg_type: str) -> str:
+        """Keep original filename as much as possible while removing unsafe chars."""
+        fallback = (
+            f"wecom_{msg_type}_{int(time.time() * 1000)}{self._default_media_suffix(msg_type)}"
+        )
+        if not filename:
+            return fallback
+        # Keep basename only; block path traversal and normalize URL-escaped names.
+        name = Path(unquote(filename)).name.strip()
+        if not name:
+            return fallback
+        # Remove filesystem-unsafe characters but keep readable original name.
+        name = re.sub(r'[\x00-\x1f<>:"/\\|?*]+', "_", name).strip(" .")
+        if not name:
+            return fallback
+        # Bound length to avoid OS filename limits, preserving extension.
+        if len(name) > 120:
+            suffix = Path(name).suffix
+            stem = Path(name).stem[: max(1, 120 - len(suffix))]
+            name = f"{stem}{suffix}"
+        if not Path(name).suffix:
+            name = f"{name}{self._default_media_suffix(msg_type)}"
+        return name
+
+    @staticmethod
+    def _default_media_suffix(msg_type: str) -> str:
+        return {"image": ".jpg", "video": ".mp4", "voice": ".amr", "file": ".bin"}.get(
+            msg_type, ".bin"
+        )
 
     @staticmethod
     def decrypt_media_data(encrypted_data: bytes, aeskey: str) -> bytes:

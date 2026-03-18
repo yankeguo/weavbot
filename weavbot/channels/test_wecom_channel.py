@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 import pytest
 
@@ -15,6 +16,12 @@ def _make_channel(tmp_path):
 
 def test_parse_mixed_message(tmp_path):
     channel = _make_channel(tmp_path)
+    fake_local = str(tmp_path / "a.png")
+
+    async def fake_download_inbound_media(url: str, aeskey: str, msg_type: str) -> str | None:
+        return fake_local if msg_type == "image" else None
+
+    channel._download_inbound_media = fake_download_inbound_media  # type: ignore[method-assign]
     body = {
         "msgtype": "mixed",
         "mixed": {
@@ -27,10 +34,10 @@ def test_parse_mixed_message(tmp_path):
             ]
         },
     }
-    content, media = channel._parse_inbound_message_body(body, "mixed")
+    content, media = asyncio.run(channel._parse_inbound_message_body(body, "mixed"))
     assert "hello" in content
-    assert "image:https://img.example/a.png" in content
-    assert media == ["https://img.example/a.png"]
+    assert "[image]" in content
+    assert media == [fake_local]
 
 
 def test_extract_req_id_via_message_id_cache(tmp_path):
@@ -118,6 +125,23 @@ def test_build_safe_media_path_strips_parent_dirs(tmp_path):
     safe = channel._build_safe_media_path("../nested/evil.bin")
     assert safe.parent.resolve() == channel._temp_media_dir.resolve()
     assert safe.name == "evil.bin"
+
+
+def test_build_safe_media_path_collision_uses_datetime_prefix(tmp_path):
+    channel = _make_channel(tmp_path)
+    existing = channel._temp_media_dir / "dup.png"
+    existing.write_bytes(b"1")
+
+    safe = channel._build_safe_media_path("dup.png", msg_type="image")
+    assert safe.parent.resolve() == channel._temp_media_dir.resolve()
+    assert re.match(r"^\d{14}_dup\.png$", safe.name)
+
+
+def test_build_safe_media_path_keeps_chinese_filename(tmp_path):
+    channel = _make_channel(tmp_path)
+    safe = channel._build_safe_media_path("测试图片_你好.png", msg_type="image")
+    assert safe.parent.resolve() == channel._temp_media_dir.resolve()
+    assert safe.name == "测试图片_你好.png"
 
 
 def test_decrypt_media_data_invalid_base64_raises():
