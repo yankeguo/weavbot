@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 import typer
+from loguru import logger
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
@@ -129,6 +130,40 @@ def _print_agent_response(response: str, render_markdown: bool) -> None:
 def _is_exit_command(command: str) -> bool:
     """Return True when input should end interactive chat."""
     return command.lower() in EXIT_COMMANDS
+
+
+def _collect_heartbeat_progress(
+    progress_items: list[str], content: str, *, tool_hint: bool = False
+) -> None:
+    """Collect user-facing heartbeat progress text; always ignore tool hints."""
+    if tool_hint:
+        return
+    text = (content or "").strip()
+    if not text:
+        return
+    if progress_items and progress_items[-1] == text:
+        return
+    progress_items.append(text)
+
+
+def _assemble_heartbeat_response(progress_items: list[str], final_content: str) -> str:
+    """Assemble heartbeat message as progress blocks followed by final content."""
+    merged: list[str] = []
+    for item in progress_items:
+        text = item.strip()
+        if not text:
+            continue
+        if merged and merged[-1] == text:
+            continue
+        merged.append(text)
+
+    final_text = (final_content or "").strip()
+    if final_text and (not merged or merged[-1] != final_text):
+        merged.append(final_text)
+
+    if not merged:
+        return ""
+    return "\n\n".join(merged)
 
 
 async def _read_interactive_input_async() -> str:
@@ -427,17 +462,38 @@ def gateway(
         """Phase 2: execute heartbeat tasks through the full agent loop."""
         channel, chat_id = _pick_heartbeat_target()
         session_key = _heartbeat_session_key(channel, chat_id)
+        progress_items: list[str] = []
 
-        async def _silent(*_args, **_kwargs):
-            pass
+        async def _collect_progress(content: str, *, tool_hint: bool = False) -> None:
+            _collect_heartbeat_progress(progress_items, content, tool_hint=tool_hint)
 
-        return await agent.process_direct(
+        final_content = await agent.process_direct(
             tasks,
             session_key=session_key,
             channel=channel,
             chat_id=chat_id,
-            on_progress=_silent,
+            on_progress=_collect_progress,
         )
+        message_tool = agent.tools.get("message")
+        if bool(getattr(message_tool, "_sent_in_turn", False)):
+            logger.info(
+                "Heartbeat execute suppressed notify because message tool already sent in turn: "
+                "channel={}, chat_id={}",
+                channel,
+                chat_id,
+            )
+            return ""
+        assembled = _assemble_heartbeat_response(progress_items, final_content)
+        logger.info(
+            "Heartbeat execute assembled response: channel={}, chat_id={}, "
+            "progress_items_count={}, final_len={}, assembled_len={}",
+            channel,
+            chat_id,
+            len(progress_items),
+            len(final_content or ""),
+            len(assembled),
+        )
+        return assembled
 
     async def on_heartbeat_notify(response: str) -> None:
         """Deliver a heartbeat response to the user's channel."""
@@ -446,6 +502,12 @@ def gateway(
         channel, chat_id = _pick_heartbeat_target()
         if channel == "cli":
             return  # No external channel available to deliver to
+        logger.info(
+            "Heartbeat notify deliver: channel={}, chat_id={}, content_len={}",
+            channel,
+            chat_id,
+            len(response or ""),
+        )
         await bus.publish_outbound(
             OutboundMessage(channel=channel, chat_id=chat_id, content=response)
         )
@@ -516,8 +578,6 @@ def agent(
     ),
 ):
     """Interact with the agent directly."""
-    from loguru import logger
-
     from weavbot.agent.loop import AgentLoop
     from weavbot.bus.queue import MessageBus
     from weavbot.config.loader import load_config
