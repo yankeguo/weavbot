@@ -238,7 +238,7 @@ _CHANNEL_DEFS: list[dict[str, Any]] = [
     },
     {
         "key": "wecom",
-        "name": "WeCom",
+        "name": "Wecom",
         "fields": [
             {"key": "botId", "label_key": "field_app_id", "secret": False},
             {"key": "secret", "label_key": "field_app_secret", "secret": True},
