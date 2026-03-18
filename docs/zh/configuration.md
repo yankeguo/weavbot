@@ -137,6 +137,27 @@ nav_order: 6
 | `secret` | string | 机器人密钥（AppSecret） |
 | `allowFrom` | string[] | 允许的 openid；空为全部允许 |
 
+## channels.wecom
+
+| 键 | 类型 | 说明 |
+| --- | --- | --- |
+| `enabled` | bool | 是否启用 |
+| `botId` | string | 企业微信管理后台中的机器人 ID |
+| `secret` | string | 长连接密钥 |
+| `wsUrl` | string | WebSocket 地址（默认 `wss://openws.work.weixin.qq.com`） |
+| `heartbeatIntervalSec` | int | 心跳间隔（秒） |
+| `maxMissedPong` | int | 连续未收到 pong 的最大次数，超过后重连 |
+| `reconnectBaseMs` | int | 断线重连基础退避时间（毫秒） |
+| `reconnectMaxMs` | int | 断线重连最大退避时间（毫秒） |
+| `maxReconnectAttempts` | int | 最大重连次数，`-1` 表示无限重试 |
+| `requestTimeoutSec` | int | 请求超时（秒） |
+| `singleInstanceGuard` | bool | 启用单实例守护，避免重复实例接入 |
+| `allowFrom` | string[] | 允许的用户 ID；空为全部允许 |
+| `perChatPerMinute` | int | 每个会话每分钟限流阈值 |
+| `perChatPerHour` | int | 每个会话每小时限流阈值 |
+| `uploadChunkSize` | int | 媒体上传分片大小（字节） |
+| `tempMediaDir` | string | 临时媒体目录（相对工作区） |
+
 ## channels.email
 
 | 键 | 类型 | 说明 |

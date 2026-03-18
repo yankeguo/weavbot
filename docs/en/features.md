@@ -56,7 +56,7 @@ See [Configuration]({{ site.baseurl }}/en/configuration/) for `providers` and `a
 
 Channels connect the agent to external chat platforms. The flow: **channel** → `bus.publish_inbound()` → **Agent** → `bus.publish_outbound()` → `ChannelManager._dispatch_outbound()` → **channel** `send()`.
 
-- **Supported channels** — Telegram, Discord, Feishu, DingTalk, Slack, QQ, Email, Mochat
+- **Supported channels** — Telegram, Discord, Feishu, DingTalk, Slack, QQ, WeCom, Email, Mochat
 - **BaseChannel** — abstract interface: `start`, `stop`, `send`, `_handle_message`
 - **Options** — `allowFrom`, proxy, streaming progress, tool hints
 
