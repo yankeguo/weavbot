@@ -1,4 +1,4 @@
-"""WeCom channel implementation using the long WebSocket connection protocol."""
+"""Wecom channel implementation using the long WebSocket connection protocol."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.config.schema import WeComConfig
+from weavbot.config.schema import WecomConfig
 
 try:
     import websockets
@@ -53,8 +53,8 @@ EVENT_FEEDBACK = "feedback_event"
 EVENT_DISCONNECTED = "disconnected_event"
 
 
-class WeComChannel(BaseChannel):
-    """WeCom channel using WebSocket long connection."""
+class WecomChannel(BaseChannel):
+    """Wecom channel using WebSocket long connection."""
 
     name = "wecom"
 
@@ -62,9 +62,9 @@ class WeComChannel(BaseChannel):
     _VOICE_EXTS = {".amr"}
     _VIDEO_EXTS = {".mp4"}
 
-    def __init__(self, config: WeComConfig, bus: MessageBus, workspace: Path):
+    def __init__(self, config: WecomConfig, bus: MessageBus, workspace: Path):
         super().__init__(config, bus, workspace)
-        self.config: WeComConfig = config
+        self.config: WecomConfig = config
 
         self._ws: Any = None
         self._receiver_task: asyncio.Task[None] | None = None
@@ -90,12 +90,12 @@ class WeComChannel(BaseChannel):
         self._temp_media_dir.mkdir(parents=True, exist_ok=True)
 
     async def start(self) -> None:
-        """Start the WeCom channel and keep reconnecting until stopped."""
+        """Start the Wecom channel and keep reconnecting until stopped."""
         if not WECOM_AVAILABLE:
             logger.error("websockets is not installed. Please install dependency first.")
             return
         if not self.config.bot_id or not self.config.secret:
-            logger.error("WeCom bot_id and secret are required.")
+            logger.error("Wecom bot_id and secret are required.")
             return
 
         self._running = True
@@ -110,7 +110,7 @@ class WeComChannel(BaseChannel):
                 raise
             except Exception as exc:
                 logger.opt(exception=exc).warning(
-                    "WeCom connection cycle ended with error type={} detail={!r}",
+                    "Wecom connection cycle ended with error type={} detail={!r}",
                     type(exc).__name__,
                     exc,
                 )
@@ -124,7 +124,7 @@ class WeComChannel(BaseChannel):
                 and reconnect_attempt > self.config.max_reconnect_attempts
             ):
                 logger.error(
-                    "WeCom reconnect attempts exceeded max_reconnect_attempts={}",
+                    "Wecom reconnect attempts exceeded max_reconnect_attempts={}",
                     self.config.max_reconnect_attempts,
                 )
                 break
@@ -134,7 +134,7 @@ class WeComChannel(BaseChannel):
                 self.config.reconnect_max_ms,
             )
             logger.info(
-                "Reconnecting WeCom websocket in {}ms (attempt {})",
+                "Reconnecting Wecom websocket in {}ms (attempt {})",
                 delay_ms,
                 reconnect_attempt,
             )
@@ -143,7 +143,7 @@ class WeComChannel(BaseChannel):
         self._running = False
 
     async def stop(self) -> None:
-        """Stop WeCom channel and close websocket gracefully."""
+        """Stop Wecom channel and close websocket gracefully."""
         self._running = False
         self._stopping = True
         self._disconnect_event.set()
@@ -152,9 +152,9 @@ class WeComChannel(BaseChannel):
         await self._cancel_receiver()
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send outbound message through WeCom websocket."""
+        """Send outbound message through Wecom websocket."""
         if not self._ws:
-            logger.warning("WeCom websocket is not connected.")
+            logger.warning("Wecom websocket is not connected.")
             return
 
         metadata = msg.metadata or {}
@@ -163,7 +163,7 @@ class WeComChannel(BaseChannel):
         chat_type = self._infer_chat_type(msg.chat_id, metadata, wecom_meta)
 
         if not self._within_rate_limit(msg.chat_id):
-            logger.warning("WeCom outbound dropped due to rate-limit for chat_id={}", msg.chat_id)
+            logger.warning("Wecom outbound dropped due to rate-limit for chat_id={}", msg.chat_id)
             return
 
         if msg.media:
@@ -231,7 +231,7 @@ class WeComChannel(BaseChannel):
         """Open one websocket session and run until disconnected."""
         self._disconnect_event = asyncio.Event()
         ws_url = self.config.ws_url or "wss://openws.work.weixin.qq.com"
-        logger.info("Connecting WeCom websocket: {}", ws_url)
+        logger.info("Connecting Wecom websocket: {}", ws_url)
         self._ws = await websockets.connect(ws_url, ping_interval=None, ping_timeout=None)
         self._missed_pong_count = 0
 
@@ -253,9 +253,9 @@ class WeComChannel(BaseChannel):
         ack = await self._send_request(cmd=CMD_SUBSCRIBE, body=body)
         if int(ack.get("errcode", -1)) != 0:
             raise RuntimeError(
-                f"WeCom subscribe failed: errcode={ack.get('errcode')} errmsg={ack.get('errmsg')}"
+                f"Wecom subscribe failed: errcode={ack.get('errcode')} errmsg={ack.get('errmsg')}"
             )
-        logger.info("WeCom subscribe authenticated")
+        logger.info("Wecom subscribe authenticated")
 
     async def _heartbeat_loop(self) -> None:
         """Send heartbeat ping frames at fixed intervals."""
@@ -265,7 +265,7 @@ class WeComChannel(BaseChannel):
 
                 if self._missed_pong_count >= max(1, self.config.max_missed_pong):
                     logger.warning(
-                        "WeCom heartbeat lost {} consecutive pong(s), reconnecting",
+                        "Wecom heartbeat lost {} consecutive pong(s), reconnecting",
                         self._missed_pong_count,
                     )
                     self._disconnect_event.set()
@@ -278,7 +278,7 @@ class WeComChannel(BaseChannel):
                     )
                     self._missed_pong_count = 0
                 except Exception as exc:
-                    logger.warning("WeCom heartbeat ping failed: {}", exc)
+                    logger.warning("Wecom heartbeat ping failed: {}", exc)
         except asyncio.CancelledError:
             return
 
@@ -293,9 +293,9 @@ class WeComChannel(BaseChannel):
         except asyncio.CancelledError:
             return
         except ConnectionClosed as exc:
-            logger.warning("WeCom websocket closed: {}", exc)
+            logger.warning("Wecom websocket closed: {}", exc)
         except Exception as exc:
-            logger.warning("WeCom receiver loop error: {}", exc)
+            logger.warning("Wecom receiver loop error: {}", exc)
         finally:
             self._disconnect_event.set()
 
@@ -319,7 +319,7 @@ class WeComChannel(BaseChannel):
                 self._missed_pong_count = 0
                 return
 
-        logger.debug("Ignored WeCom frame without routing target: {}", frame)
+        logger.debug("Ignored Wecom frame without routing target: {}", frame)
 
     async def _handle_message_callback(self, frame: dict[str, Any]) -> None:
         """Map aibot_msg_callback to InboundMessage."""
@@ -387,7 +387,7 @@ class WeComChannel(BaseChannel):
         event_type = str(event.get("eventtype", "")).strip()
 
         if event_type == EVENT_DISCONNECTED and self.config.single_instance_guard:
-            logger.warning("Received disconnected_event from WeCom, reconnecting")
+            logger.warning("Received disconnected_event from Wecom, reconnecting")
             self._disconnect_event.set()
             return
 
@@ -478,7 +478,7 @@ class WeComChannel(BaseChannel):
         return f"[wecom:{msg_type}]", media
 
     async def _download_inbound_media(self, url: str, aeskey: str, msg_type: str) -> str | None:
-        """Download inbound WeCom media and return local file path."""
+        """Download inbound Wecom media and return local file path."""
         if not url:
             return None
         fallback_filename = self._build_inbound_media_filename(url=url, msg_type=msg_type)
@@ -491,10 +491,10 @@ class WeComChannel(BaseChannel):
                 local_path = await self._download_media_resource_raw(
                     url=url, filename=fallback_filename, msg_type=msg_type
                 )
-            logger.info("Downloaded WeCom inbound {} to {}", msg_type, local_path)
+            logger.info("Downloaded Wecom inbound {} to {}", msg_type, local_path)
             return str(local_path)
         except Exception as exc:
-            logger.warning("Failed to download WeCom inbound {} from {}: {}", msg_type, url, exc)
+            logger.warning("Failed to download Wecom inbound {} from {}: {}", msg_type, url, exc)
             return None
 
     async def _download_media_resource_raw(
@@ -523,7 +523,7 @@ class WeComChannel(BaseChannel):
         basename = unquote(Path(urlparse(url).path).name).strip()
         if basename:
             return basename
-        suffix = WeComChannel._default_media_suffix(msg_type)
+        suffix = WecomChannel._default_media_suffix(msg_type)
         return f"wecom_{msg_type}_{int(time.time() * 1000)}{suffix}"
 
     async def _send_stream_progress(
@@ -577,7 +577,7 @@ class WeComChannel(BaseChannel):
         """Upload local media and send the message."""
         media_path = self.resolve_media_path(media_ref)
         if not media_path.is_file():
-            logger.warning("WeCom media path not found: {}", media_path)
+            logger.warning("Wecom media path not found: {}", media_path)
             return
 
         msg_type = self._guess_media_type(media_path)
@@ -614,7 +614,7 @@ class WeComChannel(BaseChannel):
         if cmd in {CMD_RESPOND_MSG, CMD_RESPOND_WELCOME, CMD_RESPOND_UPDATE}:
             if not req_id:
                 logger.warning(
-                    "WeCom custom command {} requires callback req_id, fallback to send_msg", cmd
+                    "Wecom custom command {} requires callback req_id, fallback to send_msg", cmd
                 )
                 if isinstance(body, dict):
                     proactive_body = {"chatid": chat_id, **body}
@@ -697,13 +697,13 @@ class WeComChannel(BaseChannel):
 
         data = await asyncio.to_thread(media_path.read_bytes)
         if not data:
-            logger.warning("WeCom upload skipped empty file: {}", media_path)
+            logger.warning("Wecom upload skipped empty file: {}", media_path)
             return None
 
         chunk_size = min(max(1, self.config.upload_chunk_size), 512 * 1024)
         total_chunks = (len(data) + chunk_size - 1) // chunk_size
         if total_chunks > 100:
-            logger.error("WeCom upload failed: too many chunks (>100) for {}", media_path)
+            logger.error("Wecom upload failed: too many chunks (>100) for {}", media_path)
             return None
 
         file_md5 = hashlib.md5(data).hexdigest()
@@ -717,7 +717,7 @@ class WeComChannel(BaseChannel):
         init_ack = await self._send_request(cmd=CMD_UPLOAD_INIT, body=init_body)
         upload_id = str((init_ack.get("body") or {}).get("upload_id", "")).strip()
         if not upload_id:
-            logger.error("WeCom upload init returned empty upload_id")
+            logger.error("Wecom upload init returned empty upload_id")
             return None
 
         for index, start in enumerate(range(0, len(data), chunk_size)):
@@ -732,7 +732,7 @@ class WeComChannel(BaseChannel):
         finish_ack = await self._send_request(cmd=CMD_UPLOAD_FINISH, body={"upload_id": upload_id})
         media_id = str((finish_ack.get("body") or {}).get("media_id", "")).strip()
         if not media_id:
-            logger.error("WeCom upload finish returned empty media_id")
+            logger.error("Wecom upload finish returned empty media_id")
             return None
         return media_id
 

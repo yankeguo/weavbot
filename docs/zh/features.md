@@ -56,7 +56,7 @@ flowchart TB
 
 渠道将代理与外部聊天平台连接。流程：**渠道** → `bus.publish_inbound()` → **Agent** → `bus.publish_outbound()` → `ChannelManager._dispatch_outbound()` → **渠道** `send()`。
 
-- **已支持** — Telegram、Discord、飞书、钉钉、Slack、QQ、企业微信（WeCom）、Email、Mochat
+- **已支持** — Telegram、Discord、飞书、钉钉、Slack、QQ、企业微信（Wecom）、Email、Mochat
 - **BaseChannel** — 抽象接口：`start`、`stop`、`send`、`_handle_message`
 - **配置项** — `allowFrom`、代理、流式进度、工具调用提示
 

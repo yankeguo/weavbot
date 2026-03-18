@@ -132,17 +132,17 @@ class ChannelManager:
             except ImportError as e:
                 logger.warning("QQ channel not available: {}", e)
 
-        # WeCom channel
+        # Wecom channel
         if self.config.channels.wecom.enabled:
             try:
-                from weavbot.channels.wecom import WeComChannel
+                from weavbot.channels.wecom import WecomChannel
 
-                self.channels["wecom"] = WeComChannel(
+                self.channels["wecom"] = WecomChannel(
                     self.config.channels.wecom, self.bus, workspace=workspace
                 )
-                logger.info("WeCom channel enabled")
+                logger.info("Wecom channel enabled")
             except ImportError as e:
-                logger.warning("WeCom channel not available: {}", e)
+                logger.warning("Wecom channel not available: {}", e)
 
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""

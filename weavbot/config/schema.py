@@ -166,11 +166,11 @@ class QQConfig(Base):
     )  # Allowed user openids (empty = public access)
 
 
-class WeComConfig(Base):
-    """WeCom (WeChat Work) channel configuration using long WebSocket connection."""
+class WecomConfig(Base):
+    """Wecom (WeChat Work) channel configuration using long WebSocket connection."""
 
     enabled: bool = False
-    bot_id: str = ""  # Bot ID from WeCom admin console
+    bot_id: str = ""  # Bot ID from Wecom admin console
     secret: str = ""  # Long-connection secret
     ws_url: str = "wss://openws.work.weixin.qq.com"
     heartbeat_interval_sec: int = 30
@@ -200,7 +200,7 @@ class ChannelsConfig(Base):
     email: EmailConfig = Field(default_factory=EmailConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
-    wecom: WeComConfig = Field(default_factory=WeComConfig)
+    wecom: WecomConfig = Field(default_factory=WecomConfig)
 
 
 class AgentDefaults(Base):

@@ -5,13 +5,13 @@ import pytest
 
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.wecom import EVENT_ENTER_CHAT, WeComChannel
-from weavbot.config.schema import WeComConfig
+from weavbot.channels.wecom import EVENT_ENTER_CHAT, WecomChannel
+from weavbot.config.schema import WecomConfig
 
 
 def _make_channel(tmp_path):
-    cfg = WeComConfig(bot_id="bot-id", secret="bot-secret")
-    return WeComChannel(cfg, MessageBus(), tmp_path)
+    cfg = WecomConfig(bot_id="bot-id", secret="bot-secret")
+    return WecomChannel(cfg, MessageBus(), tmp_path)
 
 
 def test_parse_mixed_message(tmp_path):
@@ -151,4 +151,4 @@ def test_decrypt_media_data_invalid_base64_raises():
         pytest.skip("cryptography not installed")
 
     with pytest.raises(ValueError, match="base64"):
-        WeComChannel.decrypt_media_data(b"0123456789abcdef", "%%%bad%%%")
+        WecomChannel.decrypt_media_data(b"0123456789abcdef", "%%%bad%%%")

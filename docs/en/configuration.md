@@ -142,7 +142,7 @@ Object. Key = provider name (e.g. `anthropic`, `openrouter`). Each entry:
 | Key | Type | Description |
 | --- | --- | --- |
 | `enabled` | bool | Enable channel |
-| `botId` | string | Bot ID from the WeCom admin console |
+| `botId` | string | Bot ID from the Wecom admin console |
 | `secret` | string | Long-connection secret |
 | `wsUrl` | string | WebSocket endpoint (default `wss://openws.work.weixin.qq.com`) |
 | `heartbeatIntervalSec` | int | Heartbeat interval in seconds |

@@ -816,12 +816,12 @@ def channels_status():
     em_config = em.imap_host if em.imap_host else f"[dim]{_t('not_configured')}[/dim]"
     table.add_row("Email", "✓" if em.enabled else "✗", em_config)
 
-    # WeCom
+    # Wecom
     wc = config.channels.wecom
     wc_config = (
         f"bot_id: {wc.bot_id[:10]}..." if wc.bot_id else f"[dim]{_t('not_configured')}[/dim]"
     )
-    table.add_row("WeCom", "✓" if wc.enabled else "✗", wc_config)
+    table.add_row("Wecom", "✓" if wc.enabled else "✗", wc_config)
 
     console.print(table)
 
