@@ -1,6 +1,7 @@
 """Base channel interface for chat platforms."""
 
 from abc import ABC, abstractmethod
+import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -111,12 +112,26 @@ class BaseChannel(ABC):
             )
             return
 
+        image_media: list[str] = []
+        non_image_paths: list[str] = []
+        for path in media or []:
+            mime, _ = mimetypes.guess_type(path)
+            if mime and mime.startswith("image/"):
+                image_media.append(path)
+            else:
+                non_image_paths.append(path)
+
+        if non_image_paths:
+            file_lines = "\n".join(f"- {p}" for p in non_image_paths)
+            file_note = f"Attached files (path only, not multimodal):\n{file_lines}"
+            content = f"{content}\n{file_note}" if content else file_note
+
         msg = InboundMessage(
             channel=self.name,
             sender_id=str(sender_id),
             chat_id=str(chat_id),
             content=content,
-            media=media or [],
+            media=image_media,
             metadata=metadata or {},
             session_key_override=session_key,
         )

@@ -810,8 +810,8 @@ class AgentLoop:
         for msg in messages[skip:]:
             if msg.role == "assistant" and not msg.content and not msg.tool_calls:
                 continue
-            if msg.role == "user" and msg.content and "</context>" in msg.content:
-                content = msg.content.split("</context>", 1)[1].strip() or None
+            if msg.role == "user" and msg.content and msg.content.startswith("<context"):
+                content = msg.content.split("</context>", 1)[-1].strip() or None
                 if not content:
                     continue
                 msg = msg.with_content(content)

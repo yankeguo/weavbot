@@ -72,15 +72,20 @@ class ChatMessage:
         if content is not None and not isinstance(content, str):
             content = str(content)
 
-        tool_calls = [
-            ToolCallRequest(
-                id=tc.get("id", ""),
-                name=tc.get("name", ""),
-                arguments=tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {},
+        tool_calls = []
+        for tc in data.get("tool_calls", []):
+            if not isinstance(tc, dict):
+                continue
+            # Support both flat {"id","name","arguments"} and legacy {"function":{"name","arguments"}}
+            func = tc.get("function", {}) if "function" in tc else tc
+            args = func.get("arguments", {})
+            tool_calls.append(
+                ToolCallRequest(
+                    id=tc.get("id", ""),
+                    name=func.get("name", ""),
+                    arguments=args if isinstance(args, dict) else {},
+                )
             )
-            for tc in data.get("tool_calls", [])
-            if isinstance(tc, dict)
-        ]
 
         return cls(
             role=data.get("role", "user"),
@@ -88,7 +93,7 @@ class ChatMessage:
             media=list(data.get("media") or []),
             tool_calls=tool_calls,
             tool_call_id=data.get("tool_call_id"),
-            tool_name=data.get("tool_name"),
+            tool_name=data.get("tool_name") or data.get("name"),
             reasoning_content=data.get("reasoning_content"),
             thinking_blocks=data.get("thinking_blocks"),
             timestamp=data.get("timestamp"),

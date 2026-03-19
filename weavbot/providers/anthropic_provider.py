@@ -61,12 +61,19 @@ class AnthropicProvider(LLMProvider):
 
     @classmethod
     def _encode_media_blocks_anthropic(cls, media: list[str]) -> list[dict[str, Any]]:
-        """Encode media file paths into Anthropic image source blocks."""
+        """Encode media file paths into Anthropic image source blocks.
+
+        Only image/* MIME types are supported; other types are replaced with
+        a text placeholder.
+        """
         blocks: list[dict[str, Any]] = []
         for path in media:
             encoded = cls._encode_media_file(path)
             if encoded:
                 mime, b64 = encoded
+                if not mime.startswith("image/"):
+                    blocks.append({"type": "text", "text": f"[unsupported media: {mime}]"})
+                    continue
                 blocks.append(
                     {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
                 )

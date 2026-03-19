@@ -49,6 +49,9 @@ class OpenAIProvider(LLMProvider):
                     encoded = cls._encode_media_file(path)
                     if encoded:
                         mime, b64 = encoded
+                        if not mime.startswith("image/"):
+                            parts.append({"type": "text", "text": f"[unsupported media: {mime}]"})
+                            continue
                         parts.append(
                             {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
                         )

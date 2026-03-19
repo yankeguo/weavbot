@@ -1,4 +1,4 @@
-"""Tool to load local image/video files into the chat context."""
+"""Tool to load local media files into chat context."""
 
 import mimetypes
 from pathlib import Path
@@ -9,18 +9,17 @@ from weavbot.utils import resolve_path
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
-_IMAGE_PREFIXES = ("image/",)
-_VIDEO_PREFIXES = ("video/",)
-_SUPPORTED_PREFIXES = _IMAGE_PREFIXES + _VIDEO_PREFIXES
+_SUPPORTED_PREFIXES = ("image/", "audio/", "video/")
+_SUPPORTED_EXACT = ("application/pdf",)
 
-_DESCRIPTION = """Load a local image or video file into the chat context so you can see and analyze its contents.
+_DESCRIPTION = """Load a local media file into chat context.
 
 Usage:
 - The path can be relative to workspace or absolute.
-- Supported media: common image formats (jpeg, png, gif, webp, ...) and video formats (mp4, webm, mov, ...).
+- Supported: images (jpeg, png, gif, webp, ...), audio (wav, mp3, ogg, ...), video (mp4, webm, mov, ...), and PDF.
 - Maximum file size: 20 MB.
-- Video support depends on the underlying model — not all models can process video.
-- Use this tool when you need to visually inspect an image or video file."""
+- Only image/* is attached as multimodal input.
+- Non-image files are kept as file paths in text context."""
 
 
 def _human_size(n: int) -> str:
@@ -32,7 +31,7 @@ def _human_size(n: int) -> str:
 
 
 class LoadMediaTool(Tool):
-    """Tool to load local media files into the chat context as multimodal content."""
+    """Tool to load local media files into chat context."""
 
     def __init__(self, workspace: Path, allowed_dir: Path | None = None):
         self._workspace = workspace
@@ -53,7 +52,7 @@ class LoadMediaTool(Tool):
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "File path to the image or video (relative to workspace or absolute)",
+                    "description": "File path to the media file (relative to workspace or absolute)",
                 },
             },
             "required": ["path"],
@@ -68,8 +67,11 @@ class LoadMediaTool(Tool):
                 return f"Error: Not a file: {path}"
 
             mime, _ = mimetypes.guess_type(str(file_path))
-            if not mime or not any(mime.startswith(p) for p in _SUPPORTED_PREFIXES):
-                return f"Error: Unsupported media type ({mime or 'unknown'}). Expected image/* or video/*."
+            supported = (
+                any(mime.startswith(p) for p in _SUPPORTED_PREFIXES) or mime in _SUPPORTED_EXACT
+            )
+            if not mime or not supported:
+                return f"Error: Unsupported media type ({mime or 'unknown'}). Expected image/*, audio/*, video/*, or application/pdf."
 
             size = file_path.stat().st_size
             if size > MAX_FILE_SIZE:
@@ -77,9 +79,18 @@ class LoadMediaTool(Tool):
             if size == 0:
                 return f"Error: File is empty: {path}"
 
+            path_text = str(file_path)
+            if mime.startswith("image/"):
+                return ToolResult(
+                    content=f"Media loaded: {path_text} ({mime}, {_human_size(size)})",
+                    media=[path_text],
+                )
             return ToolResult(
-                content=f"Media loaded: {file_path.name} ({mime}, {_human_size(size)})",
-                media=[str(file_path)],
+                content=(
+                    f"File loaded: {path_text} ({mime}, {_human_size(size)}). "
+                    "Non-image files are passed as file-path context only."
+                ),
+                media=[],
             )
         except PermissionError as e:
             return f"Error: {e}"
