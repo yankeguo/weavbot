@@ -37,6 +37,11 @@ Anthropic notes:
   - `WB_DEBUG_ANTHROPIC=1`: print redacted request summaries/details.
   - `WB_ANTHROPIC_CACHE_CONTROL=0`: force-disable `cache_control` fields for stricter compatibility.
 
+OpenAI-compatible notes:
+
+- Debug env var for `mode: "openai"`:
+  - `WB_DEBUG_OPENAI=1`: print redacted request summaries/details and failed payload details.
+
 ## agents.defaults
 
 | Key | Type | Default | Description |

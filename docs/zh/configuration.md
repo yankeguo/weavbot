@@ -37,6 +37,11 @@ Anthropic 说明：
   - `WB_DEBUG_ANTHROPIC=1`：输出脱敏后的请求摘要与详情。
   - `WB_ANTHROPIC_CACHE_CONTROL=0`：强制关闭 `cache_control` 字段，提升兼容网关通过率。
 
+OpenAI 兼容模式说明：
+
+- `mode: "openai"` 调试环境变量：
+  - `WB_DEBUG_OPENAI=1`：输出脱敏后的请求摘要与详情，并在失败时输出失败请求参数详情。
+
 ## agents.defaults
 
 | 键 | 类型 | 默认值 | 说明 |
