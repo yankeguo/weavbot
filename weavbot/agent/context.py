@@ -1,21 +1,19 @@
 """Context builder for assembling agent prompts."""
 
-import base64
-import mimetypes
 import platform
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from weavbot.agent.memory import MemoryStore
+from weavbot.agent.messages import ChatMessage
 from weavbot.agent.skills import SkillsLoader
+from weavbot.agent.tools.base import ToolResult
 
 
 class ContextBuilder:
     """Builds the context (system prompt + messages) for the agent."""
 
-    # IDENTITY.md is not shipped; kept in list for compatibility with similar tools
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md"]
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
 
@@ -107,76 +105,63 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
 
     def build_messages(
         self,
-        history: list[dict[str, Any]],
+        history: list[ChatMessage],
         current_message: str,
         media: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ChatMessage]:
         """Build the complete message list for an LLM call."""
         runtime_ctx = self._build_runtime_context(channel, chat_id)
-        user_content = self._build_user_content(current_message, media)
-
-        # Merge runtime context and user content into a single user message
-        # to avoid consecutive same-role messages that some providers reject.
-        if isinstance(user_content, str):
-            merged = f"{runtime_ctx}\n\n{user_content}"
-        else:
-            merged = [{"type": "text", "text": runtime_ctx}] + user_content
+        merged_content = f"{runtime_ctx}\n\n{current_message}"
 
         return [
-            {"role": "system", "content": self._build_system_prompt()},
+            ChatMessage(role="system", content=self._build_system_prompt()),
             *history,
-            {"role": "user", "content": merged},
+            ChatMessage(role="user", content=merged_content, media=media or []),
         ]
 
     @staticmethod
-    def _build_user_content(text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
-        """Build user message content with optional base64-encoded images."""
-        if not media:
-            return text
-
-        images = []
-        for path in media:
-            p = Path(path)
-            mime, _ = mimetypes.guess_type(path)
-            if not p.is_file() or not mime or not mime.startswith("image/"):
-                continue
-            b64 = base64.b64encode(p.read_bytes()).decode()
-            images.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
-
-        if not images:
-            return text
-        return images + [{"type": "text", "text": text}]
-
-    @staticmethod
     def add_tool_result(
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         tool_call_id: str,
         tool_name: str,
-        result: str | list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
+        result: str | ToolResult,
+    ) -> list[ChatMessage]:
         """Add a tool result to the message list."""
+        if isinstance(result, ToolResult):
+            content = result.content
+            media = result.media
+        else:
+            content = result
+            media = []
         messages.append(
-            {"role": "tool", "tool_call_id": tool_call_id, "name": tool_name, "content": result}
+            ChatMessage(
+                role="tool",
+                content=content,
+                tool_call_id=tool_call_id,
+                tool_name=tool_name,
+                media=media,
+            )
         )
         return messages
 
     @staticmethod
     def add_assistant_message(
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         content: str | None,
-        tool_calls: list[dict[str, Any]] | None = None,
+        tool_calls: list | None = None,
         reasoning_content: str | None = None,
         thinking_blocks: list[dict] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ChatMessage]:
         """Add an assistant message to the message list."""
-        msg: dict[str, Any] = {"role": "assistant", "content": content}
-        if tool_calls:
-            msg["tool_calls"] = tool_calls
-        if reasoning_content is not None:
-            msg["reasoning_content"] = reasoning_content
-        if thinking_blocks:
-            msg["thinking_blocks"] = thinking_blocks
-        messages.append(msg)
+        messages.append(
+            ChatMessage(
+                role="assistant",
+                content=content,
+                tool_calls=tool_calls or [],
+                reasoning_content=reasoning_content,
+                thinking_blocks=thinking_blocks,
+            )
+        )
         return messages

@@ -1,7 +1,16 @@
 """Base class for agent tools."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Any
+
+
+@dataclass
+class ToolResult:
+    """Result from a tool that includes media file references."""
+
+    content: str
+    media: list[str] = field(default_factory=list)
 
 
 class Tool(ABC):
@@ -40,7 +49,7 @@ class Tool(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, **kwargs: Any) -> str | list[dict[str, Any]]:
+    async def execute(self, **kwargs: Any) -> str | ToolResult:
         """
         Execute the tool with given parameters.
 
@@ -48,7 +57,7 @@ class Tool(ABC):
             **kwargs: Tool-specific parameters.
 
         Returns:
-            String result, or a list of multimodal content parts (e.g. image_url + text).
+            String result, or a ToolResult with content and media file paths.
         """
         pass
 

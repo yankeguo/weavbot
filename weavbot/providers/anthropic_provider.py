@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-import json_repair
 from anthropic import AsyncAnthropic
 
+from weavbot.agent.messages import ChatMessage, ToolCallRequest
 from weavbot.providers.base import (
     LLMProvider,
     LLMResponse,
-    ToolCallRequest,
     build_provider_headers,
 )
 
@@ -39,7 +37,7 @@ class AnthropicProvider(LLMProvider):
         self._client = AsyncAnthropic(**kwargs)
 
     # ------------------------------------------------------------------
-    # Message / tool conversion (OpenAI format → Anthropic format)
+    # Tool conversion
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -57,35 +55,28 @@ class AnthropicProvider(LLMProvider):
             out[-1]["cache_control"] = {"type": "ephemeral"}
         return out
 
-    @staticmethod
-    def _convert_image_url_to_anthropic(block: dict[str, Any]) -> dict[str, Any]:
-        """Convert OpenAI image_url block to Anthropic image block."""
-        if block.get("type") != "image_url":
-            return block
-        url = (block.get("image_url") or {}).get("url", "")
-        if not url.startswith("data:"):
-            return block
-        match = re.match(r"data:([^;]+);base64,(.+)", url, re.DOTALL)
-        if not match:
-            return {"type": "text", "text": "[image: invalid data URL]"}
-        media_type, b64 = match.group(1), match.group(2)
-        return {
-            "type": "image",
-            "source": {"type": "base64", "media_type": media_type, "data": b64},
-        }
+    # ------------------------------------------------------------------
+    # ChatMessage → Anthropic wire format
+    # ------------------------------------------------------------------
 
     @classmethod
-    def _convert_image_blocks(cls, blocks: list[Any]) -> list[Any]:
-        """Convert OpenAI image_url blocks in a list to Anthropic image format."""
-        return [
-            cls._convert_image_url_to_anthropic(b) if isinstance(b, dict) else b for b in blocks
-        ]
+    def _encode_media_blocks_anthropic(cls, media: list[str]) -> list[dict[str, Any]]:
+        """Encode media file paths into Anthropic image source blocks."""
+        blocks: list[dict[str, Any]] = []
+        for path in media:
+            encoded = cls._encode_media_file(path)
+            if encoded:
+                mime, b64 = encoded
+                blocks.append(
+                    {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
+                )
+        return blocks
 
     @classmethod
-    def _convert_messages(
-        cls, messages: list[dict[str, Any]]
+    def _serialize_messages_anthropic(
+        cls, messages: list[ChatMessage]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """Split system prompts and convert messages to Anthropic format.
+        """Convert ChatMessage list to Anthropic format.
 
         Returns (system_blocks, anthropic_messages).
         """
@@ -95,77 +86,51 @@ class AnthropicProvider(LLMProvider):
         i = 0
         while i < len(messages):
             msg = messages[i]
-            role = msg.get("role")
 
-            if role == "system":
-                content = msg.get("content", "")
-                if isinstance(content, str):
-                    system_blocks.append(
-                        {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
-                    )
-                elif isinstance(content, list):
-                    for item in content:
-                        block = (
-                            dict(item)
-                            if isinstance(item, dict)
-                            else {"type": "text", "text": str(item)}
-                        )
-                        if not any(b.get("cache_control") for b in system_blocks):
-                            pass
-                        system_blocks.append(block)
-                    if system_blocks:
-                        system_blocks[-1] = {
-                            **system_blocks[-1],
-                            "cache_control": {"type": "ephemeral"},
-                        }
+            if msg.role == "system":
+                system_blocks.append(
+                    {
+                        "type": "text",
+                        "text": msg.content or "",
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                )
                 i += 1
 
-            elif role == "assistant":
+            elif msg.role == "assistant":
                 blocks: list[dict[str, Any]] = []
-
-                thinking = msg.get("thinking_blocks")
-                if thinking:
-                    for tb in thinking:
-                        blocks.append(tb)
-
-                text = msg.get("content")
-                if text:
-                    if isinstance(text, str):
-                        blocks.append({"type": "text", "text": text})
-                    elif isinstance(text, list):
-                        blocks.extend(text)
-
-                for tc in msg.get("tool_calls", []):
-                    func = tc.get("function", {})
-                    args = func.get("arguments", {})
-                    if isinstance(args, str):
-                        args = json_repair.loads(args)
+                if msg.thinking_blocks:
+                    blocks.extend(msg.thinking_blocks)
+                if msg.content:
+                    blocks.append({"type": "text", "text": msg.content})
+                for tc in msg.tool_calls:
                     blocks.append(
                         {
                             "type": "tool_use",
-                            "id": tc.get("id", ""),
-                            "name": func.get("name", ""),
-                            "input": args,
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments,
                         }
                     )
-
                 if not blocks:
                     blocks = [{"type": "text", "text": ""}]
-
                 result.append({"role": "assistant", "content": blocks})
                 i += 1
 
-            elif role == "tool":
+            elif msg.role == "tool":
                 tool_results: list[dict[str, Any]] = []
-                while i < len(messages) and messages[i].get("role") == "tool":
+                while i < len(messages) and messages[i].role == "tool":
                     tm = messages[i]
-                    raw_content = tm.get("content") or "(empty)"
-                    if isinstance(raw_content, list):
-                        raw_content = cls._convert_image_blocks(raw_content)
+                    media_blocks = cls._encode_media_blocks_anthropic(tm.media)
+                    raw_content: str | list[dict[str, Any]] = tm.content or "(empty)"
+                    if media_blocks:
+                        content_parts: list[dict[str, Any]] = media_blocks
+                        content_parts.append({"type": "text", "text": tm.content or "(empty)"})
+                        raw_content = content_parts
                     tool_results.append(
                         {
                             "type": "tool_result",
-                            "tool_use_id": tm.get("tool_call_id", ""),
+                            "tool_use_id": tm.tool_call_id or "",
                             "content": raw_content,
                         }
                     )
@@ -173,16 +138,16 @@ class AnthropicProvider(LLMProvider):
                 result.append({"role": "user", "content": tool_results})
 
             else:
-                content = msg.get("content", "")
-                if isinstance(content, str):
-                    result.append({"role": "user", "content": content or "(empty)"})
-                elif isinstance(content, list):
-                    result.append({"role": "user", "content": cls._convert_image_blocks(content)})
+                media_blocks = cls._encode_media_blocks_anthropic(msg.media)
+                if media_blocks:
+                    parts: list[dict[str, Any]] = media_blocks
+                    if msg.content:
+                        parts.append({"type": "text", "text": msg.content})
+                    result.append({"role": "user", "content": parts})
                 else:
-                    result.append({"role": "user", "content": str(content) or "(empty)"})
+                    result.append({"role": "user", "content": msg.content or "(empty)"})
                 i += 1
 
-        # Anthropic requires alternating user/assistant roles — merge consecutive same-role msgs
         merged: list[dict[str, Any]] = []
         for m in result:
             if merged and merged[-1]["role"] == m["role"]:
@@ -190,12 +155,8 @@ class AnthropicProvider(LLMProvider):
                 cur = m["content"]
                 if isinstance(prev, str):
                     prev = [{"type": "text", "text": prev}]
-                elif isinstance(prev, list):
-                    prev = cls._convert_image_blocks(prev)
                 if isinstance(cur, str):
                     cur = [{"type": "text", "text": cur}]
-                elif isinstance(cur, list):
-                    cur = cls._convert_image_blocks(cur)
                 merged[-1]["content"] = prev + cur
             else:
                 merged.append(m)
@@ -208,15 +169,14 @@ class AnthropicProvider(LLMProvider):
 
     async def chat(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
         reasoning_effort: str | None = None,
     ) -> LLMResponse:
-        sanitized = self._sanitize_empty_content(messages)
-        system_blocks, converted = self._convert_messages(sanitized)
+        system_blocks, converted = self._serialize_messages_anthropic(messages)
 
         effective_max = max(1, max_tokens)
 

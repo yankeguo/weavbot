@@ -1,11 +1,10 @@
 """Tool to load local image/video files into the chat context."""
 
-import base64
 import mimetypes
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolResult
 from weavbot.utils import resolve_path
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
@@ -60,7 +59,7 @@ class LoadMediaTool(Tool):
             "required": ["path"],
         }
 
-    async def execute(self, path: str, **kwargs: Any) -> str | list[dict[str, Any]]:
+    async def execute(self, path: str, **kwargs: Any) -> str | ToolResult:
         try:
             file_path = resolve_path(path, self._workspace, self._allowed_dir)
             if not file_path.exists():
@@ -78,15 +77,10 @@ class LoadMediaTool(Tool):
             if size == 0:
                 return f"Error: File is empty: {path}"
 
-            b64 = base64.b64encode(file_path.read_bytes()).decode()
-
-            return [
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
-                {
-                    "type": "text",
-                    "text": f"Media loaded: {file_path.name} ({mime}, {_human_size(size)})",
-                },
-            ]
+            return ToolResult(
+                content=f"Media loaded: {file_path.name} ({mime}, {_human_size(size)})",
+                media=[str(file_path)],
+            )
         except PermissionError as e:
             return f"Error: {e}"
         except Exception as e:

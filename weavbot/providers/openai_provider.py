@@ -7,10 +7,10 @@ from typing import Any
 import json_repair
 from openai import AsyncOpenAI
 
+from weavbot.agent.messages import ChatMessage, ToolCallRequest
 from weavbot.providers.base import (
     LLMProvider,
     LLMResponse,
-    ToolCallRequest,
     build_provider_headers,
 )
 
@@ -33,16 +33,17 @@ class OpenAIProvider(LLMProvider):
 
     async def chat(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
         reasoning_effort: str | None = None,
     ) -> LLMResponse:
+        serialized = self._sanitize_empty_content(self._serialize_messages(messages))
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,
-            "messages": self._sanitize_empty_content(messages),
+            "messages": serialized,
             "max_tokens": max(1, max_tokens),
             "temperature": temperature,
         }

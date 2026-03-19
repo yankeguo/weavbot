@@ -9,6 +9,7 @@ from typing import Any
 
 from loguru import logger
 
+from weavbot.agent.messages import ChatMessage
 from weavbot.utils.helpers import ensure_dir, safe_filename
 
 
@@ -38,7 +39,7 @@ class Session:
         self.messages.append(msg)
         self.updated_at = datetime.now()
 
-    def get_history(self, max_messages: int = 500) -> list[dict[str, Any]]:
+    def get_history(self, max_messages: int = 500) -> list[ChatMessage]:
         """Return active messages for LLM input, aligned to a user turn."""
         start = max(self.memory_consolidated_cursor, self.context_compacted_cursor)
         if start < 0:
@@ -48,20 +49,12 @@ class Session:
         unconsolidated = self.messages[start:]
         sliced = unconsolidated[-max_messages:]
 
-        # Drop leading non-user messages to avoid orphaned tool_result blocks
         for i, m in enumerate(sliced):
             if m.get("role") == "user":
                 sliced = sliced[i:]
                 break
 
-        out: list[dict[str, Any]] = []
-        for m in sliced:
-            entry: dict[str, Any] = {"role": m["role"], "content": m.get("content", "")}
-            for k in ("tool_calls", "tool_call_id", "name"):
-                if k in m:
-                    entry[k] = m[k]
-            out.append(entry)
-        return out
+        return [ChatMessage.from_dict(m) for m in sliced]
 
     def clear(self) -> None:
         """Clear all messages and reset session to initial state."""

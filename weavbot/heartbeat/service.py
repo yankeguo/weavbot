@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
 from loguru import logger
 
+from weavbot.agent.messages import ChatMessage
+
 if TYPE_CHECKING:
     from weavbot.providers.base import LLMProvider
 
@@ -89,21 +91,21 @@ class HeartbeatService:
         """
         response = await self.provider.chat(
             messages=[
-                {
-                    "role": "system",
-                    "content": (
+                ChatMessage(
+                    role="system",
+                    content=(
                         "You are a heartbeat agent. Call the heartbeat tool to report your decision.\n\n"
                         "- Choose 'skip' when the file contains only headers, comments, or no actionable tasks.\n"
                         "- Choose 'run' when there are concrete, actionable task descriptions under Active Tasks."
                     ),
-                },
-                {
-                    "role": "user",
-                    "content": (
+                ),
+                ChatMessage(
+                    role="user",
+                    content=(
                         "Review the following HEARTBEAT.md and decide whether there are active tasks.\n\n"
                         f"{content}"
                     ),
-                },
+                ),
             ],
             tools=_HEARTBEAT_TOOL,
             model=self.model,

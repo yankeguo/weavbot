@@ -4,10 +4,11 @@ import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
 
+from weavbot.agent.messages import ChatMessage
+from weavbot.agent.tools.base import ToolResult
 from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.glob_file import GlobFileTool
 from weavbot.agent.tools.grep_file import GrepFileTool
@@ -121,12 +122,11 @@ class SubagentManager:
             tools.register(WebFetchTool(proxy=self.web_proxy))
 
             system_prompt = self._build_subagent_prompt()
-            messages: list[dict[str, Any]] = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": task},
+            messages: list[ChatMessage] = [
+                ChatMessage(role="system", content=system_prompt),
+                ChatMessage(role="user", content=task),
             ]
 
-            # Run agent loop (limited iterations)
             max_iterations = 15
             iteration = 0
             final_result: str | None = None
@@ -144,27 +144,14 @@ class SubagentManager:
                 )
 
                 if response.has_tool_calls:
-                    # Add assistant message with tool calls
-                    tool_call_dicts = [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": json.dumps(tc.arguments, ensure_ascii=False),
-                            },
-                        }
-                        for tc in response.tool_calls
-                    ]
                     messages.append(
-                        {
-                            "role": "assistant",
-                            "content": response.content or "",
-                            "tool_calls": tool_call_dicts,
-                        }
+                        ChatMessage(
+                            role="assistant",
+                            content=response.content or "",
+                            tool_calls=response.tool_calls,
+                        )
                     )
 
-                    # Execute tools
                     for tool_call in response.tool_calls:
                         args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                         logger.debug(
@@ -174,13 +161,20 @@ class SubagentManager:
                             args_str,
                         )
                         result = await tools.execute(tool_call.name, tool_call.arguments)
+                        if isinstance(result, ToolResult):
+                            content = result.content
+                            media = result.media
+                        else:
+                            content = result
+                            media = []
                         messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tool_call.id,
-                                "name": tool_call.name,
-                                "content": result,
-                            }
+                            ChatMessage(
+                                role="tool",
+                                content=content,
+                                tool_call_id=tool_call.id,
+                                tool_name=tool_call.name,
+                                media=media,
+                            )
                         )
                 else:
                     final_result = response.content
