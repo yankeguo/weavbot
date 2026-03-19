@@ -29,6 +29,19 @@ Object. Key = provider name (e.g. `anthropic`, `openrouter`). Each entry:
 | `apiBase` | string (optional) | Base URL for OpenAI-compatible APIs |
 | `extraHeaders` | object (optional) | Extra HTTP headers |
 
+Anthropic notes:
+
+- If the provider endpoint is Anthropic-compatible (not native Anthropic), prefer `mode: "openai"` first when the endpoint supports OpenAI API style.
+- If you must use `mode: "anthropic"` on a compatible gateway (for example Bailian Anthropic endpoint), set `apiBase` to the gateway URL and use debug logging to inspect payload compatibility.
+- Debug env vars for Anthropic mode:
+  - `WB_DEBUG_ANTHROPIC=1`: print redacted request summaries/details.
+  - `WB_ANTHROPIC_CACHE_CONTROL=0`: force-disable `cache_control` fields for stricter compatibility.
+
+OpenAI-compatible notes:
+
+- Debug env var for `mode: "openai"`:
+  - `WB_DEBUG_OPENAI=1`: print redacted request summaries/details and failed payload details.
+
 ## agents.defaults
 
 | Key | Type | Default | Description |

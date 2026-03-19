@@ -227,7 +227,7 @@ class ProviderConfig(Base):
 
     mode: Literal["openai", "anthropic"] = "openai"
     api_key: str = ""
-    api_base: str | None = None
+    api_base: str | None = None  # API base URL (OpenAI-compatible or Anthropic-compatible)
     extra_headers: dict[str, str] | None = None
 
 

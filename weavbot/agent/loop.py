@@ -15,6 +15,7 @@ from loguru import logger
 from weavbot.agent.compact import ContextCompactor
 from weavbot.agent.context import ContextBuilder
 from weavbot.agent.memory import MemoryStore
+from weavbot.agent.messages import ChatMessage
 from weavbot.agent.subagent import SubagentManager
 from weavbot.agent.tools.cron import CronTool
 from weavbot.agent.tools.edit_file import EditFileTool
@@ -352,7 +353,7 @@ class AgentLoop:
         channel: str,
         chat_id: str,
         media: list[str] | None = None,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    ) -> tuple[list[ChatMessage], list[ChatMessage]]:
         """Build initial messages and compact context when output budget cannot fit."""
         history = session.get_history()
         fit_params = self._get_context_fit_params(session)
@@ -379,8 +380,6 @@ class AgentLoop:
             self.max_tokens,
         )
 
-        # Consolidate raw history first so long-term memory is updated before we
-        # compact the active context into a seed summary.
         if not await self._consolidate_memory(session, up_to_index=len(session.messages)):
             logger.warning("Memory consolidation failed before context compaction; continuing")
 
@@ -399,9 +398,8 @@ class AgentLoop:
 
         previous_count = len(session.messages)
         previous_context_cursor = session.context_compacted_cursor
-        # Keep session append-only: advance context cursor, then append seed message.
         session.context_compacted_cursor = previous_count
-        session.messages.append(compact.seed_message)
+        session.messages.append(compact.seed_message.to_dict())
         session.updated_at = datetime.now()
 
         compaction_meta = session.metadata.get("compaction")
@@ -450,9 +448,9 @@ class AgentLoop:
     async def _run_agent_loop(
         self,
         session: Session,
-        initial_messages: list[dict],
+        initial_messages: list[ChatMessage],
         on_progress: Callable[..., Awaitable[None]] | None = None,
-    ) -> tuple[str | None, list[str], list[dict], dict[str, int]]:
+    ) -> tuple[str | None, list[str], list[ChatMessage], dict[str, int]]:
         """Run the agent iteration loop. Returns (final_content, tools_used, messages, turn_usage)."""
         messages = initial_messages
         fit_params = self._get_context_fit_params(session)
@@ -551,21 +549,10 @@ class AgentLoop:
                         await on_progress(clean)
                     await on_progress(self._tool_hint(response.tool_calls), tool_hint=True)
 
-                tool_call_dicts = [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
-                        },
-                    }
-                    for tc in response.tool_calls
-                ]
                 messages = self.context.add_assistant_message(
                     messages,
                     response.content,
-                    tool_call_dicts,
+                    response.tool_calls,
                     reasoning_content=response.reasoning_content,
                     thinking_blocks=response.thinking_blocks,
                 )
@@ -583,7 +570,14 @@ class AgentLoop:
                 # Don't persist error responses to session history — they can
                 # poison the context and cause permanent 400 loops (#1303).
                 if response.finish_reason == "error":
-                    logger.error("LLM returned error: {}", (clean or "")[:200])
+                    text = clean or ""
+                    req_id = ""
+                    if m := re.search(r"request_id['\"]?\s*[:=]\s*['\"]([a-z0-9-]+)", text, re.I):
+                        req_id = m.group(1)
+                    if req_id:
+                        logger.error("LLM returned error (request_id={}): {}", req_id, text[:500])
+                    else:
+                        logger.error("LLM returned error: {}", text[:500])
                     final_content = clean or "Sorry, I encountered an error calling the AI model."
                     break
                 messages = self.context.add_assistant_message(
@@ -818,53 +812,19 @@ class AgentLoop:
             metadata=msg.metadata or {},
         )
 
-    def _save_turn(self, session: Session, messages: list[dict], skip: int) -> None:
-        """Save new-turn messages into session, truncating large tool results."""
-        for m in messages[skip:]:
-            entry = dict(m)
-            role, content = entry.get("role"), entry.get("content")
-            if role == "assistant" and not content and not entry.get("tool_calls"):
-                continue  # skip empty assistant messages — they poison session context
-            if role == "tool" and isinstance(content, list):
-                filtered = []
-                for c in content:
-                    if c.get("type") == "image_url" and c.get("image_url", {}).get(
-                        "url", ""
-                    ).startswith("data:"):
-                        filtered.append({"type": "text", "text": "[media]"})
-                    else:
-                        filtered.append(c)
-                entry["content"] = filtered
-            elif role == "user":
-                if isinstance(content, str) and content.startswith(
-                    ContextBuilder._RUNTIME_CONTEXT_TAG
-                ):
-                    # Strip the runtime-context prefix, keep only the user text.
-                    parts = content.split("\n\n", 1)
-                    if len(parts) > 1 and parts[1].strip():
-                        entry["content"] = parts[1]
-                    else:
-                        continue
-                if isinstance(content, list):
-                    filtered = []
-                    for c in content:
-                        if (
-                            c.get("type") == "text"
-                            and isinstance(c.get("text"), str)
-                            and c["text"].startswith(ContextBuilder._RUNTIME_CONTEXT_TAG)
-                        ):
-                            continue  # Strip runtime context from multimodal messages
-                        if c.get("type") == "image_url" and c.get("image_url", {}).get(
-                            "url", ""
-                        ).startswith("data:"):
-                            filtered.append({"type": "text", "text": "[media]"})
-                        else:
-                            filtered.append(c)
-                    if not filtered:
-                        continue
-                    entry["content"] = filtered
-            entry.setdefault("timestamp", datetime.now().isoformat())
-            session.messages.append(entry)
+    def _save_turn(self, session: Session, messages: list[ChatMessage], skip: int) -> None:
+        """Save new-turn messages into session."""
+        for msg in messages[skip:]:
+            if msg.role == "assistant" and not msg.content and not msg.tool_calls:
+                continue
+            if msg.role == "user" and msg.content and msg.content.startswith("<context"):
+                content = msg.content.split("</context>", 1)[-1].strip() or None
+                if not content:
+                    continue
+                msg = msg.with_content(content)
+            if not msg.timestamp:
+                msg = msg.with_timestamp(datetime.now().isoformat())
+            session.messages.append(msg.to_dict())
         session.updated_at = datetime.now()
 
     async def _consolidate_memory(

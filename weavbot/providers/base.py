@@ -1,10 +1,18 @@
 """Base LLM provider interface."""
 
+from __future__ import annotations
+
+import base64
+import mimetypes
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from weavbot import __version__
+from weavbot.agent.messages import ChatMessage, ToolCallRequest  # noqa: F401 - re-export
 
 DEFAULT_PROVIDER_HEADERS: dict[str, str] = {
     "User-Agent": f"weavbot/{__version__}",
@@ -22,15 +30,6 @@ def build_provider_headers(extra_headers: dict[str, str] | None = None) -> dict[
 
 
 @dataclass
-class ToolCallRequest:
-    """A tool call request from the LLM."""
-
-    id: str
-    name: str
-    arguments: dict[str, Any]
-
-
-@dataclass
 class LLMResponse:
     """Response from an LLM provider."""
 
@@ -38,8 +37,8 @@ class LLMResponse:
     tool_calls: list[ToolCallRequest] = field(default_factory=list)
     finish_reason: str = "stop"
     usage: dict[str, int] = field(default_factory=dict)
-    reasoning_content: str | None = None  # Kimi, DeepSeek-R1 etc.
-    thinking_blocks: list[dict] | None = None  # Anthropic extended thinking
+    reasoning_content: str | None = None
+    thinking_blocks: list[dict] | None = None
 
     @property
     def has_tool_calls(self) -> bool:
@@ -60,60 +59,27 @@ class LLMProvider(ABC):
         self.api_base = api_base
 
     @staticmethod
-    def _sanitize_empty_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Replace empty text content that causes provider 400 errors.
-
-        Empty content can appear when MCP tools return nothing. Most providers
-        reject empty-string content or empty text blocks in list content.
-        """
-        result: list[dict[str, Any]] = []
-        for msg in messages:
-            content = msg.get("content")
-
-            if isinstance(content, str) and not content:
-                clean = dict(msg)
-                clean["content"] = (
-                    None
-                    if (msg.get("role") == "assistant" and msg.get("tool_calls"))
-                    else "(empty)"
-                )
-                result.append(clean)
-                continue
-
-            if isinstance(content, list):
-                filtered = [
-                    item
-                    for item in content
-                    if not (
-                        isinstance(item, dict)
-                        and item.get("type") in ("text", "input_text", "output_text")
-                        and not item.get("text")
-                    )
-                ]
-                if len(filtered) != len(content):
-                    clean = dict(msg)
-                    if filtered:
-                        clean["content"] = filtered
-                    elif msg.get("role") == "assistant" and msg.get("tool_calls"):
-                        clean["content"] = None
-                    else:
-                        clean["content"] = "(empty)"
-                    result.append(clean)
-                    continue
-
-            if isinstance(content, dict):
-                clean = dict(msg)
-                clean["content"] = [content]
-                result.append(clean)
-                continue
-
-            result.append(msg)
-        return result
+    def _encode_media_file(path: str) -> tuple[str, str] | None:
+        """Read a media file and return (mime_type, base64_data), or None on failure."""
+        p = Path(path)
+        if not p.is_file():
+            logger.debug("Media file not found, skipping: {}", path)
+            return None
+        mime, _ = mimetypes.guess_type(str(p))
+        if not mime:
+            logger.debug("Cannot determine MIME type, skipping: {}", path)
+            return None
+        try:
+            b64 = base64.b64encode(p.read_bytes()).decode()
+            return mime, b64
+        except Exception:
+            logger.debug("Failed to read media file, skipping: {}", path)
+            return None
 
     @abstractmethod
     async def chat(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
@@ -124,7 +90,7 @@ class LLMProvider(ABC):
         Send a chat completion request.
 
         Args:
-            messages: List of message dicts with 'role' and 'content'.
+            messages: List of ChatMessage objects.
             tools: Optional list of tool definitions.
             model: Model identifier (provider-specific).
             max_tokens: Maximum tokens in response.

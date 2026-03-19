@@ -6,8 +6,9 @@ import pytest
 
 from weavbot.agent.compact import COMPACTION_SYSTEM_PROMPT, ContextCompactor
 from weavbot.agent.loop import AgentLoop
+from weavbot.agent.messages import ChatMessage, ToolCallRequest
 from weavbot.bus.queue import MessageBus
-from weavbot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from weavbot.providers.base import LLMProvider, LLMResponse
 
 
 class _FakeProvider(LLMProvider):
@@ -19,7 +20,7 @@ class _FakeProvider(LLMProvider):
 
     async def chat(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
@@ -44,7 +45,7 @@ class _FakeProvider(LLMProvider):
                 )
             return LLMResponse(content=None, finish_reason="error")
 
-        system_text = str(messages[0].get("content", "")) if messages else ""
+        system_text = messages[0].content or "" if messages else ""
         if COMPACTION_SYSTEM_PROMPT.strip() in system_text:
             self.call_order.append("compact")
             if self.compaction_ok:
@@ -60,17 +61,17 @@ class _FakeProvider(LLMProvider):
 def test_runtime_shrink_drops_old_turns() -> None:
     compactor = ContextCompactor()
     messages = [
-        {"role": "system", "content": "sys"},
-        {"role": "user", "content": "u1 " * 300},
-        {"role": "assistant", "content": "a1 " * 300},
-        {"role": "user", "content": "u2 " * 300},
-        {"role": "assistant", "content": "a2 " * 300},
+        ChatMessage(role="system", content="sys"),
+        ChatMessage(role="user", content="u1 " * 300),
+        ChatMessage(role="assistant", content="a1 " * 300),
+        ChatMessage(role="user", content="u2 " * 300),
+        ChatMessage(role="assistant", content="a2 " * 300),
     ]
 
     shrunk = compactor.shrink_messages_for_runtime(messages, max_context=220, max_output_tokens=120)
     assert len(shrunk) < len(messages)
-    assert shrunk[-1]["role"] == "user"
-    assert "u2" in str(shrunk[-1]["content"])
+    assert shrunk[-1].role == "user"
+    assert "u2" in (shrunk[-1].content or "")
 
 
 @pytest.mark.asyncio
@@ -106,8 +107,8 @@ async def test_build_initial_messages_triggers_compaction(tmp_path) -> None:
     assert session.messages[-1]["is_compaction_seed"] is True
     assert isinstance(session.metadata.get("compaction"), dict)
     assert len(history) == 1
-    assert initial[0]["role"] == "system"
-    assert initial[-1]["role"] == "user"
+    assert initial[0].role == "system"
+    assert initial[-1].role == "user"
     assert provider.call_order[:2] == ["memory", "compact"]
 
 

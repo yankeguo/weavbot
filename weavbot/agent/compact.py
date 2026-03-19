@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+from weavbot.agent.messages import ChatMessage
 
 if TYPE_CHECKING:
     from weavbot.providers.base import LLMProvider
@@ -38,7 +40,7 @@ class CompactResult:
     """Result of a successful context compaction."""
 
     summary: str
-    seed_message: dict[str, Any]
+    seed_message: ChatMessage
     covered_messages: int
     estimated_before_tokens: int
     estimated_after_tokens: int
@@ -52,7 +54,7 @@ class ContextCompactor:
 
     @staticmethod
     def estimate_tokens(
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         *,
         estimate_multiplier: float = 1.0,
     ) -> int:
@@ -60,25 +62,29 @@ class ContextCompactor:
         tokens = 0.0
         for m in messages:
             tokens += ContextCompactor._BASE_MESSAGE_OVERHEAD_TOKENS
-            tokens += ContextCompactor._text_tokens(str(m.get("role", "")))
-            tokens += ContextCompactor._content_tokens(m.get("content"))
-            if (tool_calls := m.get("tool_calls")) is not None:
-                # Tool payloads often include JSON strings and can spike quickly.
-                tokens += ContextCompactor._json_tokens(tool_calls) * 1.15
-            if (name := m.get("name")) is not None:
-                tokens += ContextCompactor._text_tokens(str(name))
-            if (tool_call_id := m.get("tool_call_id")) is not None:
-                tokens += ContextCompactor._text_tokens(str(tool_call_id))
-            if (reasoning_content := m.get("reasoning_content")) is not None:
-                tokens += ContextCompactor._content_tokens(reasoning_content)
-            if (thinking_blocks := m.get("thinking_blocks")) is not None:
-                tokens += ContextCompactor._json_tokens(thinking_blocks)
+            tokens += ContextCompactor._text_tokens(m.role)
+            tokens += ContextCompactor._text_tokens(m.content or "")
+            if m.media:
+                tokens += 24 * len(m.media)
+            if m.tool_calls:
+                tc_data = [
+                    {"id": tc.id, "name": tc.name, "arguments": tc.arguments} for tc in m.tool_calls
+                ]
+                tokens += ContextCompactor._json_tokens(tc_data) * 1.15
+            if m.tool_name:
+                tokens += ContextCompactor._text_tokens(m.tool_name)
+            if m.tool_call_id:
+                tokens += ContextCompactor._text_tokens(m.tool_call_id)
+            if m.reasoning_content:
+                tokens += ContextCompactor._text_tokens(m.reasoning_content)
+            if m.thinking_blocks:
+                tokens += ContextCompactor._json_tokens(m.thinking_blocks)
         multiplier = max(1.0, float(estimate_multiplier or 1.0))
         return max(max(1, len(messages)) * 12, int(tokens * multiplier))
 
     @staticmethod
     def can_fit(
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         max_context: int,
         max_output_tokens: int,
         *,
@@ -99,45 +105,35 @@ class ContextCompactor:
 
     @staticmethod
     def shrink_messages_for_runtime(
-        messages: list[dict[str, Any]],
+        messages: list[ChatMessage],
         max_context: int,
         max_output_tokens: int,
         *,
         estimate_multiplier: float = 1.0,
         safety_tokens: int = 0,
         safety_ratio: float = 0.0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ChatMessage]:
         """Best-effort runtime shrinking for tool-heavy loops without rewriting session."""
-        if ContextCompactor.can_fit(
-            messages,
-            max_context,
-            max_output_tokens,
+        fit_kw = dict(
             estimate_multiplier=estimate_multiplier,
             safety_tokens=safety_tokens,
             safety_ratio=safety_ratio,
-        ):
+        )
+        if ContextCompactor.can_fit(messages, max_context, max_output_tokens, **fit_kw):
             return messages
         if not messages:
             return messages
 
-        system = messages[0] if messages[0].get("role") == "system" else None
+        system = messages[0] if messages[0].role == "system" else None
         rest = messages[1:] if system else messages
         turns = ContextCompactor._split_turns(rest)
         if not turns:
             return messages
 
-        # Keep newest turns first; gradually reduce old turns.
         for keep in range(len(turns), 0, -1):
             kept = [m for turn in turns[-keep:] for m in turn]
             candidate = ([system] if system else []) + kept
-            if ContextCompactor.can_fit(
-                candidate,
-                max_context,
-                max_output_tokens,
-                estimate_multiplier=estimate_multiplier,
-                safety_tokens=safety_tokens,
-                safety_ratio=safety_ratio,
-            ):
+            if ContextCompactor.can_fit(candidate, max_context, max_output_tokens, **fit_kw):
                 dropped = len(rest) - len(kept)
                 if dropped > 0:
                     logger.info(
@@ -145,22 +141,13 @@ class ContextCompactor:
                     )
                 return candidate
 
-        # Last resort: keep system + latest user message only.
-        latest_user = next((m for m in reversed(rest) if m.get("role") == "user"), None)
+        latest_user = next((m for m in reversed(rest) if m.role == "user"), None)
         fallback = ([system] if system else []) + ([latest_user] if latest_user else [])
         if fallback:
-            if ContextCompactor.can_fit(
-                fallback,
-                max_context,
-                max_output_tokens,
-                estimate_multiplier=estimate_multiplier,
-                safety_tokens=safety_tokens,
-                safety_ratio=safety_ratio,
-            ):
+            if ContextCompactor.can_fit(fallback, max_context, max_output_tokens, **fit_kw):
                 logger.warning("Runtime context shrink fell back to latest user message only")
                 return fallback
 
-            # If still too large, aggressively trim all large fields.
             base_budget = max(
                 96,
                 max_context
@@ -176,21 +163,14 @@ class ContextCompactor:
                     )
                     for msg in fallback
                 ]
-                if ContextCompactor.can_fit(
-                    truncated,
-                    max_context,
-                    max_output_tokens,
-                    estimate_multiplier=estimate_multiplier,
-                    safety_tokens=safety_tokens,
-                    safety_ratio=safety_ratio,
-                ):
+                if ContextCompactor.can_fit(truncated, max_context, max_output_tokens, **fit_kw):
                     logger.warning("Runtime context shrink applied aggressive truncation")
                     return truncated
             logger.warning("Runtime context shrink exhausted aggressive truncation")
             return [
-                {"role": "system", "content": "[System prompt truncated for context budget]"}
-                if i == 0 and msg.get("role") == "system"
-                else {"role": msg.get("role", "user"), "content": "[truncated for context budget]"}
+                ChatMessage(role="system", content="[System prompt truncated for context budget]")
+                if i == 0 and msg.role == "system"
+                else ChatMessage(role=msg.role, content="[truncated for context budget]")
                 for i, msg in enumerate(fallback)
             ]
         return messages
@@ -198,7 +178,7 @@ class ContextCompactor:
     async def compact_session_to_new_start(
         self,
         session: Session,
-        history: list[dict[str, Any]],
+        history: list[ChatMessage],
         provider: LLMProvider,
         model: str,
         *,
@@ -227,8 +207,8 @@ class ContextCompactor:
         try:
             response = await provider.chat(
                 messages=[
-                    {"role": "system", "content": COMPACTION_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
+                    ChatMessage(role="system", content=COMPACTION_SYSTEM_PROMPT),
+                    ChatMessage(role="user", content=user_prompt),
                 ],
                 model=model,
                 max_tokens=max(256, max_summary_tokens),
@@ -242,12 +222,12 @@ class ContextCompactor:
             logger.warning("Context compaction returned empty/error response, skipping")
             return None
 
-        seed_message = {
-            "role": "user",
-            "content": f"{self.SEED_PREFIX}\n\n{summary}",
-            "is_compaction_seed": True,
-            "timestamp": datetime.now().isoformat(),
-        }
+        seed_message = ChatMessage(
+            role="user",
+            content=f"{self.SEED_PREFIX}\n\n{summary}",
+            is_compaction_seed=True,
+            timestamp=datetime.now().isoformat(),
+        )
         estimated_after = self.estimate_tokens([seed_message])
 
         return CompactResult(
@@ -259,11 +239,11 @@ class ContextCompactor:
         )
 
     @staticmethod
-    def _split_turns(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-        turns: list[list[dict[str, Any]]] = []
-        current: list[dict[str, Any]] = []
+    def _split_turns(messages: list[ChatMessage]) -> list[list[ChatMessage]]:
+        turns: list[list[ChatMessage]] = []
+        current: list[ChatMessage] = []
         for m in messages:
-            if m.get("role") == "user" and current:
+            if m.role == "user" and current:
                 turns.append(current)
                 current = [m]
             else:
@@ -273,36 +253,11 @@ class ContextCompactor:
         return turns
 
     @staticmethod
-    def _content_chars(content: Any) -> int:
-        if content is None:
-            return 0
-        if isinstance(content, str):
-            return len(content)
-        if isinstance(content, list):
-            total = 0
-            for item in content:
-                if isinstance(item, dict):
-                    typ = item.get("type")
-                    if typ in ("text", "input_text", "output_text"):
-                        total += len(str(item.get("text", "")))
-                    elif typ == "image_url":
-                        total += 16
-                    else:
-                        total += len(json.dumps(item, ensure_ascii=False))
-                else:
-                    total += len(str(item))
-            return total
-        if isinstance(content, dict):
-            return len(json.dumps(content, ensure_ascii=False))
-        return len(str(content))
-
-    @staticmethod
     def _text_tokens(text: str) -> int:
         if not text:
             return 0
         ascii_chars = sum(1 for ch in text if ord(ch) < 128)
         non_ascii_chars = len(text) - ascii_chars
-        # ASCII compresses better than CJK. Use conservative estimate.
         return max(1, ascii_chars // 3 + non_ascii_chars)
 
     @staticmethod
@@ -311,32 +266,7 @@ class ContextCompactor:
             payload = json.dumps(value, ensure_ascii=False)
         except Exception:
             payload = str(value)
-        # JSON punctuation and escaped content add overhead.
         return ContextCompactor._text_tokens(payload) + max(1, len(payload) // 16)
-
-    @staticmethod
-    def _content_tokens(content: Any) -> int:
-        if content is None:
-            return 0
-        if isinstance(content, str):
-            return ContextCompactor._text_tokens(content)
-        if isinstance(content, list):
-            total = 0
-            for item in content:
-                if isinstance(item, dict):
-                    typ = item.get("type")
-                    if typ in ("text", "input_text", "output_text"):
-                        total += ContextCompactor._text_tokens(str(item.get("text", "")))
-                    elif typ == "image_url":
-                        total += 24
-                    else:
-                        total += ContextCompactor._json_tokens(item)
-                else:
-                    total += ContextCompactor._text_tokens(str(item))
-            return total
-        if isinstance(content, dict):
-            return ContextCompactor._json_tokens(content)
-        return ContextCompactor._text_tokens(str(content))
 
     @staticmethod
     def _truncate_text(text: str, max_chars: int) -> str:
@@ -347,120 +277,21 @@ class ContextCompactor:
         return text[: max_chars - 24] + "\n...[truncated]"
 
     @staticmethod
-    def _truncate_content(content: Any, max_chars: int) -> Any:
-        if content is None:
-            return None
-        if isinstance(content, str):
-            return ContextCompactor._truncate_text(content, max_chars)
-        if isinstance(content, list):
-            out: list[Any] = []
-            budget = max_chars
-            for item in content:
-                if budget <= 0:
-                    break
-                if isinstance(item, dict):
-                    typ = item.get("type")
-                    if typ in ("text", "input_text", "output_text"):
-                        text = str(item.get("text", ""))
-                        trimmed = ContextCompactor._truncate_text(text, max(32, budget))
-                        out.append({**item, "text": trimmed})
-                        budget -= len(trimmed)
-                    elif typ == "image_url":
-                        out.append({"type": "text", "text": "[media]"})
-                        budget -= 16
-                    else:
-                        dumped = ContextCompactor._truncate_text(
-                            json.dumps(item, ensure_ascii=False), max(32, budget)
-                        )
-                        out.append({"type": "text", "text": dumped})
-                        budget -= len(dumped)
-                else:
-                    text = ContextCompactor._truncate_text(str(item), max(32, budget))
-                    out.append(text)
-                    budget -= len(text)
-            return out
-        if isinstance(content, dict):
-            dumped = ContextCompactor._truncate_text(
-                json.dumps(content, ensure_ascii=False), max_chars
-            )
-            return {"type": "text", "text": dumped}
-        return ContextCompactor._truncate_text(str(content), max_chars)
+    def _minimize_message_for_budget(message: ChatMessage, max_chars: int) -> ChatMessage:
+        msg = replace(message, reasoning_content=None, thinking_blocks=None)
+        if msg.content:
+            msg = replace(msg, content=ContextCompactor._truncate_text(msg.content, max_chars))
+        if msg.tool_calls and len(msg.tool_calls) > 4:
+            msg = replace(msg, tool_calls=msg.tool_calls[:4])
+        return msg
 
-    @staticmethod
-    def _trim_tool_calls(tool_calls: Any, max_chars: int) -> Any:
-        if not isinstance(tool_calls, list):
-            return tool_calls
-        trimmed: list[dict[str, Any]] = []
-        remaining = max_chars
-        for call in tool_calls[:4]:
-            if remaining <= 0:
-                break
-            if not isinstance(call, dict):
-                continue
-            function = call.get("function")
-            fn_name = ""
-            fn_args: Any = ""
-            if isinstance(function, dict):
-                fn_name = str(function.get("name", ""))
-                fn_args = function.get("arguments", "")
-            arg_text = (
-                fn_args if isinstance(fn_args, str) else json.dumps(fn_args, ensure_ascii=False)
-            )
-            arg_limit = max(32, remaining // 2)
-            arg_text = ContextCompactor._truncate_text(arg_text, arg_limit)
-            item = {
-                "id": call.get("id"),
-                "type": call.get("type", "function"),
-                "function": {"name": fn_name, "arguments": arg_text},
-            }
-            trimmed.append(item)
-            remaining -= len(fn_name) + len(arg_text) + 16
-        return trimmed
-
-    @staticmethod
-    def _minimize_message_for_budget(message: dict[str, Any], max_chars: int) -> dict[str, Any]:
-        item = dict(message)
-        # Drop regenerable reasoning payload first.
-        item.pop("reasoning_content", None)
-        item.pop("thinking_blocks", None)
-        if "content" in item:
-            item["content"] = ContextCompactor._truncate_content(item.get("content"), max_chars)
-        if "tool_calls" in item:
-            item["tool_calls"] = ContextCompactor._trim_tool_calls(
-                item.get("tool_calls"), max(64, max_chars // 2)
-            )
-        return item
-
-    def _render_transcript(self, history: list[dict[str, Any]]) -> str:
+    def _render_transcript(self, history: list[ChatMessage]) -> str:
         lines: list[str] = []
         for idx, msg in enumerate(history, start=1):
-            role = str(msg.get("role", "unknown")).upper()
-            content = self._content_to_text(msg.get("content"))
-            if tool_calls := msg.get("tool_calls"):
-                content += f"\n[tool_calls] {json.dumps(tool_calls, ensure_ascii=False)}"
+            role = msg.role.upper()
+            content = msg.content or "(empty)"
+            if msg.tool_calls:
+                tc_data = [{"name": tc.name, "arguments": tc.arguments} for tc in msg.tool_calls]
+                content += f"\n[tool_calls] {json.dumps(tc_data, ensure_ascii=False)}"
             lines.append(f"{idx}. {role}: {content}")
         return "\n\n".join(lines)
-
-    @staticmethod
-    def _content_to_text(content: Any) -> str:
-        if content is None:
-            return "(empty)"
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            chunks: list[str] = []
-            for item in content:
-                if isinstance(item, dict):
-                    typ = item.get("type")
-                    if typ in ("text", "input_text", "output_text"):
-                        chunks.append(str(item.get("text", "")))
-                    elif typ == "image_url":
-                        chunks.append("[image]")
-                    else:
-                        chunks.append(json.dumps(item, ensure_ascii=False))
-                else:
-                    chunks.append(str(item))
-            return "\n".join(c for c in chunks if c) or "(empty)"
-        if isinstance(content, dict):
-            return json.dumps(content, ensure_ascii=False)
-        return str(content)
