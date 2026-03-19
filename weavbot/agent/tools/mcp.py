@@ -61,7 +61,7 @@ async def connect_mcp_servers(
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    for name, cfg in mcp_servers.items():
+    for name, cfg in sorted(mcp_servers.items()):
         try:
             if cfg.command:
                 params = StdioServerParameters(
@@ -92,7 +92,7 @@ async def connect_mcp_servers(
 
             tools = await session.list_tools()
             registered = 0
-            for tool_def in tools.tools:
+            for tool_def in sorted(tools.tools, key=lambda t: t.name):
                 if cfg.enabled_tools and tool_def.name not in cfg.enabled_tools:
                     continue
                 if tool_def.name in cfg.disabled_tools:
