@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -68,34 +69,82 @@ class ChatMessage:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ChatMessage:
         """Deserialize from dict."""
-        content = data.get("content")
-        if content is not None and not isinstance(content, str):
-            content = str(content)
 
-        tool_calls = []
-        for tc in data.get("tool_calls", []):
-            if not isinstance(tc, dict):
-                continue
+        def _coerce_str(v: Any) -> str | None:
+            if v is None:
+                return None
+            return v if isinstance(v, str) else str(v)
+
+        def _coerce_media(v: Any) -> list[str]:
+            if v is None:
+                return []
+            if isinstance(v, str):
+                return [v]
+            if isinstance(v, list):
+                return [str(x) for x in v if x is not None]
+            return [str(v)]
+
+        def _coerce_tool_calls(v: Any) -> list[dict[str, Any]]:
+            if isinstance(v, list):
+                return [x for x in v if isinstance(x, dict)]
+            if isinstance(v, dict):
+                return [v]
+            return []
+
+        def _coerce_bool(v: Any) -> bool:
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, str):
+                return v.strip().lower() in {"1", "true", "yes", "on"}
+            if isinstance(v, (int, float)):
+                return v != 0
+            return bool(v)
+
+        content = data.get("content")
+        if isinstance(content, list):
+            # Legacy content arrays are often OpenAI/Anthropic blocks; extract text when possible.
+            text_parts: list[str] = []
+            for part in content:
+                if isinstance(part, dict):
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        text_parts.append(text)
+            content = "\n".join(text_parts) if text_parts else str(content)
+        else:
+            content = _coerce_str(content)
+
+        tool_calls: list[ToolCallRequest] = []
+        for tc in _coerce_tool_calls(data.get("tool_calls")):
             # Support both flat {"id","name","arguments"} and legacy {"function":{"name","arguments"}}
             func = tc.get("function", {}) if "function" in tc else tc
             args = func.get("arguments", {})
+            if isinstance(args, str):
+                try:
+                    parsed = json.loads(args)
+                    args = parsed if isinstance(parsed, dict) else {}
+                except Exception:
+                    args = {}
             tool_calls.append(
                 ToolCallRequest(
-                    id=tc.get("id", ""),
-                    name=func.get("name", ""),
+                    id=_coerce_str(tc.get("id")) or "",
+                    name=_coerce_str(func.get("name")) or "",
                     arguments=args if isinstance(args, dict) else {},
                 )
             )
 
         return cls(
-            role=data.get("role", "user"),
+            role=_coerce_str(data.get("role")) or "user",
             content=content,
-            media=list(data.get("media") or []),
+            media=_coerce_media(data.get("media")),
             tool_calls=tool_calls,
-            tool_call_id=data.get("tool_call_id"),
-            tool_name=data.get("tool_name") or data.get("name"),
-            reasoning_content=data.get("reasoning_content"),
-            thinking_blocks=data.get("thinking_blocks"),
-            timestamp=data.get("timestamp"),
-            is_compaction_seed=bool(data.get("is_compaction_seed")),
+            tool_call_id=_coerce_str(data.get("tool_call_id")),
+            tool_name=_coerce_str(data.get("tool_name")) or _coerce_str(data.get("name")),
+            reasoning_content=_coerce_str(data.get("reasoning_content")),
+            thinking_blocks=(
+                data.get("thinking_blocks")
+                if isinstance(data.get("thinking_blocks"), list)
+                else None
+            ),
+            timestamp=_coerce_str(data.get("timestamp")),
+            is_compaction_seed=_coerce_bool(data.get("is_compaction_seed")),
         )
