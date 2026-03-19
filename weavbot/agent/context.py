@@ -15,7 +15,6 @@ class ContextBuilder:
     """Builds the context (system prompt + messages) for the agent."""
 
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md"]
-    _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
 
     def __init__(self, workspace: Path):
         self.workspace = workspace
@@ -84,13 +83,14 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
 
     @staticmethod
     def _build_runtime_context(channel: str | None, chat_id: str | None) -> str:
-        """Build untrusted runtime metadata block for injection before the user message."""
+        """Build runtime metadata block wrapped in XML for injection before the user message."""
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         tz = time.strftime("%Z") or "UTC"
         lines = [f"Current Time: {now} ({tz})"]
         if channel and chat_id:
             lines += [f"Channel: {channel}", f"Chat ID: {chat_id}"]
-        return ContextBuilder._RUNTIME_CONTEXT_TAG + "\n" + "\n".join(lines)
+        body = "\n".join(lines)
+        return f'<context role="metadata">\n{body}\n</context>'
 
     def _load_bootstrap_files(self) -> str:
         """Load all bootstrap files from workspace."""
@@ -114,7 +114,7 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
     ) -> list[ChatMessage]:
         """Build the complete message list for an LLM call."""
         runtime_ctx = self._build_runtime_context(channel, chat_id)
-        merged_content = f"{runtime_ctx}\n\n{current_message}"
+        merged_content = f"{runtime_ctx}\n{current_message}"
 
         return [
             ChatMessage(role="system", content=self._build_system_prompt()),
