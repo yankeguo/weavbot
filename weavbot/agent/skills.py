@@ -98,7 +98,7 @@ class SkillsLoader:
             content = self.load_skill(name)
             if content:
                 content = self._strip_frontmatter(content)
-                parts.append(f"### Skill: {name}\n\n{content}")
+                parts.append(f'<skill name="{name}">\n{content}\n</skill>')
 
         return "\n\n---\n\n".join(parts) if parts else ""
 

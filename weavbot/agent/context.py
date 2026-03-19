@@ -23,37 +23,40 @@ class ContextBuilder:
         self.skills = SkillsLoader(workspace)
 
     def _build_system_prompt(self) -> str:
-        """Build the system prompt from identity, bootstrap files, skills, and memory (last)."""
-        parts = [self._get_identity()]
+        """Build the system prompt from identity, bootstrap files, skills, and memory."""
+        sections = [
+            self._build_identity_section(),
+            self._load_bootstrap_files(),
+            self._build_active_skills_section(),
+            self._build_skills_directory_section(),
+            self.memory.get_memory_context(),
+        ]
+        return "\n\n---\n\n".join(s for s in sections if s)
 
-        bootstrap = self._load_bootstrap_files()
-        if bootstrap:
-            parts.append(bootstrap)
+    def _build_active_skills_section(self) -> str:
+        """Build the active (always-on) skills section."""
+        names = self.skills.get_always_skills()
+        if not names:
+            return ""
+        content = self.skills.load_skills_for_context(names)
+        return f"# Active Skills\n\n{content}" if content else ""
 
-        always_skills = self.skills.get_always_skills()
-        if always_skills:
-            always_content = self.skills.load_skills_for_context(always_skills)
-            if always_content:
-                parts.append(f"# Active Skills\n\n{always_content}")
+    def _build_skills_directory_section(self) -> str:
+        """Build the available-skills directory section."""
+        summary = self.skills.build_skills_summary()
+        if not summary:
+            return ""
+        return (
+            "# Available Skills\n\n"
+            "Before calling tools for reminders, memory, or any task that matches a skill: "
+            "read that skill's SKILL.md with read_file first. Do not guess tool usage.\n\n"
+            'Skills with available="false" need dependencies installed first '
+            "- you can try installing them with apt/brew.\n\n"
+            f"{summary}"
+        )
 
-        skills_summary = self.skills.build_skills_summary()
-        if skills_summary:
-            parts.append(f"""# Skills
-
-Before calling tools for reminders, memory, or any task that matches a skill: read that skill's SKILL.md with read_file first. Do not guess tool usage.
-
-The following skills extend your capabilities. Skills with available="false" need dependencies installed first - you can try installing them with apt/brew.
-
-{skills_summary}""")
-
-        memory = self.memory.get_memory_context()
-        if memory:
-            parts.append(memory)
-
-        return "\n\n---\n\n".join(parts)
-
-    def _get_identity(self) -> str:
-        """Get the core identity section."""
+    def _build_identity_section(self) -> str:
+        """Build the core identity section."""
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
@@ -99,7 +102,7 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
             file_path = self.workspace / filename
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")
-                parts.append(f"## {filename}\n\n{content}")
+                parts.append(f'<file source="{filename}">\n{content}\n</file>')
 
         return "\n\n".join(parts) if parts else ""
 
