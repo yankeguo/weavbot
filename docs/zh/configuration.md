@@ -29,6 +29,14 @@ nav_order: 6
 | `apiBase` | string（可选） | OpenAI 兼容 API 的 base URL |
 | `extraHeaders` | object（可选） | 额外 HTTP 头 |
 
+Anthropic 说明：
+
+- 如果服务端是 Anthropic 兼容网关（非原生 Anthropic），且支持 OpenAI 风格接口，优先使用 `mode: "openai"`。
+- 若必须以 `mode: "anthropic"` 访问兼容网关（例如 Bailian Anthropic endpoint），请配置 `apiBase` 并开启调试日志检查请求体兼容性。
+- Anthropic 模式调试环境变量：
+  - `WB_DEBUG_ANTHROPIC=1`：输出脱敏后的请求摘要与详情。
+  - `WB_ANTHROPIC_CACHE_CONTROL=0`：强制关闭 `cache_control` 字段，提升兼容网关通过率。
+
 ## agents.defaults
 
 | 键 | 类型 | 默认值 | 说明 |

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 from typing import Any
 
 from anthropic import AsyncAnthropic
+from loguru import logger
 
 from weavbot.agent.messages import ChatMessage, ToolCallRequest
 from weavbot.providers.base import (
@@ -30,18 +33,57 @@ class AnthropicProvider(LLMProvider):
     ):
         super().__init__(api_key, api_base)
         self.default_model = default_model
+        self._debug_enabled = self._env_flag("WB_DEBUG_ANTHROPIC", default=False)
+        self._use_cache_control = self._resolve_cache_control(api_base)
         kwargs: dict[str, Any] = {"api_key": api_key}
         if api_base:
             kwargs["base_url"] = api_base
         kwargs["default_headers"] = build_provider_headers(extra_headers)
         self._client = AsyncAnthropic(**kwargs)
 
+    @staticmethod
+    def _env_flag(name: str, default: bool = False) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+
+    @classmethod
+    def _resolve_cache_control(cls, api_base: str | None) -> bool:
+        override = os.getenv("WB_ANTHROPIC_CACHE_CONTROL")
+        if override is not None:
+            return cls._env_flag("WB_ANTHROPIC_CACHE_CONTROL")
+        if not api_base:
+            return True
+        # Some Anthropic-compatible gateways reject optional Anthropic-only fields.
+        return "dashscope.aliyuncs.com" not in api_base
+
+    @staticmethod
+    def _sanitize_thinking_block(block: Any) -> dict[str, Any] | None:
+        if not isinstance(block, dict):
+            return None
+        kind = block.get("type")
+        if kind == "thinking":
+            thinking = block.get("thinking")
+            signature = block.get("signature")
+            if isinstance(thinking, str) and isinstance(signature, str):
+                return {"type": "thinking", "thinking": thinking, "signature": signature}
+            return None
+        if kind == "redacted_thinking":
+            data = block.get("data")
+            if isinstance(data, str):
+                return {"type": "redacted_thinking", "data": data}
+            return None
+        return None
+
     # ------------------------------------------------------------------
     # Tool conversion
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _convert_tools(
+        tools: list[dict[str, Any]], use_cache_control: bool = True
+    ) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for t in tools:
             func = t.get("function", {})
@@ -51,7 +93,7 @@ class AnthropicProvider(LLMProvider):
                 "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
             }
             out.append(entry)
-        if out:
+        if out and use_cache_control:
             out[-1]["cache_control"] = {"type": "ephemeral"}
         return out
 
@@ -81,7 +123,7 @@ class AnthropicProvider(LLMProvider):
 
     @classmethod
     def _serialize_messages_anthropic(
-        cls, messages: list[ChatMessage]
+        cls, messages: list[ChatMessage], use_cache_control: bool = True
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Convert ChatMessage list to Anthropic format.
 
@@ -95,19 +137,19 @@ class AnthropicProvider(LLMProvider):
             msg = messages[i]
 
             if msg.role == "system":
-                system_blocks.append(
-                    {
-                        "type": "text",
-                        "text": msg.content or "",
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                )
+                block: dict[str, Any] = {"type": "text", "text": msg.content or ""}
+                if use_cache_control:
+                    block["cache_control"] = {"type": "ephemeral"}
+                system_blocks.append(block)
                 i += 1
 
             elif msg.role == "assistant":
                 blocks: list[dict[str, Any]] = []
                 if msg.thinking_blocks:
-                    blocks.extend(msg.thinking_blocks)
+                    for block in msg.thinking_blocks:
+                        sanitized = cls._sanitize_thinking_block(block)
+                        if sanitized:
+                            blocks.append(sanitized)
                 if msg.content:
                     blocks.append({"type": "text", "text": msg.content})
                 for tc in msg.tool_calls:
@@ -170,6 +212,73 @@ class AnthropicProvider(LLMProvider):
 
         return system_blocks, merged
 
+    @classmethod
+    def _redact_for_log(cls, value: Any, key: str | None = None) -> Any:
+        if isinstance(value, dict):
+            out: dict[str, Any] = {}
+            for k, v in value.items():
+                lk = k.lower()
+                if lk in {"authorization", "api_key", "x-api-key", "token"}:
+                    out[k] = "***redacted***"
+                    continue
+                if lk == "data" and isinstance(v, str):
+                    out[k] = f"<base64:{len(v)} chars redacted>"
+                    continue
+                if lk == "signature" and isinstance(v, str):
+                    out[k] = f"<signature:{len(v)} chars redacted>"
+                    continue
+                out[k] = cls._redact_for_log(v, key=k)
+            return out
+        if isinstance(value, list):
+            return [cls._redact_for_log(v, key=key) for v in value]
+        if isinstance(value, str):
+            if len(value) > 300:
+                return f"{value[:300]}...[truncated {len(value) - 300} chars]"
+            return value
+        return value
+
+    @staticmethod
+    def _request_summary(payload: dict[str, Any]) -> dict[str, Any]:
+        messages = payload.get("messages") or []
+        role_counts: dict[str, int] = {}
+        block_counts: dict[str, int] = {}
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            role = str(msg.get("role", "unknown"))
+            role_counts[role] = role_counts.get(role, 0) + 1
+            content = msg.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        btype = str(block.get("type", "unknown"))
+                        block_counts[btype] = block_counts.get(btype, 0) + 1
+            elif isinstance(content, str):
+                block_counts["text"] = block_counts.get("text", 0) + 1
+        return {
+            "model": payload.get("model"),
+            "max_tokens": payload.get("max_tokens"),
+            "has_system": bool(payload.get("system")),
+            "has_tools": bool(payload.get("tools")),
+            "has_thinking": bool(payload.get("thinking")),
+            "message_count": len(messages),
+            "role_counts": role_counts,
+            "block_counts": block_counts,
+        }
+
+    @staticmethod
+    def _error_context(exc: Exception) -> dict[str, Any]:
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict):
+            body = json.loads(json.dumps(body))
+        return {
+            "error_type": type(exc).__name__,
+            "status_code": getattr(exc, "status_code", None),
+            "request_id": getattr(exc, "request_id", None),
+            "body": body,
+            "message": str(exc),
+        }
+
     # ------------------------------------------------------------------
     # Chat
     # ------------------------------------------------------------------
@@ -183,7 +292,9 @@ class AnthropicProvider(LLMProvider):
         temperature: float = 0.7,
         reasoning_effort: str | None = None,
     ) -> LLMResponse:
-        system_blocks, converted = self._serialize_messages_anthropic(messages)
+        system_blocks, converted = self._serialize_messages_anthropic(
+            messages, use_cache_control=self._use_cache_control
+        )
 
         effective_max = max(1, max_tokens)
 
@@ -205,14 +316,31 @@ class AnthropicProvider(LLMProvider):
             kwargs["temperature"] = temperature
 
         if tools:
-            kwargs["tools"] = self._convert_tools(tools)
+            kwargs["tools"] = self._convert_tools(tools, use_cache_control=self._use_cache_control)
             kwargs["tool_choice"] = {"type": "auto"}
+
+        if self._debug_enabled:
+            logger.debug("Anthropic payload summary: {}", self._request_summary(kwargs))
+            logger.debug(
+                "Anthropic payload detail: {}",
+                json.dumps(self._redact_for_log(kwargs), ensure_ascii=False, default=str),
+            )
 
         try:
             async with self._client.messages.stream(**kwargs) as stream:
                 response = await stream.get_final_message()
             return self._parse_response(response)
         except Exception as e:
+            err_ctx = self._error_context(e)
+            logger.error(
+                "Anthropic request failed: {}",
+                json.dumps(self._redact_for_log(err_ctx), ensure_ascii=False, default=str),
+            )
+            if self._debug_enabled:
+                logger.debug(
+                    "Anthropic failed payload detail: {}",
+                    json.dumps(self._redact_for_log(kwargs), ensure_ascii=False, default=str),
+                )
             return LLMResponse(content=f"Error: {e}", finish_reason="error")
 
     # ------------------------------------------------------------------
@@ -233,7 +361,15 @@ class AnthropicProvider(LLMProvider):
                     ToolCallRequest(id=block.id, name=block.name, arguments=block.input)
                 )
             elif block.type == "thinking":
-                thinking_blocks.append({"type": "thinking", "thinking": block.thinking})
+                signature = getattr(block, "signature", None)
+                if isinstance(block.thinking, str) and isinstance(signature, str):
+                    thinking_blocks.append(
+                        {"type": "thinking", "thinking": block.thinking, "signature": signature}
+                    )
+            elif block.type == "redacted_thinking":
+                data = getattr(block, "data", None)
+                if isinstance(data, str):
+                    thinking_blocks.append({"type": "redacted_thinking", "data": data})
 
         usage: dict[str, int] = {}
         if response.usage:
