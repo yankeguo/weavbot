@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -50,17 +49,12 @@ class ChatMessage:
             d["media"] = list(self.media)
         if self.tool_calls:
             d["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.name, "arguments": tc.arguments},
-                }
-                for tc in self.tool_calls
+                {"id": tc.id, "name": tc.name, "arguments": tc.arguments} for tc in self.tool_calls
             ]
         if self.tool_call_id is not None:
             d["tool_call_id"] = self.tool_call_id
         if self.tool_name is not None:
-            d["name"] = self.tool_name
+            d["tool_name"] = self.tool_name
         if self.reasoning_content is not None:
             d["reasoning_content"] = self.reasoning_content
         if self.thinking_blocks is not None:
@@ -73,52 +67,28 @@ class ChatMessage:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ChatMessage:
-        """Deserialize from dict, with backward compatibility for legacy formats."""
+        """Deserialize from dict."""
         content = data.get("content")
-        media: list[str] = list(data.get("media") or [])
-
-        if isinstance(content, list):
-            text_parts: list[str] = []
-            for item in content:
-                if isinstance(item, dict):
-                    typ = item.get("type")
-                    if typ in ("text", "input_text", "output_text"):
-                        text_parts.append(str(item.get("text", "")))
-                    elif typ == "image_url":
-                        text_parts.append("[media]")
-                    else:
-                        text_parts.append(str(item))
-                else:
-                    text_parts.append(str(item))
-            content = "\n".join(p for p in text_parts if p) or None
-        elif isinstance(content, dict):
+        if content is not None and not isinstance(content, str):
             content = str(content)
 
-        tool_calls: list[ToolCallRequest] = []
-        for tc_raw in data.get("tool_calls", []):
-            if isinstance(tc_raw, dict):
-                func = tc_raw.get("function", {})
-                args = func.get("arguments", {})
-                if isinstance(args, str):
-                    try:
-                        args = json.loads(args)
-                    except (json.JSONDecodeError, ValueError):
-                        args = {}
-                tool_calls.append(
-                    ToolCallRequest(
-                        id=tc_raw.get("id", ""),
-                        name=func.get("name", ""),
-                        arguments=args if isinstance(args, dict) else {},
-                    )
-                )
+        tool_calls = [
+            ToolCallRequest(
+                id=tc.get("id", ""),
+                name=tc.get("name", ""),
+                arguments=tc.get("arguments") if isinstance(tc.get("arguments"), dict) else {},
+            )
+            for tc in data.get("tool_calls", [])
+            if isinstance(tc, dict)
+        ]
 
         return cls(
             role=data.get("role", "user"),
             content=content,
-            media=media,
+            media=list(data.get("media") or []),
             tool_calls=tool_calls,
             tool_call_id=data.get("tool_call_id"),
-            tool_name=data.get("name"),
+            tool_name=data.get("tool_name"),
             reasoning_content=data.get("reasoning_content"),
             thinking_blocks=data.get("thinking_blocks"),
             timestamp=data.get("timestamp"),
