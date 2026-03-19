@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import json_repair
@@ -31,6 +32,59 @@ class OpenAIProvider(LLMProvider):
             default_headers=build_provider_headers(extra_headers),
         )
 
+    @classmethod
+    def _serialize_messages(cls, messages: list[ChatMessage]) -> list[dict[str, Any]]:
+        """Convert ChatMessage list to OpenAI-compatible wire format.
+
+        Media file paths are base64-encoded into image_url content parts.
+        Empty content is sanitized inline to avoid provider 400 errors.
+        """
+        result: list[dict[str, Any]] = []
+        for msg in messages:
+            d: dict[str, Any] = {"role": msg.role}
+
+            if msg.media:
+                parts: list[dict[str, Any]] = []
+                for path in msg.media:
+                    encoded = cls._encode_media_file(path)
+                    if encoded:
+                        mime, b64 = encoded
+                        parts.append(
+                            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+                        )
+                if msg.content:
+                    parts.append({"type": "text", "text": msg.content})
+                d["content"] = parts if parts else (msg.content or "(empty)")
+            elif not msg.content:
+                d["content"] = None if msg.tool_calls else "(empty)"
+            else:
+                d["content"] = msg.content
+
+            if msg.tool_calls:
+                d["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ]
+
+            if msg.tool_call_id is not None:
+                d["tool_call_id"] = msg.tool_call_id
+            if msg.tool_name is not None:
+                d["name"] = msg.tool_name
+            if msg.reasoning_content is not None:
+                d["reasoning_content"] = msg.reasoning_content
+            if msg.thinking_blocks is not None:
+                d["thinking_blocks"] = msg.thinking_blocks
+
+            result.append(d)
+        return result
+
     async def chat(
         self,
         messages: list[ChatMessage],
@@ -40,7 +94,7 @@ class OpenAIProvider(LLMProvider):
         temperature: float = 0.7,
         reasoning_effort: str | None = None,
     ) -> LLMResponse:
-        serialized = self._sanitize_empty_content(self._serialize_messages(messages))
+        serialized = self._serialize_messages(messages)
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,
             "messages": serialized,
