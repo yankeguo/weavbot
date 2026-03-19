@@ -24,7 +24,7 @@ class ContextBuilder:
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
 
-    def build_system_prompt(self) -> str:
+    def _build_system_prompt(self) -> str:
         """Build the system prompt from identity, bootstrap files, skills, and memory (last)."""
         parts = [self._get_identity()]
 
@@ -125,7 +125,7 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
             merged = [{"type": "text", "text": runtime_ctx}] + user_content
 
         return [
-            {"role": "system", "content": self.build_system_prompt()},
+            {"role": "system", "content": self._build_system_prompt()},
             *history,
             {"role": "user", "content": merged},
         ]
