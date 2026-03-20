@@ -87,9 +87,9 @@ async def test_build_initial_messages_triggers_compaction(tmp_path) -> None:
         max_context=140,
     )
     session = loop.sessions.get_or_create("cli:direct")
-    session.add_message("user", "U" * 200)
-    session.add_message("assistant", "A" * 200)
-    session.add_message("user", "B" * 200)
+    session.append_chat_message(ChatMessage(role="user", content="U" * 200))
+    session.append_chat_message(ChatMessage(role="assistant", content="A" * 200))
+    session.append_chat_message(ChatMessage(role="user", content="B" * 200))
     before_count = len(session.messages)
 
     history, initial = await loop._build_initial_messages_with_compaction(
@@ -125,8 +125,8 @@ async def test_build_initial_messages_compaction_failure_keeps_history(tmp_path)
         max_context=140,
     )
     session = loop.sessions.get_or_create("cli:direct")
-    session.add_message("user", "U" * 200)
-    session.add_message("assistant", "A" * 200)
+    session.append_chat_message(ChatMessage(role="user", content="U" * 200))
+    session.append_chat_message(ChatMessage(role="assistant", content="A" * 200))
     before = list(session.messages)
 
     history, _ = await loop._build_initial_messages_with_compaction(
@@ -156,8 +156,8 @@ async def test_new_command_keeps_memory_only_archival(tmp_path) -> None:
         max_context=140,
     )
     session = loop.sessions.get_or_create("cli:direct")
-    session.add_message("user", "old message 1")
-    session.add_message("assistant", "old message 2")
+    session.append_chat_message(ChatMessage(role="user", content="old message 1"))
+    session.append_chat_message(ChatMessage(role="assistant", content="old message 2"))
 
     content = await loop.process_direct(
         "/new", session_key="cli:direct", channel="cli", chat_id="direct"

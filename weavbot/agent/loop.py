@@ -94,7 +94,8 @@ class AgentLoop:
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
 
-        self.context = ContextBuilder(workspace)
+        self.memory = MemoryStore(workspace)
+        self.context = ContextBuilder(workspace, self.memory)
         self.compactor = ContextCompactor()
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
@@ -256,30 +257,6 @@ class AgentLoop:
         )
         session.metadata["token_usage"] = token_usage
 
-    def _get_context_fit_params(self, session: Session) -> dict[str, float | int]:
-        """Get conservative context-fit params, with per-session calibration when available."""
-        base_multiplier = self._DEFAULT_ESTIMATE_MULTIPLIER
-        base_safety = self._DEFAULT_SAFETY_TOKENS
-        estimator_meta = session.metadata.get("token_estimator")
-        estimator_meta = estimator_meta if isinstance(estimator_meta, dict) else {}
-        model_meta = estimator_meta.get(self.model)
-        model_meta = model_meta if isinstance(model_meta, dict) else {}
-        multiplier_raw = model_meta.get("estimate_multiplier", base_multiplier)
-        safety_raw = model_meta.get("safety_tokens", base_safety)
-        try:
-            multiplier = float(multiplier_raw)
-        except (TypeError, ValueError):
-            multiplier = base_multiplier
-        try:
-            safety_tokens = int(safety_raw)
-        except (TypeError, ValueError):
-            safety_tokens = base_safety
-        return {
-            "estimate_multiplier": min(3.0, max(1.0, multiplier)),
-            "safety_tokens": min(32768, max(256, safety_tokens)),
-            "safety_ratio": self._DEFAULT_SAFETY_RATIO,
-        }
-
     def _record_estimation_error(
         self,
         session: Session,
@@ -356,7 +333,12 @@ class AgentLoop:
     ) -> tuple[list[ChatMessage], list[ChatMessage]]:
         """Build initial messages and compact context when output budget cannot fit."""
         history = session.get_history()
-        fit_params = self._get_context_fit_params(session)
+        fit_params = session.get_context_fit_params(
+            model=self.model,
+            default_estimate_multiplier=self._DEFAULT_ESTIMATE_MULTIPLIER,
+            default_safety_tokens=self._DEFAULT_SAFETY_TOKENS,
+            default_safety_ratio=self._DEFAULT_SAFETY_RATIO,
+        )
         initial_messages = self.context.build_messages(
             history=history,
             current_message=current_message,
@@ -399,8 +381,7 @@ class AgentLoop:
         previous_count = len(session.messages)
         previous_context_cursor = session.context_compacted_cursor
         session.context_compacted_cursor = previous_count
-        session.messages.append(compact.seed_message.to_dict())
-        session.updated_at = datetime.now()
+        session.append_chat_message(compact.seed_message)
 
         compaction_meta = session.metadata.get("compaction")
         compaction_meta = compaction_meta if isinstance(compaction_meta, dict) else {}
@@ -453,7 +434,12 @@ class AgentLoop:
     ) -> tuple[str | None, list[str], list[ChatMessage], dict[str, int]]:
         """Run the agent iteration loop. Returns (final_content, tools_used, messages, turn_usage)."""
         messages = initial_messages
-        fit_params = self._get_context_fit_params(session)
+        fit_params = session.get_context_fit_params(
+            model=self.model,
+            default_estimate_multiplier=self._DEFAULT_ESTIMATE_MULTIPLIER,
+            default_safety_tokens=self._DEFAULT_SAFETY_TOKENS,
+            default_safety_ratio=self._DEFAULT_SAFETY_RATIO,
+        )
         iteration = 0
         final_content = None
         tools_used: list[str] = []
@@ -530,7 +516,12 @@ class AgentLoop:
                 estimated_prompt_tokens=estimated_prompt,
                 actual_prompt_tokens=usage["prompt_tokens"],
             )
-            fit_params = self._get_context_fit_params(session)
+            fit_params = session.get_context_fit_params(
+                model=self.model,
+                default_estimate_multiplier=self._DEFAULT_ESTIMATE_MULTIPLIER,
+                default_safety_tokens=self._DEFAULT_SAFETY_TOKENS,
+                default_safety_ratio=self._DEFAULT_SAFETY_RATIO,
+            )
             turn_usage["prompt_tokens"] += usage["prompt_tokens"]
             turn_usage["completion_tokens"] += usage["completion_tokens"]
             turn_usage["total_tokens"] += usage["total_tokens"]
@@ -812,7 +803,8 @@ class AgentLoop:
             metadata=msg.metadata or {},
         )
 
-    def _save_turn(self, session: Session, messages: list[ChatMessage], skip: int) -> None:
+    @staticmethod
+    def _save_turn(session: Session, messages: list[ChatMessage], skip: int) -> None:
         """Save new-turn messages into session."""
         for msg in messages[skip:]:
             if msg.role == "assistant" and not msg.content and not msg.tool_calls:
@@ -822,16 +814,13 @@ class AgentLoop:
                 if not content:
                     continue
                 msg = msg.with_content(content)
-            if not msg.timestamp:
-                msg = msg.with_timestamp(datetime.now().isoformat())
-            session.messages.append(msg.to_dict())
-        session.updated_at = datetime.now()
+            session.append_chat_message(msg)
 
     async def _consolidate_memory(
         self, session: Session, archive_all: bool = False, up_to_index: int | None = None
     ) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
-        return await MemoryStore(self.workspace).consolidate(
+        return await self.memory.consolidate(
             session,
             self.provider,
             self.model,

@@ -5,12 +5,20 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from loguru import logger
 
 from weavbot.agent.messages import ChatMessage
 from weavbot.utils.helpers import ensure_dir, safe_filename
+
+
+class ContextFitParams(TypedDict):
+    """Typed context-fit params for token budget checks."""
+
+    estimate_multiplier: float
+    safety_tokens: int
+    safety_ratio: float
 
 
 @dataclass
@@ -33,10 +41,10 @@ class Session:
     memory_consolidated_cursor: int = 0  # Number of messages archived to memory files
     context_compacted_cursor: int = 0  # Start index for active context history
 
-    def add_message(self, role: str, content: str, **kwargs: Any) -> None:
-        """Add a message to the session."""
-        msg = {"role": role, "content": content, "timestamp": datetime.now().isoformat(), **kwargs}
-        self.messages.append(msg)
+    def append_chat_message(self, message: ChatMessage) -> None:
+        """Append a typed chat message to session storage."""
+        msg = message if message.timestamp else message.with_timestamp(datetime.now().isoformat())
+        self.messages.append(msg.to_dict())
         self.updated_at = datetime.now()
 
     def get_history(self, max_messages: int = 500) -> list[ChatMessage]:
@@ -55,6 +63,35 @@ class Session:
                 break
 
         return [ChatMessage.from_dict(m) for m in sliced]
+
+    def get_context_fit_params(
+        self,
+        *,
+        model: str,
+        default_estimate_multiplier: float,
+        default_safety_tokens: int,
+        default_safety_ratio: float,
+    ) -> ContextFitParams:
+        """Get conservative context-fit params with per-session calibration when available."""
+        estimator_meta = self.metadata.get("token_estimator")
+        estimator_meta = estimator_meta if isinstance(estimator_meta, dict) else {}
+        model_meta = estimator_meta.get(model)
+        model_meta = model_meta if isinstance(model_meta, dict) else {}
+        multiplier_raw = model_meta.get("estimate_multiplier", default_estimate_multiplier)
+        safety_raw = model_meta.get("safety_tokens", default_safety_tokens)
+        try:
+            multiplier = float(multiplier_raw)
+        except (TypeError, ValueError):
+            multiplier = default_estimate_multiplier
+        try:
+            safety_tokens = int(safety_raw)
+        except (TypeError, ValueError):
+            safety_tokens = default_safety_tokens
+        return {
+            "estimate_multiplier": min(3.0, max(1.0, multiplier)),
+            "safety_tokens": min(32768, max(256, safety_tokens)),
+            "safety_ratio": default_safety_ratio,
+        }
 
     def clear(self) -> None:
         """Clear all messages and reset session to initial state."""
