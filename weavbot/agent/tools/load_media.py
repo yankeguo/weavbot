@@ -7,7 +7,7 @@ from typing import Any
 from weavbot.agent.tools.base import Tool, ToolResult
 from weavbot.utils import resolve_path
 
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 _SUPPORTED_PREFIX = "image/"
 
