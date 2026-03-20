@@ -103,54 +103,27 @@ class SubagentManager:
         try:
             # Build subagent tools (no message tool, no spawn tool)
             tools = ToolRegistry()
-            tools.register(
-                ReadFileTool(
-                    workspace=self.workspace,
-                    restrict_to_workspace=self.restrict_to_workspace,
+            for cls in (
+                ReadFileTool,
+                WriteFileTool,
+                EditFileTool,
+                ListDirTool,
+                GlobFileTool,
+                GrepFileTool,
+                LoadMediaTool,
+            ):
+                tools.register(
+                    cls(
+                        workspace=self.workspace,
+                        restrict_to_workspace=self.restrict_to_workspace,
+                    )
                 )
-            )
-            tools.register(
-                WriteFileTool(
-                    workspace=self.workspace,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                )
-            )
-            tools.register(
-                EditFileTool(
-                    workspace=self.workspace,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                )
-            )
-            tools.register(
-                ListDirTool(
-                    workspace=self.workspace,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                )
-            )
-            tools.register(
-                GlobFileTool(
-                    workspace=self.workspace,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                )
-            )
-            tools.register(
-                GrepFileTool(
-                    workspace=self.workspace,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                )
-            )
             tools.register(
                 ShellTool(
                     workspace=self.workspace,
                     timeout=self.exec_config.timeout,
                     restrict_to_workspace=self.restrict_to_workspace,
                     path_append=self.exec_config.path_append,
-                )
-            )
-            tools.register(
-                LoadMediaTool(
-                    workspace=self.workspace,
-                    restrict_to_workspace=self.restrict_to_workspace,
                 )
             )
             tools.register(WebFetchTool(proxy=self.web_proxy))

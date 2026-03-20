@@ -130,6 +130,7 @@ class AgentLoop:
             ListDirTool,
             GlobFileTool,
             GrepFileTool,
+            LoadMediaTool,
         ):
             self.tools.register(
                 cls(
@@ -143,12 +144,6 @@ class AgentLoop:
                 timeout=self.exec_config.timeout,
                 restrict_to_workspace=self.restrict_to_workspace,
                 path_append=self.exec_config.path_append,
-            )
-        )
-        self.tools.register(
-            LoadMediaTool(
-                workspace=self.workspace,
-                restrict_to_workspace=self.restrict_to_workspace,
             )
         )
         self.tools.register(WebFetchTool(proxy=self.web_proxy))
