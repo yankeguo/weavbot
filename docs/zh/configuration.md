@@ -59,8 +59,6 @@ OpenAI 兼容模式说明：
 
 | 键 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `host` | string | `0.0.0.0` | 监听地址 |
-| `port` | int | 18790 | 监听端口 |
 | `heartbeat.enabled` | bool | true | 是否启用心跳服务 |
 | `heartbeat.intervalS` | int | 1800 | 心跳间隔（秒） |
 

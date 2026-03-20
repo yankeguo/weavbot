@@ -59,8 +59,6 @@ OpenAI-compatible notes:
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `host` | string | `0.0.0.0` | Bind address |
-| `port` | int | 18790 | Bind port |
 | `heartbeat.enabled` | bool | true | Enable heartbeat service |
 | `heartbeat.intervalS` | int | 1800 | Heartbeat interval (seconds) |
 

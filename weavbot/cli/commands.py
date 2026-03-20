@@ -340,7 +340,6 @@ def _make_provider(config: Config):
 
 @app.command()
 def gateway(
-    port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Start the weavbot gateway."""
@@ -358,7 +357,7 @@ def gateway(
 
         logging.basicConfig(level=logging.DEBUG)
 
-    console.print(f"{__logo__} {_t('gateway_starting', port)}")
+    console.print(f"{__logo__} {_t('gateway_starting')}")
 
     config = load_config()
     sync_workspace_templates(config.workspace_path)

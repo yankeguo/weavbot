@@ -11,7 +11,7 @@ nav_order: 5
 | 命令 | 说明 |
 | --- | --- |
 | `weavbot onboard [--set key=value]` | 初始化配置与工作区 |
-| `weavbot gateway [-p/--port 18790]` | 启动网关 |
+| `weavbot gateway` | 启动网关 |
 | `weavbot agent` | 交互式对话 |
 | `weavbot agent -m "..."` | 发送单条消息 |
 | `weavbot status` | 查看状态 |

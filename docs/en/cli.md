@@ -11,7 +11,7 @@ nav_order: 5
 | Command | Description |
 | --- | --- |
 | `weavbot onboard [--set key=value]` | Initialize config and workspace |
-| `weavbot gateway [-p/--port 18790]` | Start the gateway |
+| `weavbot gateway` | Start the gateway |
 | `weavbot agent` | Interactive chat mode |
 | `weavbot agent -m "..."` | Send a single message |
 | `weavbot status` | Show status |
