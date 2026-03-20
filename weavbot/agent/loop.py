@@ -256,30 +256,6 @@ class AgentLoop:
         )
         session.metadata["token_usage"] = token_usage
 
-    def _get_context_fit_params(self, session: Session) -> dict[str, float | int]:
-        """Get conservative context-fit params, with per-session calibration when available."""
-        base_multiplier = self._DEFAULT_ESTIMATE_MULTIPLIER
-        base_safety = self._DEFAULT_SAFETY_TOKENS
-        estimator_meta = session.metadata.get("token_estimator")
-        estimator_meta = estimator_meta if isinstance(estimator_meta, dict) else {}
-        model_meta = estimator_meta.get(self.model)
-        model_meta = model_meta if isinstance(model_meta, dict) else {}
-        multiplier_raw = model_meta.get("estimate_multiplier", base_multiplier)
-        safety_raw = model_meta.get("safety_tokens", base_safety)
-        try:
-            multiplier = float(multiplier_raw)
-        except (TypeError, ValueError):
-            multiplier = base_multiplier
-        try:
-            safety_tokens = int(safety_raw)
-        except (TypeError, ValueError):
-            safety_tokens = base_safety
-        return {
-            "estimate_multiplier": min(3.0, max(1.0, multiplier)),
-            "safety_tokens": min(32768, max(256, safety_tokens)),
-            "safety_ratio": self._DEFAULT_SAFETY_RATIO,
-        }
-
     def _record_estimation_error(
         self,
         session: Session,
@@ -356,7 +332,12 @@ class AgentLoop:
     ) -> tuple[list[ChatMessage], list[ChatMessage]]:
         """Build initial messages and compact context when output budget cannot fit."""
         history = session.get_history()
-        fit_params = self._get_context_fit_params(session)
+        fit_params = session.get_context_fit_params(
+            model=self.model,
+            default_estimate_multiplier=self._DEFAULT_ESTIMATE_MULTIPLIER,
+            default_safety_tokens=self._DEFAULT_SAFETY_TOKENS,
+            default_safety_ratio=self._DEFAULT_SAFETY_RATIO,
+        )
         initial_messages = self.context.build_messages(
             history=history,
             current_message=current_message,
@@ -453,7 +434,12 @@ class AgentLoop:
     ) -> tuple[str | None, list[str], list[ChatMessage], dict[str, int]]:
         """Run the agent iteration loop. Returns (final_content, tools_used, messages, turn_usage)."""
         messages = initial_messages
-        fit_params = self._get_context_fit_params(session)
+        fit_params = session.get_context_fit_params(
+            model=self.model,
+            default_estimate_multiplier=self._DEFAULT_ESTIMATE_MULTIPLIER,
+            default_safety_tokens=self._DEFAULT_SAFETY_TOKENS,
+            default_safety_ratio=self._DEFAULT_SAFETY_RATIO,
+        )
         iteration = 0
         final_content = None
         tools_used: list[str] = []
@@ -530,7 +516,12 @@ class AgentLoop:
                 estimated_prompt_tokens=estimated_prompt,
                 actual_prompt_tokens=usage["prompt_tokens"],
             )
-            fit_params = self._get_context_fit_params(session)
+            fit_params = session.get_context_fit_params(
+                model=self.model,
+                default_estimate_multiplier=self._DEFAULT_ESTIMATE_MULTIPLIER,
+                default_safety_tokens=self._DEFAULT_SAFETY_TOKENS,
+                default_safety_ratio=self._DEFAULT_SAFETY_RATIO,
+            )
             turn_usage["prompt_tokens"] += usage["prompt_tokens"]
             turn_usage["completion_tokens"] += usage["completion_tokens"]
             turn_usage["total_tokens"] += usage["total_tokens"]
