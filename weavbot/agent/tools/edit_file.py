@@ -281,9 +281,9 @@ Usage:
 - The edit fails if old_text matches multiple times: provide more surrounding context to make it unique, or use replace_all to change every occurrence.
 - Use replace_all for renaming variables or replacing across the file."""
 
-    def __init__(self, workspace: Path, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path, restrict_to_workspace: bool = False):
         self._workspace = workspace
-        self._allowed_dir = allowed_dir
+        self._restrict_to_workspace = restrict_to_workspace
 
     @property
     def name(self) -> str:
@@ -319,7 +319,7 @@ Usage:
         **kwargs: Any,
     ) -> str:
         try:
-            file_path = resolve_path(path, self._workspace, self._allowed_dir)
+            file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if file_path.exists() and file_path.is_dir():
                 return f"Error: Path is a directory, not a file: {path}"
 

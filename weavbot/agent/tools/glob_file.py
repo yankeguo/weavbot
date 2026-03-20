@@ -18,9 +18,9 @@ Call multiple globs in a batch when useful."""
 class GlobFileTool(Tool):
     """Tool to find files by glob pattern."""
 
-    def __init__(self, workspace: Path, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path, restrict_to_workspace: bool = False):
         self._workspace = workspace
-        self._allowed_dir = allowed_dir
+        self._restrict_to_workspace = restrict_to_workspace
 
     @property
     def name(self) -> str:
@@ -55,7 +55,7 @@ class GlobFileTool(Tool):
     ) -> str:
         try:
             search_path_str = path if path is not None else "."
-            base = resolve_path(search_path_str, self._workspace, self._allowed_dir)
+            base = resolve_path(search_path_str, self._workspace, self._restrict_to_workspace)
 
             if not base.exists():
                 return f"Error: Directory not found: {search_path_str}"

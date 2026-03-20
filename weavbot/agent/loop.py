@@ -123,7 +123,6 @@ class AgentLoop:
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
-        allowed_dir = self.workspace if self.restrict_to_workspace else None
         for cls in (
             ReadFileTool,
             WriteFileTool,
@@ -132,7 +131,12 @@ class AgentLoop:
             GlobFileTool,
             GrepFileTool,
         ):
-            self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
+            self.tools.register(
+                cls(
+                    workspace=self.workspace,
+                    restrict_to_workspace=self.restrict_to_workspace,
+                )
+            )
         self.tools.register(
             ShellTool(
                 workspace=self.workspace,
@@ -141,7 +145,12 @@ class AgentLoop:
                 path_append=self.exec_config.path_append,
             )
         )
-        self.tools.register(LoadMediaTool(workspace=self.workspace, allowed_dir=allowed_dir))
+        self.tools.register(
+            LoadMediaTool(
+                workspace=self.workspace,
+                restrict_to_workspace=self.restrict_to_workspace,
+            )
+        )
         self.tools.register(WebFetchTool(proxy=self.web_proxy))
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
