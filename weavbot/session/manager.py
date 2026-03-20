@@ -41,10 +41,10 @@ class Session:
     memory_consolidated_cursor: int = 0  # Number of messages archived to memory files
     context_compacted_cursor: int = 0  # Start index for active context history
 
-    def add_message(self, role: str, content: str, **kwargs: Any) -> None:
-        """Add a message to the session."""
-        msg = {"role": role, "content": content, "timestamp": datetime.now().isoformat(), **kwargs}
-        self.messages.append(msg)
+    def append_chat_message(self, message: ChatMessage) -> None:
+        """Append a typed chat message to session storage."""
+        msg = message if message.timestamp else message.with_timestamp(datetime.now().isoformat())
+        self.messages.append(msg.to_dict())
         self.updated_at = datetime.now()
 
     def get_history(self, max_messages: int = 500) -> list[ChatMessage]:

@@ -380,8 +380,7 @@ class AgentLoop:
         previous_count = len(session.messages)
         previous_context_cursor = session.context_compacted_cursor
         session.context_compacted_cursor = previous_count
-        session.messages.append(compact.seed_message.to_dict())
-        session.updated_at = datetime.now()
+        session.append_chat_message(compact.seed_message)
 
         compaction_meta = session.metadata.get("compaction")
         compaction_meta = compaction_meta if isinstance(compaction_meta, dict) else {}
@@ -803,7 +802,8 @@ class AgentLoop:
             metadata=msg.metadata or {},
         )
 
-    def _save_turn(self, session: Session, messages: list[ChatMessage], skip: int) -> None:
+    @staticmethod
+    def _save_turn(session: Session, messages: list[ChatMessage], skip: int) -> None:
         """Save new-turn messages into session."""
         for msg in messages[skip:]:
             if msg.role == "assistant" and not msg.content and not msg.tool_calls:
@@ -813,10 +813,7 @@ class AgentLoop:
                 if not content:
                     continue
                 msg = msg.with_content(content)
-            if not msg.timestamp:
-                msg = msg.with_timestamp(datetime.now().isoformat())
-            session.messages.append(msg.to_dict())
-        session.updated_at = datetime.now()
+            session.append_chat_message(msg)
 
     async def _consolidate_memory(
         self, session: Session, archive_all: bool = False, up_to_index: int | None = None
