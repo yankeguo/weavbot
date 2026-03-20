@@ -94,7 +94,8 @@ class AgentLoop:
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
 
-        self.context = ContextBuilder(workspace)
+        self.memory = MemoryStore(workspace)
+        self.context = ContextBuilder(workspace, self.memory)
         self.compactor = ContextCompactor()
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
@@ -819,7 +820,7 @@ class AgentLoop:
         self, session: Session, archive_all: bool = False, up_to_index: int | None = None
     ) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
-        return await MemoryStore(self.workspace).consolidate(
+        return await self.memory.consolidate(
             session,
             self.provider,
             self.model,
