@@ -14,8 +14,6 @@ nav_order: 5
 | `weavbot gateway` | 启动网关 |
 | `weavbot agent` | 交互式对话 |
 | `weavbot agent -m "..."` | 发送单条消息 |
-| `weavbot status` | 查看状态 |
-| `weavbot channels status` | 查看渠道状态 |
 
 ## 聊天命令
 
