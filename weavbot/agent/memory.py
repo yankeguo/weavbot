@@ -17,6 +17,26 @@ if TYPE_CHECKING:
     from weavbot.session.manager import Session
 
 
+_CONSOLIDATION_SYSTEM_PROMPT = """\
+You are a memory consolidation agent. Call the save_memory tool with your consolidation.
+
+- daily_log_entry: A chronological summary (2-5 sentences) of what happened -- events, decisions, \
+topics discussed. Must start with [YYYY-MM-DD HH:MM]. Include concrete details for grep search.
+- long_term_memory: Keep it concise. Do not repeat content from SKILL files (usage instructions, \
+structure descriptions). Store only factual knowledge: preferences, project context, relationships. \
+Merge new facts into the existing memory. Remove outdated facts. Return unchanged if nothing new to add."""
+
+_CONSOLIDATION_USER_TEMPLATE = """\
+Process this conversation and call the save_memory tool with your consolidation.
+
+<current-memory>
+{current_memory}
+</current-memory>
+
+<conversation>
+{conversation}
+</conversation>"""
+
 _SAVE_MEMORY_TOOL = [
     {
         "type": "function",
@@ -141,28 +161,15 @@ class MemoryStore:
             return True
 
         current_memory = self.read_long_term()
-        prompt = f"""Process this conversation and call the save_memory tool with your consolidation.
-
-## Current Long-term Memory
-{current_memory or "(empty)"}
-
-## Conversation to Process
-{chr(10).join(lines)}"""
+        prompt = _CONSOLIDATION_USER_TEMPLATE.format(
+            current_memory=current_memory or "(empty)",
+            conversation="\n".join(lines),
+        )
 
         try:
             response = await provider.chat(
                 messages=[
-                    ChatMessage(
-                        role="system",
-                        content=(
-                            "You are a memory consolidation agent. Call the save_memory tool with your consolidation.\n\n"
-                            "- daily_log_entry: A chronological summary (2-5 sentences) of what happened — events, decisions, topics discussed. "
-                            "Must start with [YYYY-MM-DD HH:MM]. Include concrete details for grep search.\n"
-                            "- long_term_memory: Keep it concise. Do not repeat content from SKILL files (usage instructions, structure descriptions). "
-                            "Store only factual knowledge: preferences, project context, relationships. "
-                            "Merge new facts into the existing memory. Remove outdated facts. Return unchanged if nothing new to add."
-                        ),
-                    ),
+                    ChatMessage(role="system", content=_CONSOLIDATION_SYSTEM_PROMPT),
                     ChatMessage(role="user", content=prompt),
                 ],
                 tools=_SAVE_MEMORY_TOOL,
