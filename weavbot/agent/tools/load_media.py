@@ -9,17 +9,15 @@ from weavbot.utils import resolve_path
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
-_SUPPORTED_PREFIXES = ("image/", "audio/", "video/")
-_SUPPORTED_EXACT = ("application/pdf",)
+_SUPPORTED_PREFIX = "image/"
 
 _DESCRIPTION = """Load a local media file into chat context.
 
 Usage:
 - The path can be relative to workspace or absolute.
-- Supported: images (jpeg, png, gif, webp, ...), audio (wav, mp3, ogg, ...), video (mp4, webm, mov, ...), and PDF.
+- Supported: images only (jpeg, png, gif, webp, ...).
 - Maximum file size: 20 MB.
-- Only image/* is attached as multimodal input.
-- Non-image files are kept as file paths in text context."""
+- The file is attached as multimodal image input."""
 
 
 def _human_size(n: int) -> str:
@@ -67,11 +65,8 @@ class LoadMediaTool(Tool):
                 return f"Error: Not a file: {path}"
 
             mime, _ = mimetypes.guess_type(str(file_path))
-            supported = (
-                any(mime.startswith(p) for p in _SUPPORTED_PREFIXES) or mime in _SUPPORTED_EXACT
-            )
-            if not mime or not supported:
-                return f"Error: Unsupported media type ({mime or 'unknown'}). Expected image/*, audio/*, video/*, or application/pdf."
+            if not mime or not mime.startswith(_SUPPORTED_PREFIX):
+                return f"Error: Unsupported media type ({mime or 'unknown'}). Expected image/*."
 
             size = file_path.stat().st_size
             if size > MAX_FILE_SIZE:
@@ -80,17 +75,9 @@ class LoadMediaTool(Tool):
                 return f"Error: File is empty: {path}"
 
             path_text = str(file_path)
-            if mime.startswith("image/"):
-                return ToolResult(
-                    content=f"Media loaded: {path_text} ({mime}, {_human_size(size)})",
-                    media=[path_text],
-                )
             return ToolResult(
-                content=(
-                    f"File loaded: {path_text} ({mime}, {_human_size(size)}). "
-                    "Non-image files are passed as file-path context only."
-                ),
-                media=[],
+                content=f"Media loaded: {path_text} ({mime}, {_human_size(size)})",
+                media=[path_text],
             )
         except PermissionError as e:
             return f"Error: {e}"
