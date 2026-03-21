@@ -16,7 +16,6 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markdown import Markdown
-from rich.table import Table
 from rich.text import Text
 
 from weavbot import __logo__, __version__
@@ -340,7 +339,6 @@ def _make_provider(config: Config):
 
 @app.command()
 def gateway(
-    port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Start the weavbot gateway."""
@@ -358,7 +356,7 @@ def gateway(
 
         logging.basicConfig(level=logging.DEBUG)
 
-    console.print(f"{__logo__} {_t('gateway_starting', port)}")
+    console.print(f"{__logo__} {_t('gateway_starting')}")
 
     config = load_config()
     sync_workspace_templates(config.workspace_path)
@@ -743,120 +741,6 @@ def agent(
                 await agent_loop.close_mcp()
 
         asyncio.run(run_interactive())
-
-
-# ============================================================================
-# Channel Commands
-# ============================================================================
-
-
-channels_app = typer.Typer(help="Manage channels")
-app.add_typer(channels_app, name="channels")
-
-
-@channels_app.command("status")
-def channels_status():
-    """Show channel status."""
-    from weavbot.config.loader import load_config
-
-    config = load_config()
-
-    table = Table(title=_t("channel_status"))
-    table.add_column(_t("column_channel"), style="cyan")
-    table.add_column(_t("column_enabled"), style="green")
-    table.add_column(_t("column_configuration"), style="yellow")
-
-    dc = config.channels.discord
-    table.add_row("Discord", "✓" if dc.enabled else "✗", dc.gateway_url)
-
-    # Feishu
-    fs = config.channels.feishu
-    fs_config = (
-        f"app_id: {fs.app_id[:10]}..." if fs.app_id else f"[dim]{_t('not_configured')}[/dim]"
-    )
-    table.add_row("Feishu", "✓" if fs.enabled else "✗", fs_config)
-
-    # Mochat
-    mc = config.channels.mochat
-    mc_base = mc.base_url or f"[dim]{_t('not_configured')}[/dim]"
-    table.add_row("Mochat", "✓" if mc.enabled else "✗", mc_base)
-
-    # Telegram
-    tg = config.channels.telegram
-    tg_config = f"token: {tg.token[:10]}..." if tg.token else f"[dim]{_t('not_configured')}[/dim]"
-    table.add_row("Telegram", "✓" if tg.enabled else "✗", tg_config)
-
-    # Slack
-    slack = config.channels.slack
-    slack_config = (
-        _t("socket")
-        if slack.app_token and slack.bot_token
-        else f"[dim]{_t('not_configured')}[/dim]"
-    )
-    table.add_row("Slack", "✓" if slack.enabled else "✗", slack_config)
-
-    # DingTalk
-    dt = config.channels.dingtalk
-    dt_config = (
-        f"client_id: {dt.client_id[:10]}..."
-        if dt.client_id
-        else f"[dim]{_t('not_configured')}[/dim]"
-    )
-    table.add_row("DingTalk", "✓" if dt.enabled else "✗", dt_config)
-
-    # QQ
-    qq = config.channels.qq
-    qq_config = (
-        f"app_id: {qq.app_id[:10]}..." if qq.app_id else f"[dim]{_t('not_configured')}[/dim]"
-    )
-    table.add_row("QQ", "✓" if qq.enabled else "✗", qq_config)
-
-    # Email
-    em = config.channels.email
-    em_config = em.imap_host if em.imap_host else f"[dim]{_t('not_configured')}[/dim]"
-    table.add_row("Email", "✓" if em.enabled else "✗", em_config)
-
-    # Wecom
-    wc = config.channels.wecom
-    wc_config = (
-        f"bot_id: {wc.bot_id[:10]}..." if wc.bot_id else f"[dim]{_t('not_configured')}[/dim]"
-    )
-    table.add_row("Wecom", "✓" if wc.enabled else "✗", wc_config)
-
-    console.print(table)
-
-
-# ============================================================================
-# Status Commands
-# ============================================================================
-
-
-@app.command()
-def status():
-    """Show weavbot status."""
-    from weavbot.config.loader import get_config_path, load_config
-
-    config_path = get_config_path()
-    config = load_config()
-    workspace = config.workspace_path
-
-    console.print(f"{__logo__} {_t('status_title')}\n")
-
-    config_mark = "[green]✓[/green]" if config_path.exists() else "[red]✗[/red]"
-    workspace_mark = "[green]✓[/green]" if workspace.exists() else "[red]✗[/red]"
-    console.print(_t("status_config", config_path, config_mark))
-    console.print(_t("status_workspace", workspace, workspace_mark))
-
-    if config_path.exists():
-        console.print(_t("status_model", config.agents.defaults.model))
-        provider = config.agents.defaults.provider or f"[dim]{_t('not_set')}[/dim]"
-        console.print(_t("status_provider", provider))
-
-        for name, p in config.providers.items():
-            has_key = bool(p.api_key)
-            base_info = f" ({p.api_base})" if p.api_base else ""
-            key_mark = "[green]✓[/green]" if has_key else f"[dim]{_t('not_set')}[/dim]"
-            console.print(f"{name} [dim][{p.mode}][/dim]: {key_mark}{base_info}")
 
 
 if __name__ == "__main__":

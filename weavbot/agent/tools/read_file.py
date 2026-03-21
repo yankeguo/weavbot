@@ -85,9 +85,9 @@ Usage:
 class ReadFileTool(Tool):
     """Tool to read file contents."""
 
-    def __init__(self, workspace: Path, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path, restrict_to_workspace: bool = False):
         self._workspace = workspace
-        self._allowed_dir = allowed_dir
+        self._restrict_to_workspace = restrict_to_workspace
 
     @property
     def name(self) -> str:
@@ -128,7 +128,7 @@ class ReadFileTool(Tool):
         **kwargs: Any,
     ) -> str:
         try:
-            file_path = resolve_path(path, self._workspace, self._allowed_dir)
+            file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if not file_path.exists():
                 return f"Error: File not found: {path}"
             if not file_path.is_file():

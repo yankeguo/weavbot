@@ -22,17 +22,17 @@ def get_workspace_path(workspace: str | None = None) -> Path:
     return ensure_dir(path)
 
 
-def resolve_path(path: str, workspace: Path, allowed_dir: Path | None = None) -> Path:
-    """Resolve path against workspace (if relative) and enforce directory restriction."""
+def resolve_path(path: str, workspace: Path, restrict_to_workspace: bool = False) -> Path:
+    """Resolve path against workspace (if relative) and optionally restrict to workspace."""
     p = Path(path).expanduser()
     if not p.is_absolute():
         p = workspace / p
     resolved = p.resolve()
-    if allowed_dir:
+    if restrict_to_workspace:
         try:
-            resolved.relative_to(allowed_dir.resolve())
+            resolved.relative_to(workspace.resolve())
         except ValueError:
-            raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
+            raise PermissionError(f"Path {path} is outside workspace {workspace}")
     return resolved
 
 

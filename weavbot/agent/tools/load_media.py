@@ -7,19 +7,17 @@ from typing import Any
 from weavbot.agent.tools.base import Tool, ToolResult
 from weavbot.utils import resolve_path
 
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
-_SUPPORTED_PREFIXES = ("image/", "audio/", "video/")
-_SUPPORTED_EXACT = ("application/pdf",)
+_SUPPORTED_PREFIX = "image/"
 
-_DESCRIPTION = """Load a local media file into chat context.
+_DESCRIPTION_TEMPLATE = """Load a local media file into chat context.
 
 Usage:
 - The path can be relative to workspace or absolute.
-- Supported: images (jpeg, png, gif, webp, ...), audio (wav, mp3, ogg, ...), video (mp4, webm, mov, ...), and PDF.
-- Maximum file size: 20 MB.
-- Only image/* is attached as multimodal input.
-- Non-image files are kept as file paths in text context."""
+- Supported: images only (jpeg, png, gif, webp, ...).
+- Maximum file size: {max_file_size}.
+- The file is attached as multimodal image input."""
 
 
 def _human_size(n: int) -> str:
@@ -30,12 +28,20 @@ def _human_size(n: int) -> str:
     return f"{n:.1f} GB"
 
 
+_MAX_FILE_SIZE_TEXT = _human_size(MAX_FILE_SIZE)
+
+
+def _is_supported_image_mime(mime: str | None) -> bool:
+    return bool(mime and mime.startswith(_SUPPORTED_PREFIX))
+
+
 class LoadMediaTool(Tool):
     """Tool to load local media files into chat context."""
 
-    def __init__(self, workspace: Path, allowed_dir: Path | None = None):
+    def __init__(self, workspace: Path, restrict_to_workspace: bool = False):
         self._workspace = workspace
-        self._allowed_dir = allowed_dir
+        self._restrict_to_workspace = restrict_to_workspace
+        self._description = _DESCRIPTION_TEMPLATE.format(max_file_size=_MAX_FILE_SIZE_TEXT)
 
     @property
     def name(self) -> str:
@@ -43,7 +49,7 @@ class LoadMediaTool(Tool):
 
     @property
     def description(self) -> str:
-        return _DESCRIPTION
+        return self._description
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -60,37 +66,26 @@ class LoadMediaTool(Tool):
 
     async def execute(self, path: str, **kwargs: Any) -> str | ToolResult:
         try:
-            file_path = resolve_path(path, self._workspace, self._allowed_dir)
+            file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if not file_path.exists():
                 return f"Error: File not found: {path}"
             if not file_path.is_file():
                 return f"Error: Not a file: {path}"
 
             mime, _ = mimetypes.guess_type(str(file_path))
-            supported = (
-                any(mime.startswith(p) for p in _SUPPORTED_PREFIXES) or mime in _SUPPORTED_EXACT
-            )
-            if not mime or not supported:
-                return f"Error: Unsupported media type ({mime or 'unknown'}). Expected image/*, audio/*, video/*, or application/pdf."
+            if not _is_supported_image_mime(mime):
+                return f"Error: Unsupported media type ({mime or 'unknown'}). Expected image/*."
 
             size = file_path.stat().st_size
             if size > MAX_FILE_SIZE:
-                return f"Error: File too large ({_human_size(size)}). Maximum is {_human_size(MAX_FILE_SIZE)}."
+                return f"Error: File too large ({_human_size(size)}). Maximum is {_MAX_FILE_SIZE_TEXT}."
             if size == 0:
                 return f"Error: File is empty: {path}"
 
             path_text = str(file_path)
-            if mime.startswith("image/"):
-                return ToolResult(
-                    content=f"Media loaded: {path_text} ({mime}, {_human_size(size)})",
-                    media=[path_text],
-                )
             return ToolResult(
-                content=(
-                    f"File loaded: {path_text} ({mime}, {_human_size(size)}). "
-                    "Non-image files are passed as file-path context only."
-                ),
-                media=[],
+                content=f"Media loaded: {path_text} ({mime}, {_human_size(size)})",
+                media=[path_text],
             )
         except PermissionError as e:
             return f"Error: {e}"
