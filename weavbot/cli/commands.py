@@ -167,6 +167,46 @@ def _assemble_heartbeat_response(progress_items: list[str], final_content: str) 
     return "\n\n".join(merged)
 
 
+def _parse_heartbeat_target(key: str) -> tuple[str, str, dict[str, object]] | None:
+    """Parse a session key into heartbeat delivery target fields.
+
+    Returns (channel, chat_id, metadata) or None for invalid keys.
+    """
+    text = (key or "").strip()
+    if not text:
+        return None
+
+    # Wechat uses scoped session key: wechat:{account_key}:{peer_id}
+    if text.startswith("wechat:"):
+        parts = text.split(":", 2)
+        if len(parts) == 3 and parts[1] and parts[2]:
+            return "wechat", parts[2], {"wechat": {"account_key": parts[1]}}
+        return None
+
+    if ":" not in text:
+        return None
+    channel, chat_id = text.split(":", 1)
+    if not channel or not chat_id:
+        return None
+    return channel, chat_id, {}
+
+
+def _pick_heartbeat_target_from_sessions(
+    sessions: list[dict[str, object]], enabled_channels: set[str]
+) -> tuple[str, str, dict[str, object]]:
+    """Pick routable heartbeat target from session list."""
+    for item in sessions:
+        parsed = _parse_heartbeat_target(str(item.get("key") or ""))
+        if not parsed:
+            continue
+        channel, chat_id, metadata = parsed
+        if channel in {"cli", "system"}:
+            continue
+        if channel in enabled_channels and chat_id:
+            return channel, chat_id, metadata
+    return "cli", "direct", {}
+
+
 async def _read_interactive_input_async() -> str:
     """Read user input using prompt_toolkit (handles paste, history, display).
 
@@ -437,21 +477,12 @@ def gateway(
     # Create channel manager
     channels = ChannelManager(config, bus)
 
-    def _pick_heartbeat_target() -> tuple[str, str]:
+    def _pick_heartbeat_target() -> tuple[str, str, dict[str, object]]:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
-        enabled = set(channels.enabled_channels)
-        # Prefer the most recently updated non-internal session on an enabled channel.
-        for item in session_manager.list_sessions():
-            key = item.get("key") or ""
-            if ":" not in key:
-                continue
-            channel, chat_id = key.split(":", 1)
-            if channel in {"cli", "system"}:
-                continue
-            if channel in enabled and chat_id:
-                return channel, chat_id
-        # Fallback keeps prior behavior but remains explicit.
-        return "cli", "direct"
+        return _pick_heartbeat_target_from_sessions(
+            session_manager.list_sessions(),
+            set(channels.enabled_channels),
+        )
 
     def _heartbeat_session_key(channel: str, chat_id: str) -> str:
         """Rotate heartbeat context daily to avoid unbounded background-session growth."""
@@ -460,7 +491,7 @@ def gateway(
     # Create heartbeat service
     async def on_heartbeat_execute(tasks: str) -> str:
         """Phase 2: execute heartbeat tasks through the full agent loop."""
-        channel, chat_id = _pick_heartbeat_target()
+        channel, chat_id, _target_meta = _pick_heartbeat_target()
         session_key = _heartbeat_session_key(channel, chat_id)
         progress_items: list[str] = []
 
@@ -499,17 +530,20 @@ def gateway(
         """Deliver a heartbeat response to the user's channel."""
         from weavbot.bus.events import OutboundMessage
 
-        channel, chat_id = _pick_heartbeat_target()
+        channel, chat_id, target_meta = _pick_heartbeat_target()
         if channel == "cli":
             return  # No external channel available to deliver to
         logger.info(
-            "Heartbeat notify deliver: channel={}, chat_id={}, content_len={}",
+            "Heartbeat notify deliver: channel={}, chat_id={}, content_len={}, meta_keys={}",
             channel,
             chat_id,
             len(response or ""),
+            sorted(target_meta.keys()),
         )
         await bus.publish_outbound(
-            OutboundMessage(channel=channel, chat_id=chat_id, content=response)
+            OutboundMessage(
+                channel=channel, chat_id=chat_id, content=response, metadata=target_meta
+            )
         )
 
     hb_cfg = config.gateway.heartbeat
