@@ -54,14 +54,17 @@ async def wechat_qr_login(
     _render_qr_if_possible(console, qr_url)
     console.print("\n[dim]等待扫码确认...[/dim]\n")
 
-    deadline = asyncio.get_event_loop().time() + (max(1, timeout_ms) / 1000.0)
-    while asyncio.get_event_loop().time() < deadline:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + (max(1, timeout_ms) / 1000.0)
+    while loop.time() < deadline:
         status = await api.get_qrcode_status(qrcode=qrcode)
         state = str(status.get("status", "wait")).strip().lower()
         if state in {"wait", ""}:
+            await asyncio.sleep(1.0)
             continue
         if state == "scaned":
             console.print("[dim]已扫码，等待手机确认...[/dim]")
+            await asyncio.sleep(1.0)
             continue
         if state == "confirmed":
             token = str(status.get("bot_token", "")).strip()

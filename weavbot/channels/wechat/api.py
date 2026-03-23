@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import os
 import random
 from typing import Any
@@ -56,8 +57,6 @@ class WechatApiClient:
     async def _post_json(
         self, endpoint: str, payload: dict[str, Any], timeout_ms: int | None = None
     ) -> dict[str, Any]:
-        import json
-
         body = json.dumps(payload, ensure_ascii=False)
         headers = make_headers(self.token, body, self.route_tag)
         timeout_s = (timeout_ms / 1000.0) if timeout_ms else float(self.request_timeout_sec)

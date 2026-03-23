@@ -21,6 +21,7 @@ from weavbot.channels.wechat.types import (
     UPLOAD_MEDIA_FILE,
     UPLOAD_MEDIA_IMAGE,
     UPLOAD_MEDIA_VIDEO,
+    MessageItem,
 )
 
 
@@ -65,7 +66,7 @@ def _guess_media_type(path: Path) -> tuple[int, int]:
 
 async def upload_media_file(
     api: WechatApiClient, cdn_base_url: str, file_path: Path, to_user_id: str
-) -> tuple[int, dict]:
+) -> tuple[int, MessageItem]:
     raw = await asyncio.to_thread(file_path.read_bytes)
     rawsize = len(raw)
     rawmd5 = hashlib.md5(raw).hexdigest()  # noqa: S324 - protocol requirement

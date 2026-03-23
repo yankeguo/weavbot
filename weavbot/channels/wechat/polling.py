@@ -3,23 +3,29 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Awaitable, Callable
+from pathlib import Path
+from typing import Awaitable, Callable
 
 from loguru import logger
 
 from weavbot.channels.wechat.accounts import load_sync_buf, save_sync_buf
 from weavbot.channels.wechat.api import WechatApiClient
 from weavbot.channels.wechat.session_guard import SessionGuard
-from weavbot.channels.wechat.types import SESSION_EXPIRED_ERRCODE, ResolvedWechatAccount
+from weavbot.channels.wechat.types import (
+    SESSION_EXPIRED_ERRCODE,
+    GetUpdatesResp,
+    ResolvedWechatAccount,
+    WechatMessage,
+)
 
-OnMessage = Callable[[ResolvedWechatAccount, dict[str, Any]], Awaitable[None]]
+OnMessage = Callable[[ResolvedWechatAccount, WechatMessage], Awaitable[None]]
 
 
 async def run_long_poll(
     *,
     account: ResolvedWechatAccount,
     api: WechatApiClient,
-    state_dir,
+    state_dir: Path,
     guard: SessionGuard,
     poll_retry_delay_ms: int,
     max_consecutive_failures: int,
@@ -41,7 +47,7 @@ async def run_long_poll(
             await asyncio.sleep(min(remain, 5))
             continue
         try:
-            resp = await api.get_updates(cursor)
+            resp: GetUpdatesResp = await api.get_updates(cursor)
             ret = int(resp.get("ret", 0) or 0)
             errcode = int(resp.get("errcode", 0) or 0)
             if ret != 0 or errcode != 0:
@@ -70,7 +76,12 @@ async def run_long_poll(
                 cursor = next_cursor
                 save_sync_buf(state_dir, account.key, cursor)
 
-            for msg in resp.get("msgs") or []:
+            msgs = resp.get("msgs")
+            if not isinstance(msgs, list):
+                msgs = []
+            for msg in msgs:
+                if not isinstance(msg, dict):
+                    continue
                 try:
                     await on_message(account, msg)
                 except Exception:

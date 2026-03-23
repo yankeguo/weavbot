@@ -26,11 +26,14 @@ from weavbot.channels.wechat.types import (
     ITEM_TYPE_IMAGE,
     ITEM_TYPE_TEXT,
     ITEM_TYPE_VIDEO,
+    ITEM_TYPE_VOICE,
     MESSAGE_STATE_FINISH,
     MESSAGE_TYPE_BOT,
+    MessageItem,
     ResolvedWechatAccount,
+    WechatMessage,
 )
-from weavbot.channels.wechat.typing import TypingManager
+from weavbot.channels.wechat.typing_manager import TypingManager
 from weavbot.config.schema import WechatConfig
 
 
@@ -106,8 +109,7 @@ class WechatChannel(BaseChannel):
         self._poll_tasks.clear()
 
     async def send(self, msg: OutboundMessage) -> None:
-        metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
-        wechat_meta = metadata.get("wechat", {}) if isinstance(metadata.get("wechat"), dict) else {}
+        metadata, wechat_meta = self._extract_send_metadata(msg)
         requested_account_key = (
             str(wechat_meta.get("account_key", "")).strip()
             or str(metadata.get("account_key", "")).strip()
@@ -129,12 +131,15 @@ class WechatChannel(BaseChannel):
             return
 
         chat_id = msg.chat_id
+        # Reply token is scoped by account+peer and can be supplied explicitly by callers.
         context_token = (
             str(wechat_meta.get("context_token", "")).strip()
             or str(metadata.get("context_token", "")).strip()
             or self._context_tokens.get(f"{account_key}:{chat_id}", "")
         )
-        await self._typing.send_typing(api, account_key, chat_id, context_token or None)
+        typing_ticket = await self._typing.send_typing(
+            api, account_key, chat_id, context_token or None
+        )
 
         try:
             if msg.media:
@@ -165,7 +170,19 @@ class WechatChannel(BaseChannel):
                     )
                 )
         finally:
-            await self._typing.cancel_typing(api, account_key, chat_id, context_token or None)
+            await self._typing.cancel_typing(
+                api,
+                account_key,
+                chat_id,
+                context_token or None,
+                ticket=typing_ticket,
+            )
+
+    @staticmethod
+    def _extract_send_metadata(msg: OutboundMessage) -> tuple[dict[str, Any], dict[str, Any]]:
+        metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
+        wechat_meta = metadata.get("wechat", {}) if isinstance(metadata.get("wechat"), dict) else {}
+        return metadata, wechat_meta
 
     def _resolve_outbound_account_key(self, requested: str, chat_id: str) -> str:
         """Resolve outbound account key with safe fallbacks.
@@ -191,7 +208,7 @@ class WechatChannel(BaseChannel):
 
     @staticmethod
     def _build_bot_message(
-        *, to_user_id: str, context_token: str | None, item_list: list[dict[str, Any]]
+        *, to_user_id: str, context_token: str | None, item_list: list[MessageItem]
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "from_user_id": "",
@@ -205,7 +222,7 @@ class WechatChannel(BaseChannel):
             payload["context_token"] = context_token
         return payload
 
-    async def _handle_inbound(self, account: ResolvedWechatAccount, msg: dict[str, Any]) -> None:
+    async def _handle_inbound(self, account: ResolvedWechatAccount, msg: WechatMessage) -> None:
         sender_id = str(msg.get("from_user_id", "")).strip()
         if not sender_id:
             return
@@ -240,11 +257,12 @@ class WechatChannel(BaseChannel):
             content=content,
             media=media,
             metadata=metadata,
+            # Include account key in session namespace for multi-account isolation.
             session_key=f"wechat:{account.key}:{sender_id}",
         )
 
     async def _extract_inbound_content(
-        self, account: ResolvedWechatAccount, msg: dict[str, Any]
+        self, account: ResolvedWechatAccount, msg: WechatMessage
     ) -> tuple[str, list[str]]:
         parts: list[str] = []
         media_paths: list[str] = []
@@ -264,23 +282,7 @@ class WechatChannel(BaseChannel):
                         parts.append(text)
                 continue
 
-            media_node: dict[str, Any] | None = None
-            marker = "file"
-            if item_type == ITEM_TYPE_IMAGE:
-                media_node = (
-                    item.get("image_item") if isinstance(item.get("image_item"), dict) else None
-                )
-                marker = "image"
-            elif item_type == ITEM_TYPE_FILE:
-                media_node = (
-                    item.get("file_item") if isinstance(item.get("file_item"), dict) else None
-                )
-                marker = "file"
-            elif item_type == ITEM_TYPE_VIDEO:
-                media_node = (
-                    item.get("video_item") if isinstance(item.get("video_item"), dict) else None
-                )
-                marker = "video"
+            media_node, marker = self._resolve_media_node(item, item_type)
 
             if not media_node:
                 parts.append(f"[wechat:{marker}]")
@@ -310,3 +312,19 @@ class WechatChannel(BaseChannel):
                 parts.append(f"[wechat:{marker}:download_failed]")
 
         return "\n".join(parts), media_paths
+
+    @staticmethod
+    def _resolve_media_node(item: MessageItem, item_type: int) -> tuple[dict[str, Any] | None, str]:
+        if item_type == ITEM_TYPE_IMAGE:
+            node = item.get("image_item") if isinstance(item.get("image_item"), dict) else None
+            return node, "image"
+        if item_type == ITEM_TYPE_FILE:
+            node = item.get("file_item") if isinstance(item.get("file_item"), dict) else None
+            return node, "file"
+        if item_type == ITEM_TYPE_VIDEO:
+            node = item.get("video_item") if isinstance(item.get("video_item"), dict) else None
+            return node, "video"
+        if item_type == ITEM_TYPE_VOICE:
+            node = item.get("voice_item") if isinstance(item.get("voice_item"), dict) else None
+            return node, "voice"
+        return None, "file"
