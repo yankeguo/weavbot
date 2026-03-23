@@ -1,4 +1,9 @@
-from weavbot.cli.commands import _assemble_heartbeat_response, _collect_heartbeat_progress
+from weavbot.cli.commands import (
+    _assemble_heartbeat_response,
+    _collect_heartbeat_progress,
+    _parse_heartbeat_target,
+    _pick_heartbeat_target_from_sessions,
+)
 
 
 def test_heartbeat_response_without_toolcalls_uses_final_only() -> None:
@@ -35,3 +40,30 @@ def test_heartbeat_progress_deduplicates_adjacent_text() -> None:
 def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
     assembled = _assemble_heartbeat_response([], "")
     assert assembled == ""
+
+
+def test_parse_heartbeat_target_wechat_scoped_key() -> None:
+    parsed = _parse_heartbeat_target("wechat:bot-main:u_123")
+    assert parsed == ("wechat", "u_123", {"wechat": {"account_key": "bot-main"}})
+
+
+def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata() -> None:
+    sessions = [
+        {"key": "feishu:oc_legacy"},
+        {"key": "wechat:acc-a:u_new"},
+    ]
+    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    assert channel == "wechat"
+    assert chat_id == "u_new"
+    assert metadata == {"wechat": {"account_key": "acc-a"}}
+
+
+def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> None:
+    sessions = [
+        {"key": "feishu:oc_legacy"},
+        {"key": "cli:direct"},
+    ]
+    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    assert channel == "cli"
+    assert chat_id == "direct"
+    assert metadata == {}
