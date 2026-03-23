@@ -13,7 +13,7 @@ always: true
 
 ## Search Past Events
 
-```
+```text
 grep_file(pattern="keyword", path="memory")
 ```
 
@@ -33,4 +33,4 @@ Write important facts immediately using `edit_file` or `write_file`:
 
 Old conversations are automatically summarized and appended to today's `memory/YYYY-MM-DD.md` when the session grows large. Long-term facts are extracted to `MEMORY.md`. You don't need to manage this.
 
-For other tasks (reminders, cron, etc.), read the corresponding skill's SKILL.md first.
+For other tasks (reminders, scheduled jobs, etc.), read the corresponding skill's SKILL.md first.

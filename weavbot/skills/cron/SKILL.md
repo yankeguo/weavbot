@@ -5,7 +5,7 @@ description: Schedule reminders and recurring tasks.
 
 # Cron
 
-Use the `cron` tool to schedule reminders or recurring tasks.
+Use `add_cron`, `list_cron`, and `remove_cron` to schedule reminders and manage recurring tasks.
 
 ## Three Modes
 
@@ -17,39 +17,39 @@ Use the `cron` tool to schedule reminders or recurring tasks.
 
 Fixed reminder:
 
-```
-cron(action="add", message="Time to take a break!", interval=1200)
+```text
+add_cron(message="Time to take a break!", interval=1200)
 ```
 
 Dynamic task (agent executes each time):
 
-```
-cron(action="add", message="Check yankeguo/weavbot GitHub stars and report", interval=600)
+```text
+add_cron(message="Check yankeguo/weavbot GitHub stars and report", interval=600)
 ```
 
 One-time scheduled task (compute ISO datetime from current time):
 
-```
-cron(action="add", message="Remind me about the meeting", at="<ISO datetime>")
+```text
+add_cron(message="Remind me about the meeting", at="<ISO datetime>")
 ```
 
 Timezone-aware cron:
 
-```
-cron(action="add", message="Morning standup", expr="0 9 * * 1-5", tz="America/Vancouver")
+```text
+add_cron(message="Morning standup", expr="0 9 * * 1-5", tz="America/Vancouver")
 ```
 
 List/remove:
 
-```
-cron(action="list")
-cron(action="remove", job_id="abc123")
+```text
+list_cron()
+remove_cron(job_id="abc123")
 ```
 
 ## Time Expressions
 
 | User says | Parameters |
-|-----------|------------|
+| --------- | ---------- |
 | every 20 minutes | interval: 1200 |
 | every hour | interval: 3600 |
 | every day at 8am | expr: "0 8 ** *" |

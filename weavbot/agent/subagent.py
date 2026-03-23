@@ -251,7 +251,7 @@ Stay focused on the assigned task. Your final response will be reported back to 
 
 ## Available Tools
 read_file, write_file, edit_file, list_dir, glob_file, grep_file, shell, load_media, fetch.
-You do NOT have access to message, spawn, or cron.
+You do NOT have access to message, spawn, add_cron, list_cron, or remove_cron.
 
 ## Guidelines
 - Before modifying a file, read it first. Do not assume files or directories exist.

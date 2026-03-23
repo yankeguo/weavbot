@@ -1,14 +1,16 @@
-"""Cron tool for scheduling reminders and tasks."""
+"""Tool for adding cron jobs."""
 
 from contextvars import ContextVar
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from weavbot.agent.tools.base import Tool
 from weavbot.cron.service import CronService
 from weavbot.cron.types import CronSchedule
 
 
-class CronTool(Tool):
+class AddCronTool(Tool):
     """Tool to schedule reminders and recurring tasks."""
 
     def __init__(self, cron_service: CronService):
@@ -32,23 +34,18 @@ class CronTool(Tool):
 
     @property
     def name(self) -> str:
-        return "cron"
+        return "add_cron"
 
     @property
     def description(self) -> str:
-        return "Schedule reminders and recurring tasks. Actions: add, list, remove."
+        return "Add a scheduled reminder/task. Supports interval, cron expression, or one-time datetime."
 
     @property
     def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["add", "list", "remove"],
-                    "description": "Action to perform",
-                },
-                "message": {"type": "string", "description": "Reminder message (required for add)"},
+                "message": {"type": "string", "description": "Reminder message"},
                 "interval": {
                     "type": "integer",
                     "description": "Repeat interval in seconds",
@@ -59,46 +56,27 @@ class CronTool(Tool):
                 },
                 "tz": {
                     "type": "string",
-                    "description": "IANA timezone (e.g. America/Vancouver)",
+                    "description": "IANA timezone (e.g. America/Vancouver), only valid with expr",
                 },
                 "at": {
                     "type": "string",
                     "description": "ISO datetime for one-time execution (e.g. '2026-02-12T10:30:00')",
                 },
-                "job_id": {"type": "string", "description": "Job ID (required for remove)"},
             },
-            "required": ["action"],
+            "required": ["message"],
         }
 
     async def execute(
         self,
-        action: str,
-        message: str = "",
+        message: str,
         interval: int | None = None,
         expr: str | None = None,
         tz: str | None = None,
         at: str | None = None,
-        job_id: str | None = None,
         **kwargs: Any,
     ) -> str:
-        if action == "add":
-            if self._in_cron_context.get():
-                return "Error: cannot schedule new jobs from within a cron job execution"
-            return self._add_job(message, interval, expr, tz, at)
-        elif action == "list":
-            return self._list_jobs()
-        elif action == "remove":
-            return self._remove_job(job_id)
-        return f"Unknown action: {action}"
-
-    def _add_job(
-        self,
-        message: str,
-        interval: int | None,
-        expr: str | None,
-        tz: str | None,
-        at: str | None,
-    ) -> str:
+        if self._in_cron_context.get():
+            return "Error: cannot schedule new jobs from within a cron job execution"
         if not message:
             return "Error: message is required for add"
         if not self._channel or not self._chat_id:
@@ -106,22 +84,17 @@ class CronTool(Tool):
         if tz and not expr:
             return "Error: tz can only be used with expr"
         if tz:
-            from zoneinfo import ZoneInfo
-
             try:
                 ZoneInfo(tz)
             except (KeyError, Exception):
                 return f"Error: unknown timezone '{tz}'"
 
-        # Build schedule
         delete_after = False
         if interval:
             schedule = CronSchedule(kind="every", every_ms=interval * 1000)
         elif expr:
             schedule = CronSchedule(kind="cron", expr=expr, tz=tz)
         elif at:
-            from datetime import datetime
-
             dt = datetime.fromisoformat(at)
             at_ms = int(dt.timestamp() * 1000)
             schedule = CronSchedule(kind="at", at_ms=at_ms)
@@ -139,17 +112,3 @@ class CronTool(Tool):
             delete_after_run=delete_after,
         )
         return f"Created job '{job.name}' (id: {job.id})"
-
-    def _list_jobs(self) -> str:
-        jobs = self._cron.list_jobs()
-        if not jobs:
-            return "No scheduled jobs."
-        lines = [f"- {j.name} (id: {j.id}, {j.schedule.kind})" for j in jobs]
-        return "Scheduled jobs:\n" + "\n".join(lines)
-
-    def _remove_job(self, job_id: str | None) -> str:
-        if not job_id:
-            return "Error: job_id is required for remove"
-        if self._cron.remove_job(job_id):
-            return f"Removed job {job_id}"
-        return f"Job {job_id} not found"

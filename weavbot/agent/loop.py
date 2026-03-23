@@ -17,16 +17,18 @@ from weavbot.agent.context import ContextBuilder
 from weavbot.agent.memory import MemoryStore
 from weavbot.agent.messages import ChatMessage
 from weavbot.agent.subagent import SubagentManager
-from weavbot.agent.tools.cron import CronTool
+from weavbot.agent.tools.add_cron import AddCronTool
 from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.fetch import FetchTool
 from weavbot.agent.tools.glob_file import GlobFileTool
 from weavbot.agent.tools.grep_file import GrepFileTool
+from weavbot.agent.tools.list_cron import ListCronTool
 from weavbot.agent.tools.list_dir import ListDirTool
 from weavbot.agent.tools.load_media import LoadMediaTool
 from weavbot.agent.tools.message import MessageTool
 from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.registry import ToolRegistry
+from weavbot.agent.tools.remove_cron import RemoveCronTool
 from weavbot.agent.tools.shell import ShellTool
 from weavbot.agent.tools.spawn import SpawnTool
 from weavbot.agent.tools.write_file import WriteFileTool
@@ -150,7 +152,9 @@ class AgentLoop:
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
-            self.tools.register(CronTool(self.cron_service))
+            self.tools.register(AddCronTool(self.cron_service))
+            self.tools.register(ListCronTool(self.cron_service))
+            self.tools.register(RemoveCronTool(self.cron_service))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -177,7 +181,7 @@ class AgentLoop:
 
     def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
         """Update context for all tools that need routing info."""
-        for name in ("message", "spawn", "cron"):
+        for name in ("message", "spawn", "add_cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
                     tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))

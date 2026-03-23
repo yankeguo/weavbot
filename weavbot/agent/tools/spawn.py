@@ -32,7 +32,8 @@ class SpawnTool(Tool):
         return (
             "Spawn an in-process subagent to handle a task in the background. "
             "Use this for complex or time-consuming tasks that can run independently. "
-            "The subagent has access to file tools, shell, and fetch, but NOT message, spawn, or cron. "
+            "The subagent has access to file tools, shell, and fetch, "
+            "but NOT message, spawn, add_cron, list_cron, or remove_cron. "
             "It runs as an async task in the same process (not a separate OS process—do not use ps/top to check). "
             "Wait for the completion message in this chat to know when it finishes."
         )
