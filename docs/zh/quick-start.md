@@ -14,7 +14,7 @@ nav_order: 2
 weavbot onboard
 ```
 
-会创建 `~/.weavbot/config.json` 和 `~/.weavbot/workspace/`，并启动**交互式配置向导**，依次完成：
+会创建 `WB_HOME/config.json` 和 `WB_HOME/workspace/`（默认 `WB_HOME=~/.weavbot`），并启动**交互式配置向导**，依次完成：
 
 1. **服务商选择** — 从 [models.dev](https://models.dev) 拉取已知服务商与模型，选择服务商、模型并填写 API 密钥
 2. **渠道配置** — 配置聊天渠道（Telegram、Discord、飞书、钉钉、Slack、QQ、企业微信（Wecom）、Email、Mochat）的凭证
@@ -39,7 +39,7 @@ weavbot onboard \
 
 ## 2. 配置
 
-也可直接编辑 `~/.weavbot/config.json` 设置 API 密钥和模型。
+也可直接编辑 `WB_HOME/config.json`（默认 `~/.weavbot/config.json`）设置 API 密钥和模型。
 
 服务商为扁平对象，键为自定名称，每项包含 `mode`（`"openai"` 或 `"anthropic"`）及凭证：
 

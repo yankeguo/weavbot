@@ -1,16 +1,17 @@
 """Session management for conversation history."""
 
 import json
-import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from loguru import logger
 
-from weavbot.agent.messages import ChatMessage
-from weavbot.utils.helpers import ensure_dir, safe_filename
+from weavbot.utils.helpers import ensure_data_path, ensure_dir, safe_filename
+
+if TYPE_CHECKING:
+    from weavbot.agent.messages import ChatMessage
 
 
 class ContextFitParams(TypedDict):
@@ -41,14 +42,16 @@ class Session:
     memory_consolidated_cursor: int = 0  # Number of messages archived to memory files
     context_compacted_cursor: int = 0  # Start index for active context history
 
-    def append_chat_message(self, message: ChatMessage) -> None:
+    def append_chat_message(self, message: "ChatMessage") -> None:
         """Append a typed chat message to session storage."""
         msg = message if message.timestamp else message.with_timestamp(datetime.now().isoformat())
         self.messages.append(msg.to_dict())
         self.updated_at = datetime.now()
 
-    def get_history(self, max_messages: int = 500) -> list[ChatMessage]:
+    def get_history(self, max_messages: int = 500) -> list["ChatMessage"]:
         """Return active messages for LLM input, aligned to a user turn."""
+        from weavbot.agent.messages import ChatMessage
+
         start = max(self.memory_consolidated_cursor, self.context_compacted_cursor)
         if start < 0:
             start = 0
@@ -110,19 +113,13 @@ class SessionManager:
 
     def __init__(self, workspace: Path):
         self.workspace = workspace
-        self.sessions_dir = ensure_dir(self.workspace / "sessions")
-        self.legacy_sessions_dir = Path.home() / ".weavbot" / "sessions"
+        self.sessions_dir = ensure_dir(ensure_data_path() / "sessions")
         self._cache: dict[str, Session] = {}
 
     def _get_session_path(self, key: str) -> Path:
         """Get the file path for a session."""
         safe_key = safe_filename(key.replace(":", "_"))
         return self.sessions_dir / f"{safe_key}.jsonl"
-
-    def _get_legacy_session_path(self, key: str) -> Path:
-        """Legacy global session path (~/.weavbot/sessions/)."""
-        safe_key = safe_filename(key.replace(":", "_"))
-        return self.legacy_sessions_dir / f"{safe_key}.jsonl"
 
     def get_or_create(self, key: str) -> Session:
         """
@@ -147,15 +144,6 @@ class SessionManager:
     def _load(self, key: str) -> Session | None:
         """Load a session from disk."""
         path = self._get_session_path(key)
-        if not path.exists():
-            legacy_path = self._get_legacy_session_path(key)
-            if legacy_path.exists():
-                try:
-                    shutil.move(str(legacy_path), str(path))
-                    logger.info("Migrated session {} from legacy path", key)
-                except Exception:
-                    logger.exception("Failed to migrate session {}", key)
-
         if not path.exists():
             return None
 

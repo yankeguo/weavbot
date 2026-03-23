@@ -286,7 +286,7 @@ def onboard(
     """Initialize weavbot configuration and workspace."""
     from weavbot.config.loader import get_config_path, load_config, save_config
     from weavbot.config.schema import Config
-    from weavbot.utils.helpers import get_workspace_path
+    from weavbot.utils.helpers import ensure_workspace_path
 
     config_path = get_config_path()
 
@@ -318,7 +318,7 @@ def onboard(
     save_config(config)
 
     # Create workspace
-    workspace = get_workspace_path()
+    workspace = ensure_workspace_path()
 
     if not workspace.exists():
         workspace.mkdir(parents=True, exist_ok=True)
@@ -392,6 +392,7 @@ def gateway(
     from weavbot.cron.types import CronJob
     from weavbot.heartbeat.service import HeartbeatService
     from weavbot.session.manager import SessionManager
+    from weavbot.utils.path_migration import prepare_runtime_paths
 
     if verbose:
         import logging
@@ -401,14 +402,13 @@ def gateway(
     console.print(f"{__logo__} {_t('gateway_starting')}")
 
     config = load_config()
-    sync_workspace_templates(config.workspace_path)
+    runtime_paths = prepare_runtime_paths(config.workspace_path)
     bus = MessageBus()
     provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
 
     # Create cron service first (callback set after agent creation)
-    cron_store_path = config.workspace_path / "cron" / "jobs.json"
-    cron = CronService(cron_store_path)
+    cron = CronService(runtime_paths.cron_store_path)
 
     # Create agent with cron service
     agent = AgentLoop(
@@ -616,16 +616,16 @@ def agent(
     from weavbot.bus.queue import MessageBus
     from weavbot.config.loader import load_config
     from weavbot.cron.service import CronService
+    from weavbot.utils.path_migration import prepare_runtime_paths
 
     config = load_config()
-    sync_workspace_templates(config.workspace_path)
+    runtime_paths = prepare_runtime_paths(config.workspace_path)
 
     bus = MessageBus()
     provider = _make_provider(config)
 
     # Create cron service for tool usage (no callback needed for CLI unless running)
-    cron_store_path = config.workspace_path / "cron" / "jobs.json"
-    cron = CronService(cron_store_path)
+    cron = CronService(runtime_paths.cron_store_path)
 
     if logs:
         logger.enable("weavbot")

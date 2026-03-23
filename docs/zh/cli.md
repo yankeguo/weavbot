@@ -25,8 +25,8 @@ weavbot onboard
 
 ### 初始化内容
 
-- 创建 `~/.weavbot/config.json`
-- 创建 `~/.weavbot/workspace/`
+- 创建 `WB_HOME/config.json`（默认 `~/.weavbot/config.json`）
+- 创建 `WB_HOME/workspace/`（默认 `~/.weavbot/workspace/`）
 - 启动服务商/模型/渠道的交互式配置向导
 - 可选安装 ripgrep 与配置开机自启
 

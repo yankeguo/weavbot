@@ -91,7 +91,7 @@ Config: `gateway.heartbeat.enabled`, `gateway.heartbeat.intervalS`.
 
 ## Cron
 
-Scheduled agent runs. Jobs are stored in `workspace/cron/jobs.json`.
+Scheduled agent runs. Jobs are stored in `WB_HOME/cron.json` (default `~/.weavbot/cron.json`).
 
 - **Schedule types** — `at` (one-time), `every` (interval), `cron` (cron expression, with timezone)
 - **Cron tools** — agent manages jobs with `add_cron`, `list_cron`, `remove_cron`

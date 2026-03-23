@@ -8,13 +8,13 @@ nav_order: 6
 
 # Configuration
 
-Config file: `~/.weavbot/config.json`. All keys use camelCase (e.g. `apiKey`, `allowFrom`). Environment variables override config with the `WB_` prefix and `__` as the nesting delimiter (e.g. `WB_AGENTS__DEFAULTS__MODEL`). Set `WB_LANG` to override CLI language (`zh` or `en`) via `weavbot.i18n`.
+Data root is controlled by `WB_HOME` (default: `~/.weavbot`). Config file path is `WB_HOME/config.json`. All keys use camelCase (e.g. `apiKey`, `allowFrom`). Environment variables override config with the `WB_` prefix and `__` as the nesting delimiter (e.g. `WB_AGENTS__DEFAULTS__MODEL`). Set `WB_LANG` to override CLI language (`zh` or `en`) via `weavbot.i18n`.
 
 | Path | Description |
 | --- | --- |
-| Config file | `~/.weavbot/config.json` |
-| Workspace | `~/.weavbot/workspace/` |
-| Data directory | `~/.weavbot/` |
+| Config file | `WB_HOME/config.json` (default `~/.weavbot/config.json`) |
+| Workspace | `WB_HOME/workspace/` by default |
+| Data directory | `WB_HOME/` (default `~/.weavbot/`) |
 | Built-in bin | `~/.weavbot/bin/` (always in agent tool PATH) |
 | Logs | `~/.weavbot/logs/` |
 
@@ -46,7 +46,7 @@ OpenAI-compatible notes:
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `workspace` | string | `~/.weavbot/workspace` | Agent workspace path |
+| `workspace` | string | `workspace` | Agent workspace path (relative values are resolved from `WB_HOME`) |
 | `model` | string | — | Model name (e.g. `claude-sonnet-4-20250514`) |
 | `provider` | string | — | Must match a key in `providers` |
 | `maxTokens` | int | 8192 | Max response tokens |

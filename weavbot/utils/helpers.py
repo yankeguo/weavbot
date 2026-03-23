@@ -1,5 +1,6 @@
 """Utility functions for weavbot."""
 
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -11,14 +12,19 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
-def get_data_path() -> Path:
-    """~/.weavbot data directory."""
-    return ensure_dir(Path.home() / ".weavbot")
+def ensure_data_path() -> Path:
+    """Data directory rooted at WB_HOME."""
+    raw = os.environ.get("WB_HOME", "~/.weavbot").strip() or "~/.weavbot"
+    return ensure_dir(Path(raw).expanduser())
 
 
-def get_workspace_path(workspace: str | None = None) -> Path:
-    """Resolve and ensure workspace path. Defaults to ~/.weavbot/workspace."""
-    path = Path(workspace).expanduser() if workspace else Path.home() / ".weavbot" / "workspace"
+def ensure_workspace_path(workspace: str | None = None) -> Path:
+    """Resolve and ensure workspace path."""
+    if not workspace:
+        path = ensure_data_path() / "workspace"
+    else:
+        p = Path(workspace).expanduser()
+        path = p if p.is_absolute() else (ensure_data_path() / p)
     return ensure_dir(path)
 
 

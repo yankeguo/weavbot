@@ -8,13 +8,13 @@ nav_order: 6
 
 # 配置
 
-配置文件：`~/.weavbot/config.json`。键均为 camelCase（如 `apiKey`、`allowFrom`）。环境变量以 `WB_` 前缀和 `__` 嵌套分隔符覆盖配置（如 `WB_AGENTS__DEFAULTS__MODEL`）。设置 `WB_LANG` 可通过 `weavbot.i18n` 覆盖 CLI 语言（`zh` 或 `en`）。
+数据根目录由 `WB_HOME` 控制（默认 `~/.weavbot`）。配置文件路径为 `WB_HOME/config.json`。键均为 camelCase（如 `apiKey`、`allowFrom`）。环境变量以 `WB_` 前缀和 `__` 嵌套分隔符覆盖配置（如 `WB_AGENTS__DEFAULTS__MODEL`）。设置 `WB_LANG` 可通过 `weavbot.i18n` 覆盖 CLI 语言（`zh` 或 `en`）。
 
 | 路径 | 说明 |
 | --- | --- |
-| 配置文件 | `~/.weavbot/config.json` |
-| 工作区 | `~/.weavbot/workspace/` |
-| 数据目录 | `~/.weavbot/` |
+| 配置文件 | `WB_HOME/config.json`（默认 `~/.weavbot/config.json`） |
+| 工作区 | 默认 `WB_HOME/workspace/` |
+| 数据目录 | `WB_HOME/`（默认 `~/.weavbot/`） |
 | 内置 bin | `~/.weavbot/bin/`（始终在代理工具 PATH 中） |
 | 日志 | `~/.weavbot/logs/` |
 
@@ -46,7 +46,7 @@ OpenAI 兼容模式说明：
 
 | 键 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `workspace` | string | `~/.weavbot/workspace` | 代理工作区路径 |
+| `workspace` | string | `workspace` | 代理工作区路径（相对路径会基于 `WB_HOME` 解析） |
 | `model` | string | — | 模型名（如 `claude-sonnet-4-20250514`） |
 | `provider` | string | — | 需与 `providers` 中某键一致 |
 | `maxTokens` | int | 8192 | 最大回复 token 数 |
