@@ -28,6 +28,8 @@ app = typer.Typer(
     help=f"{__logo__} weavbot - Personal AI Assistant",
     no_args_is_help=True,
 )
+wechat_app = typer.Typer(name="wechat", help="Wechat channel helper commands")
+app.add_typer(wechat_app, name="wechat")
 
 console = Console()
 EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q"}
@@ -741,6 +743,107 @@ def agent(
                 await agent_loop.close_mcp()
 
         asyncio.run(run_interactive())
+
+
+# ============================================================================
+# Wechat Commands
+# ============================================================================
+
+
+@wechat_app.command("login")
+def wechat_login(
+    account_key: str = typer.Option(
+        "", "--account", "-a", help="Account key name to save in channels.wechat.accounts"
+    ),
+    base_url: str = typer.Option(
+        "", "--base-url", help="Wechat API base URL, default from config.channels.wechat.baseUrl"
+    ),
+    route_tag: str = typer.Option("", "--route-tag", help="Optional SKRouteTag header value"),
+    timeout_ms: int = typer.Option(480000, "--timeout-ms", help="QR login timeout in milliseconds"),
+):
+    """Scan QR code and save Wechat account credentials."""
+    from weavbot.channels.wechat.accounts import (
+        resolve_state_dir,
+        save_account_credentials,
+        upsert_account_config,
+    )
+    from weavbot.channels.wechat.api import WechatApiClient
+    from weavbot.channels.wechat.auth import account_key_from_account_id, wechat_qr_login
+    from weavbot.config.loader import load_config, save_config
+    from weavbot.config.schema import WechatAccountConfig
+
+    config = load_config()
+    wc = config.channels.wechat
+    api_base = (base_url or wc.base_url).strip()
+    if not api_base:
+        raise typer.BadParameter("wechat baseUrl is empty")
+
+    api = WechatApiClient(
+        base_url=api_base,
+        token="",
+        request_timeout_sec=wc.request_timeout_sec,
+        long_poll_timeout_ms=wc.long_poll_timeout_ms,
+        route_tag=route_tag or wc.route_tag or None,
+    )
+
+    async def run_login():
+        return await wechat_qr_login(api=api, console=console, timeout_ms=timeout_ms)
+
+    result = asyncio.run(run_login())
+    key = (account_key or account_key_from_account_id(result.account_id)).strip()
+    state_dir = resolve_state_dir(config.workspace_path, wc.state_dir)
+    save_account_credentials(
+        state_dir,
+        key,
+        account_id=result.account_id,
+        token=result.token,
+        base_url=result.base_url,
+        user_id=result.user_id,
+    )
+
+    upsert_account_config(
+        wc,
+        key,
+        WechatAccountConfig(
+            enabled=True,
+            account_id=result.account_id,
+            token=result.token,
+            base_url=result.base_url,
+            cdn_base_url=wc.cdn_base_url,
+            route_tag=route_tag or wc.route_tag or "",
+            allow_from=list(wc.allow_from or []),
+        ),
+    )
+    wc.enabled = True
+    if key not in wc.enabled_accounts:
+        wc.enabled_accounts.append(key)
+    save_config(config)
+
+    console.print("\n[green]✓[/green] Wechat login success")
+    console.print(f"  account key: [cyan]{key}[/cyan]")
+    console.print(f"  account id: [cyan]{result.account_id}[/cyan]")
+    console.print("  restart gateway: [cyan]weavbot gateway[/cyan]")
+
+
+@wechat_app.command("list-accounts")
+def wechat_list_accounts():
+    """List saved Wechat account records."""
+    from weavbot.channels.wechat.accounts import list_account_credentials, resolve_state_dir
+    from weavbot.config.loader import load_config
+
+    config = load_config()
+    wc = config.channels.wechat
+    state_dir = resolve_state_dir(config.workspace_path, wc.state_dir)
+    rows = list_account_credentials(state_dir)
+    if not rows:
+        console.print("[yellow]No wechat accounts found.[/yellow]")
+        return
+    console.print("[bold]Wechat Accounts[/bold]")
+    for row in rows:
+        console.print(
+            f"- key=[cyan]{row['key']}[/cyan] id={row['account_id']} "
+            f"user={row['user_id'] or '-'} base={row['base_url'] or '-'}"
+        )
 
 
 if __name__ == "__main__":

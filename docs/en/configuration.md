@@ -169,6 +169,34 @@ OpenAI-compatible notes:
 | `uploadChunkSize` | int | Media upload chunk size in bytes |
 | `tempMediaDir` | string | Temporary media directory (relative to workspace) |
 
+## channels.wechat
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `enabled` | bool | Enable channel |
+| `accountId` | string | Default account ID (optional when using `accounts`) |
+| `token` | string | Default account token (optional when using `accounts`) |
+| `baseUrl` | string | API base URL (default `https://ilinkai.weixin.qq.com`) |
+| `cdnBaseUrl` | string | CDN base URL (default `https://novac2c.cdn.weixin.qq.com/c2c`) |
+| `routeTag` | string | Optional `SKRouteTag` header |
+| `allowFrom` | string[] | Allowed sender IDs; empty = allow all |
+| `requestTimeoutSec` | int | HTTP request timeout in seconds |
+| `longPollTimeoutMs` | int | getUpdates long-poll timeout in milliseconds |
+| `pollRetryDelayMs` | int | Delay before retry after poll failure |
+| `maxConsecutiveFailures` | int | Backoff threshold for consecutive poll errors |
+| `sessionPauseMinutes` | int | Pause window when server returns session-expired error (`-14`) |
+| `typingKeepaliveSec` | int | Typing-status keepalive interval hint |
+| `tempMediaDir` | string | Temporary media directory (relative to workspace) |
+| `stateDir` | string | Persistent state directory for account files and cursors |
+| `enabledAccounts` | string[] | Optional allowlist of account keys to run |
+| `accounts` | object | Multi-account map. Each account supports: `enabled`, `accountId`, `token`, `baseUrl`, `cdnBaseUrl`, `routeTag`, `allowFrom` |
+
+Notes:
+
+- `onboard` only enables Wechat as a placeholder; QR login is not executed in onboarding.
+- Run `weavbot wechat login` to scan QR code and persist account credentials.
+- Multi-account runs in one workspace; session keys are scoped by account and peer.
+
 ## channels.email
 
 | Key | Type | Description |

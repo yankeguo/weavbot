@@ -449,6 +449,12 @@ _CHANNEL_DEFS: list[dict[str, Any]] = [
         ],
     },
     {
+        "key": "wechat",
+        "name": "Wechat",
+        "fields": [],
+        "extra": {"enabled": True},
+    },
+    {
         "key": "email",
         "name": "Email",
         "fields": [
@@ -546,6 +552,8 @@ def _configure_channels(data: dict, console: Console) -> dict:
 
     configured.append(ch_def["name"])
     console.print(f"[green]✓[/green] {ch_def['name']} {_t('configured')}")
+    if ch_def["key"] == "wechat":
+        console.print(f"[dim]{_t('wechat_login_hint')}[/dim]")
 
     if configured:
         console.print(f"\n[green]✓[/green] {_t('channels_configured', ', '.join(configured))}")

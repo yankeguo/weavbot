@@ -169,6 +169,34 @@ OpenAI 兼容模式说明：
 | `uploadChunkSize` | int | 媒体上传分片大小（字节） |
 | `tempMediaDir` | string | 临时媒体目录（相对工作区） |
 
+## channels.wechat
+
+| 键 | 类型 | 说明 |
+| --- | --- | --- |
+| `enabled` | bool | 是否启用 |
+| `accountId` | string | 默认账号 ID（使用 `accounts` 时可不填） |
+| `token` | string | 默认账号 token（使用 `accounts` 时可不填） |
+| `baseUrl` | string | API 地址（默认 `https://ilinkai.weixin.qq.com`） |
+| `cdnBaseUrl` | string | CDN 地址（默认 `https://novac2c.cdn.weixin.qq.com/c2c`） |
+| `routeTag` | string | 可选 `SKRouteTag` 请求头 |
+| `allowFrom` | string[] | 允许的发送者 ID；空为全部允许 |
+| `requestTimeoutSec` | int | HTTP 请求超时（秒） |
+| `longPollTimeoutMs` | int | getUpdates 长轮询超时（毫秒） |
+| `pollRetryDelayMs` | int | 轮询失败后的重试延迟（毫秒） |
+| `maxConsecutiveFailures` | int | 连续失败退避阈值 |
+| `sessionPauseMinutes` | int | 服务端返回会话过期（`-14`）后的暂停窗口（分钟） |
+| `typingKeepaliveSec` | int | 输入状态保活间隔提示值 |
+| `tempMediaDir` | string | 临时媒体目录（相对工作区） |
+| `stateDir` | string | 账号与游标持久化目录 |
+| `enabledAccounts` | string[] | 可选，限定启动的账号 key 列表 |
+| `accounts` | object | 多账号映射。每个账号支持：`enabled`、`accountId`、`token`、`baseUrl`、`cdnBaseUrl`、`routeTag`、`allowFrom` |
+
+说明：
+
+- `onboard` 对 Wechat 仅做占位启用，不执行二维码登录。
+- 请执行 `weavbot wechat login` 扫码并保存账号凭据。
+- 多账号共享同一 workspace，但会话键按账号 + 对端隔离。
+
 ## channels.email
 
 | 键 | 类型 | 说明 |

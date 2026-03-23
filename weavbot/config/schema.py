@@ -187,6 +187,40 @@ class WecomConfig(Base):
     temp_media_dir: str = "media/wecom"
 
 
+class WechatAccountConfig(Base):
+    """Wechat sub-account configuration."""
+
+    enabled: bool = True
+    account_id: str = ""  # Platform account id, e.g. xxx@im.bot
+    token: str = ""  # Bot token obtained via QR login
+    base_url: str = "https://ilinkai.weixin.qq.com"
+    cdn_base_url: str = "https://novac2c.cdn.weixin.qq.com/c2c"
+    route_tag: str = ""
+    allow_from: list[str] = Field(default_factory=list)
+
+
+class WechatConfig(Base):
+    """Wechat channel configuration using HTTP POST + long poll."""
+
+    enabled: bool = False
+    account_id: str = ""  # Default account id
+    token: str = ""  # Default account token
+    base_url: str = "https://ilinkai.weixin.qq.com"
+    cdn_base_url: str = "https://novac2c.cdn.weixin.qq.com/c2c"
+    route_tag: str = ""
+    allow_from: list[str] = Field(default_factory=list)  # Allowed sender IDs (empty = allow all)
+    request_timeout_sec: int = 15
+    long_poll_timeout_ms: int = 35000
+    poll_retry_delay_ms: int = 2000
+    max_consecutive_failures: int = 3
+    session_pause_minutes: int = 60
+    typing_keepalive_sec: int = 5
+    temp_media_dir: str = "media/wechat"
+    state_dir: str = "~/.weavbot/wechat"
+    enabled_accounts: list[str] = Field(default_factory=list)
+    accounts: dict[str, WechatAccountConfig] = Field(default_factory=dict)
+
+
 class ChannelsConfig(Base):
     """Configuration for chat channels."""
 
@@ -201,6 +235,7 @@ class ChannelsConfig(Base):
     slack: SlackConfig = Field(default_factory=SlackConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
     wecom: WecomConfig = Field(default_factory=WecomConfig)
+    wechat: WechatConfig = Field(default_factory=WechatConfig)
 
 
 class AgentDefaults(Base):

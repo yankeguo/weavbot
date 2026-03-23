@@ -144,6 +144,18 @@ class ChannelManager:
             except ImportError as e:
                 logger.warning("Wecom channel not available: {}", e)
 
+        # Wechat channel
+        if self.config.channels.wechat.enabled:
+            try:
+                from weavbot.channels.wechat import WechatChannel
+
+                self.channels["wechat"] = WechatChannel(
+                    self.config.channels.wechat, self.bus, workspace=workspace
+                )
+                logger.info("Wechat channel enabled")
+            except ImportError as e:
+                logger.warning("Wechat channel not available: {}", e)
+
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""
         try:
