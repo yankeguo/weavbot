@@ -4,11 +4,13 @@ from weavbot.config.loader import get_config_path
 from weavbot.config.schema import Config
 from weavbot.utils.helpers import ensure_data_path, ensure_workspace_path
 
+DEFAULT_DATA_ROOT = Path("~/.weavbot")
+
 
 def test_wb_home_defaults_to_home_dot_weavbot(monkeypatch, tmp_path: Path):
     monkeypatch.delenv("WB_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert ensure_data_path() == tmp_path / ".weavbot"
+    assert ensure_data_path() == DEFAULT_DATA_ROOT.expanduser()
 
 
 def test_workspace_path_uses_wb_home_for_relative(monkeypatch, tmp_path: Path):
