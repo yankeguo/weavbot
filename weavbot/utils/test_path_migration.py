@@ -59,7 +59,7 @@ def test_merge_sessions_prefers_newer_metadata_and_removes_old_dir(monkeypatch, 
     wb_home = tmp_path / "wb-home"
     # Keep "workspace" as legacy fixture input intentionally; migration behavior depends on it.
     workspace = tmp_path / LEGACY_WORKSPACE_DIRNAME
-    monkeypatch.setenv("WB_HOME", str(wb_home))
+    monkeypatch.setenv("WB_DATA_PATH", str(wb_home))
 
     src_file = workspace / LEGACY_SESSIONS_REL_PATH / "cli_direct.jsonl"
     dst_file = wb_home / "sessions" / "cli_direct.jsonl"
@@ -76,7 +76,7 @@ def test_merge_sessions_prefers_newer_metadata_and_removes_old_dir(monkeypatch, 
 def test_merge_sessions_keeps_target_when_target_newer(monkeypatch, tmp_path: Path):
     wb_home = tmp_path / "wb-home"
     workspace = tmp_path / LEGACY_WORKSPACE_DIRNAME
-    monkeypatch.setenv("WB_HOME", str(wb_home))
+    monkeypatch.setenv("WB_DATA_PATH", str(wb_home))
 
     src_file = workspace / LEGACY_SESSIONS_REL_PATH / "cli_direct.jsonl"
     dst_file = wb_home / "sessions" / "cli_direct.jsonl"
@@ -93,7 +93,7 @@ def test_merge_sessions_keeps_target_when_target_newer(monkeypatch, tmp_path: Pa
 def test_run_startup_migrations_merges_cron_and_sessions(monkeypatch, tmp_path: Path):
     wb_home = tmp_path / "wb-home"
     workspace = tmp_path / LEGACY_WORKSPACE_DIRNAME
-    monkeypatch.setenv("WB_HOME", str(wb_home))
+    monkeypatch.setenv("WB_DATA_PATH", str(wb_home))
 
     _write_cron(workspace / LEGACY_CRON_REL_PATH, [{"id": "job-1", "name": "legacy"}])
     _write_session(
@@ -116,7 +116,7 @@ def test_prepare_runtime_paths_returns_cron_location_and_runs_migrations(
 ):
     wb_home = tmp_path / "wb-home"
     workspace = tmp_path / LEGACY_WORKSPACE_DIRNAME
-    monkeypatch.setenv("WB_HOME", str(wb_home))
+    monkeypatch.setenv("WB_DATA_PATH", str(wb_home))
 
     _write_cron(workspace / LEGACY_CRON_REL_PATH, [{"id": "job-2", "name": "legacy-2"}])
 

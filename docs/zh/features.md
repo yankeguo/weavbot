@@ -91,7 +91,7 @@ flowchart TB
 
 ## 定时任务
 
-定时执行 Agent。任务存储在 `WB_HOME/cron.json`（默认 `~/.weavbot/cron.json`）。
+定时执行 Agent。任务存储在 `WB_DATA_PATH/cron.json`（默认 `~/.weavbot/cron.json`）。
 
 - **调度类型** — `at`（一次性）、`every`（间隔）、`cron`（cron 表达式，支持时区）
 - **cron 工具** — Agent 通过 `add_cron`、`list_cron`、`remove_cron` 管理任务

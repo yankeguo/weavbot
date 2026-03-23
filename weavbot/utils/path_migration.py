@@ -156,7 +156,7 @@ class PathMigration:
 
     @classmethod
     def merge_sessions_dir(cls, target_root: Path, legacy_root: Path) -> None:
-        """Merge legacy workspace sessions into WB_HOME sessions and clean old dir."""
+        """Merge legacy workspace sessions into WB_DATA_PATH sessions and clean old dir."""
         if not legacy_root.exists() or not legacy_root.is_dir():
             return
         if legacy_root.resolve() == target_root.resolve():

@@ -13,8 +13,8 @@ def ensure_dir(path: Path) -> Path:
 
 
 def ensure_data_path() -> Path:
-    """Data directory rooted at WB_HOME."""
-    raw = os.environ.get("WB_HOME", "~/.weavbot").strip() or "~/.weavbot"
+    """Data directory rooted at WB_DATA_PATH."""
+    raw = os.environ.get("WB_DATA_PATH", "~/.weavbot").strip() or "~/.weavbot"
     return ensure_dir(Path(raw).expanduser())
 
 
