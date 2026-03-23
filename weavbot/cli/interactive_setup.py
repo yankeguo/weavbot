@@ -566,7 +566,7 @@ _TRAYCLI_FALLBACK_TAG = "v0.1.3"
 
 
 def _setup_systemd(exe_path: str, console: Console) -> None:
-    """Write a systemd user service and enable it."""
+    """Write a systemd user service and print manual commands."""
     console.print(f"[dim]{_t('autostart_linux')}[/dim]")
 
     unit_dir = Path.home() / ".config" / "systemd" / "user"
@@ -592,14 +592,16 @@ WantedBy=default.target
 
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
     subprocess.run(["systemctl", "--user", "enable", "weavbot.service"], check=True)
-    subprocess.run(["systemctl", "--user", "start", "weavbot.service"], check=True)
 
     console.print(f"[green]✓[/green] {_t('autostart_configured')}")
-    console.print(f"[green]✓[/green] {_t('service_started')}")
+    console.print(f"[dim]{_t('autostart_not_started')}[/dim]")
+    console.print(f"[dim]{_t('manual_command', 'systemctl --user daemon-reload')}[/dim]")
+    console.print(f"[dim]{_t('manual_command', 'systemctl --user enable weavbot.service')}[/dim]")
+    console.print(f"[dim]{_t('manual_command', 'systemctl --user start weavbot.service')}[/dim]")
 
 
 def _setup_launchd(exe_path: str, console: Console) -> None:
-    """Write a launchd LaunchAgent plist and load it."""
+    """Write a launchd LaunchAgent plist and print manual command."""
     console.print(f"[dim]{_t('autostart_macos')}[/dim]")
 
     log_dir = Path.home() / ".weavbot" / "logs"
@@ -638,10 +640,9 @@ def _setup_launchd(exe_path: str, console: Console) -> None:
 """
     plist_path.write_text(plist_content, encoding="utf-8")
 
-    subprocess.run(["launchctl", "load", str(plist_path)], check=True)
-
     console.print(f"[green]✓[/green] {_t('autostart_configured')}")
-    console.print(f"[green]✓[/green] {_t('service_started')}")
+    console.print(f"[dim]{_t('autostart_not_started')}[/dim]")
+    console.print(f"[dim]{_t('manual_command', f'launchctl load {plist_path}')}[/dim]")
 
 
 def _setup_traycli(exe_path: str, console: Console) -> None:
@@ -713,17 +714,8 @@ def _setup_traycli(exe_path: str, console: Console) -> None:
         return
 
     console.print(f"[green]✓[/green] {_t('autostart_configured')}")
-
-    # --- Launch traycli.exe immediately (detached) ---
-    try:
-        subprocess.Popen(
-            [str(traycli_path)],
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-            close_fds=True,
-        )
-        console.print(f"[green]✓[/green] {_t('service_started')}")
-    except (OSError, subprocess.SubprocessError) as exc:
-        console.print(f"[yellow]{_t('traycli_launch_failed', exc)}[/yellow]")
+    console.print(f"[dim]{_t('autostart_not_started')}[/dim]")
+    console.print(f"[dim]{_t('manual_command', str(traycli_path))}[/dim]")
 
 
 _WEAVBOT_BIN = Path.home() / ".weavbot" / "bin"
