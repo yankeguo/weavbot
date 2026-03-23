@@ -117,6 +117,18 @@ def test_configure_channels_realtime_path(monkeypatch):
     assert "discord" not in updated["channels"]
 
 
+def test_select_channel_realtime_falls_back_to_numbered(monkeypatch):
+    monkeypatch.setattr(
+        interactive_setup,
+        "_ask_fuzzy",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no tty")),
+    )
+    monkeypatch.setattr(interactive_setup.typer, "prompt", lambda *_args, **_kwargs: "2")
+
+    picked = interactive_setup._select_channel_realtime(_make_console())
+    assert picked == 1
+
+
 def test_interactive_setup_keeps_original_when_realtime_provider_cancelled(monkeypatch):
     raw = {
         "openai": {
@@ -148,23 +160,52 @@ def test_interactive_setup_keeps_original_when_realtime_provider_cancelled(monke
     assert updated is original
 
 
-def test_select_provider_failfast_when_fuzzy_unavailable(monkeypatch):
+def test_select_provider_falls_back_when_fuzzy_unavailable(monkeypatch):
     monkeypatch.setattr(
         interactive_setup,
-        "_ensure_fuzzy_mode",
-        lambda: (_ for _ in ()).throw(RuntimeError("no tty")),
+        "_ask_fuzzy",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("no tty")),
     )
+    monkeypatch.setattr(interactive_setup.typer, "prompt", lambda *_args, **_kwargs: "1")
     providers = [
         {"id": "openai", "name": "OpenAI", "npm": "@ai-sdk/openai", "models": {"b": {}}},
     ]
-    try:
-        interactive_setup._select_provider(providers, _make_console())
-        assert False, "should raise RuntimeError"
-    except RuntimeError as exc:
-        assert "no tty" in str(exc)
+    picked = interactive_setup._select_provider(providers, _make_console())
+    assert picked is not None
+    assert picked["id"] == "openai"
 
 
-def test_ask_fuzzy_failfast_on_internal_error(monkeypatch):
+def test_select_model_falls_back_on_internal_error(monkeypatch):
+    monkeypatch.setattr(
+        interactive_setup,
+        "_ask_fuzzy",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("boom")),
+    )
+    monkeypatch.setattr(interactive_setup.typer, "prompt", lambda *_args, **_kwargs: "2")
+
+    provider = {
+        "name": "OpenAI",
+        "models": {
+            "gpt-4o": {
+                "id": "gpt-4o",
+                "name": "GPT-4o",
+                "limit": {"context": 128000},
+            },
+            "gpt-4o-mini": {
+                "id": "gpt-4o-mini",
+                "name": "GPT-4o mini",
+                "limit": {"context": 128000, "output": 16384},
+            },
+        },
+    }
+
+    chosen = interactive_setup._select_model(provider, _make_console())
+    assert chosen is not None
+    model_id, _model_data = chosen
+    assert model_id == "gpt-4o-mini"
+
+
+def test_ask_fuzzy_raises_internal_error(monkeypatch):
     class _BrokenPrompt:
         def execute(self):
             raise ValueError("boom")

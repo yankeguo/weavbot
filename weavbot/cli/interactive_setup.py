@@ -177,11 +177,18 @@ _FUZZY_STYLE = (
 )
 
 
-def _ensure_fuzzy_mode() -> None:
+def _fuzzy_mode_error() -> str | None:
     if inquirer is None:
-        raise RuntimeError("InquirerPy is required for interactive setup selection.")
+        return "InquirerPy is required for interactive setup selection."
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        raise RuntimeError("Interactive setup selection requires a TTY terminal.")
+        return "Interactive setup selection requires a TTY terminal."
+    return None
+
+
+def _ensure_fuzzy_mode() -> None:
+    error = _fuzzy_mode_error()
+    if error:
+        raise RuntimeError(error)
 
 
 def _ask_fuzzy(
@@ -207,6 +214,77 @@ def _ask_fuzzy(
         ).execute()
     except (KeyboardInterrupt, EOFError):
         return _PROMPT_CTRL_C
+
+
+def _prompt_number(prompt_text: str, max_val: int) -> int | None | object:
+    while True:
+        try:
+            raw: str = typer.prompt(prompt_text, default="", show_default=False)
+        except (KeyboardInterrupt, EOFError, typer.Abort):
+            return _PROMPT_CTRL_C
+
+        text = raw.strip()
+        if not text:
+            return None
+        if text.isdigit():
+            value = int(text)
+            if 1 <= value <= max_val:
+                return value
+
+        typer.echo(_t("enter_number", max_val))
+
+
+def _ask_numbered_choice(
+    *,
+    message: str,
+    choices: list[dict[str, Any]],
+    hint_text: str,
+    console: Console,
+) -> Any | None | object:
+    console.print(f"[bold]{message}[/bold]")
+    console.print(f"[dim]{hint_text}[/dim]")
+    for idx, choice in enumerate(choices, start=1):
+        console.print(f"  {idx:>2}. {choice['name']}")
+
+    picked_index = _prompt_number(f"{message} [1-{len(choices)}]", len(choices))
+    if picked_index is _PROMPT_CTRL_C:
+        return _PROMPT_CTRL_C
+    if picked_index is None:
+        return None
+    return choices[picked_index - 1]["value"]
+
+
+def _pick_single_choice(
+    *,
+    message: str,
+    choices: list[dict[str, Any]],
+    fuzzy_hint: str,
+    fallback_hint: str,
+    console: Console,
+) -> Any | None | object:
+    def _fallback(reason: str) -> Any | None | object:
+        console.print(f"[yellow]{_t('picker_compat_mode_reason', reason)}[/yellow]")
+        console.print(f"[dim]{_t('picker_compat_mode')}[/dim]")
+        return _ask_numbered_choice(
+            message=message,
+            choices=choices,
+            hint_text=fallback_hint,
+            console=console,
+        )
+
+    try:
+        picked = _ask_fuzzy(message, choices, fuzzy_hint)
+    except Exception as exc:
+        picked = _fallback(str(exc))
+
+    if picked is _PROMPT_CTRL_C:
+        return _PROMPT_CTRL_C
+    if picked is None:
+        return None
+
+    console.print(_choice_label_for_value(choices, picked))
+    console.print()
+    return picked
 
 
 def _choice_label_for_value(choices: list[dict[str, Any]], picked: Any) -> str:
@@ -249,14 +327,13 @@ def _select_provider(
         )
         choices.append({"name": display, "value": p})
 
-    picked = _ask_fuzzy(_t("provider"), choices, _t("provider_hint_realtime"))
-    if picked is _PROMPT_CTRL_C:
-        return _PROMPT_CTRL_C
-    if not picked:
-        return None
-    console.print(_choice_label_for_value(choices, picked))
-    console.print()
-    return picked
+    return _pick_single_choice(
+        message=_t("provider"),
+        choices=choices,
+        fuzzy_hint=_t("provider_hint_realtime"),
+        fallback_hint=_t("provider_hint_fallback"),
+        console=console,
+    )
 
 
 def _select_model(
@@ -307,14 +384,13 @@ def _select_model(
         )
         choices.append({"name": display, "value": (model_id, mdata)})
 
-    picked = _ask_fuzzy(_t("model"), choices, _t("model_hint_realtime"))
-    if picked is _PROMPT_CTRL_C:
-        return _PROMPT_CTRL_C
-    if not picked:
-        return None
-    console.print(_choice_label_for_value(choices, picked))
-    console.print()
-    return picked
+    return _pick_single_choice(
+        message=_t("model"),
+        choices=choices,
+        fuzzy_hint=_t("model_hint_realtime"),
+        fallback_hint=_t("model_hint_fallback"),
+        console=console,
+    )
 
 
 _CHANNEL_DEFS: list[dict[str, Any]] = [
@@ -409,14 +485,16 @@ def _select_channel_realtime(console: Console) -> int | None | object:
             }
         )
 
-    picked = _ask_fuzzy(_t("select_channel_realtime"), choices, _t("channels_hint_realtime"))
-    if picked is _PROMPT_CTRL_C:
-        return _PROMPT_CTRL_C
-    if picked is None:
-        return None
+    picked = _pick_single_choice(
+        message=_t("select_channel_realtime"),
+        choices=choices,
+        fuzzy_hint=_t("channels_hint_realtime"),
+        fallback_hint=_t("channels_hint_fallback"),
+        console=console,
+    )
     if isinstance(picked, int):
-        console.print(_choice_label_for_value(choices, picked))
-        console.print()
+        return picked
+    if picked is _PROMPT_CTRL_C or picked is None:
         return picked
     return None
 
