@@ -347,3 +347,22 @@ def test_configure_channels_no_confirm_gate(monkeypatch):
     data: dict = {}
     updated = interactive_setup._configure_channels(data, _make_console())
     assert updated["channels"]["telegram"]["enabled"] is True
+
+
+def test_configure_channels_wechat_placeholder(monkeypatch):
+    monkeypatch.setattr(interactive_setup, "_ensure_fuzzy_mode", lambda: None)
+    wechat_idx = next(
+        i for i, c in enumerate(interactive_setup._CHANNEL_DEFS) if c["key"] == "wechat"
+    )
+    monkeypatch.setattr(interactive_setup, "_select_channel_realtime", lambda _console: wechat_idx)
+    monkeypatch.setattr(
+        interactive_setup.typer,
+        "prompt",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("prompt should not be called")
+        ),
+    )
+
+    data: dict = {}
+    updated = interactive_setup._configure_channels(data, _make_console())
+    assert updated["channels"]["wechat"]["enabled"] is True

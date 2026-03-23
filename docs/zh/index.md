@@ -20,6 +20,8 @@ has_children: true
 - [开机自启]({{ site.baseurl }}/zh/auto-start/) — 登录后自动运行（Linux、macOS、Windows）
 - [命令参考]({{ site.baseurl }}/zh/cli/) — 命令一览
 - [配置]({{ site.baseurl }}/zh/configuration/) — 完整配置说明
+- [微信渠道配置]({{ site.baseurl }}/zh/configuration/#channelswechat) — 启用渠道、执行 `weavbot wechat login`、管理多账号
+- [仓库中文 README](https://github.com/yankeguo/weavbot/blob/main/README.zh.md) — 仓库层面的快速说明
 
 ## 致谢
 

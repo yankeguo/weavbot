@@ -20,6 +20,8 @@ A lightweight personal AI assistant framework.
 - [Auto-Start]({{ site.baseurl }}/en/auto-start/) — Run on login (Linux, macOS, Windows)
 - [CLI Reference]({{ site.baseurl }}/en/cli/) — Command overview
 - [Configuration]({{ site.baseurl }}/en/configuration/) — Full config reference
+- [Wechat Channel Config]({{ site.baseurl }}/en/configuration/#channelswechat) — Enable channel, run `weavbot wechat login`, and manage multi-account setup
+- [GitHub README (EN)](https://github.com/yankeguo/weavbot/blob/main/README.md) — Quick repo-level onboarding guide
 
 ## Credits
 
