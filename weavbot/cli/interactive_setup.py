@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import io
 import json as _json
+import logging
 import os
 import platform
 import shutil
@@ -18,6 +19,12 @@ from typing import Any
 
 import httpx
 import typer
+from wcwidth import wcwidth
+
+try:
+    from InquirerPy import inquirer
+except ImportError:  # pragma: no cover - runtime fallback when optional dependency missing
+    inquirer = None
 from rich.console import Console
 from rich.table import Table
 
@@ -25,6 +32,7 @@ from weavbot.config.schema import Config
 from weavbot.i18n import t
 
 MODELS_DEV_URL = "https://models.dev/api.json"
+_LOGGER = logging.getLogger(__name__)
 
 
 def _t(key: str, *args: Any) -> str:
@@ -88,6 +96,63 @@ def _format_limit(value: int | None) -> str:
     return str(value)
 
 
+def _display_width(text: str) -> int:
+    return sum(max(wcwidth(ch), 1) for ch in text)
+
+
+def _pad_to_width(text: str, width: int) -> str:
+    return f"{text}{' ' * max(width - _display_width(text), 0)}"
+
+
+def _fit_column(text: str, width: int) -> str:
+    """Fit text into fixed display-width column using ASCII ellipsis."""
+    if _display_width(text) <= width:
+        return _pad_to_width(text, width)
+    if width <= 3:
+        out = ""
+        for ch in text:
+            if _display_width(out + ch) > width:
+                break
+            out += ch
+        return _pad_to_width(out, width)
+
+    target = width - 3
+    out = ""
+    for ch in text:
+        if _display_width(out + ch) > target:
+            break
+        out += ch
+    return _pad_to_width(f"{out}...", width)
+
+
+def _channel_layout() -> tuple[int, int, int]:
+    key_w = min(
+        16,
+        max(
+            _display_width("KEY"),
+            max(_display_width(str(ch.get("key", ""))) for ch in _CHANNEL_DEFS),
+        ),
+    )
+    name_w = min(
+        20,
+        max(
+            _display_width("NAME"),
+            max(_display_width(str(ch.get("name", ""))) for ch in _CHANNEL_DEFS),
+        ),
+    )
+    fields_w = 56
+    return key_w, name_w, fields_w
+
+
+def _channel_display(ch: dict[str, Any], key_w: int, name_w: int, fields_w: int) -> str:
+    fields = ", ".join(_t(f["label_key"]) for f in ch["fields"])
+    return (
+        f"{_fit_column(str(ch['key']), key_w)}  "
+        f"{_fit_column(str(ch['name']), name_w)}  "
+        f"{_fit_column(fields, fields_w)}"
+    )
+
+
 def _prompt_number(prompt_text: str, max_val: int) -> int | None:
     """Prompt for a 1-based number. Returns None if user wants to cancel."""
     while True:
@@ -104,8 +169,44 @@ def _prompt_number(prompt_text: str, max_val: int) -> int | None:
         typer.echo(_t("enter_number", max_val))
 
 
-def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[str, Any] | None:
-    """Display provider list, support search and selection. Returns chosen provider or None."""
+_PROMPT_ERROR = object()
+_FUZZY_QMARK = ">"
+_FUZZY_PROMPT = ">"
+_FUZZY_POINTER = "●"
+_FUZZY_MARKER = "●"
+
+
+def _inquirer_enabled() -> bool:
+    return bool(inquirer is not None and sys.stdin.isatty() and sys.stdout.isatty())
+
+
+def _ask_fuzzy(message: str, choices: list[dict[str, Any]]) -> Any | None:
+    if inquirer is None:
+        return None
+    try:
+        return inquirer.fuzzy(
+            message=message,
+            choices=choices,
+            instruction=_t("arrow_filter_instruction"),
+            match_exact=True,
+            qmark=_FUZZY_QMARK,
+            amark=_FUZZY_QMARK,
+            prompt=_FUZZY_PROMPT,
+            pointer=_FUZZY_POINTER,
+            marker=_FUZZY_MARKER,
+        ).execute()
+    except (KeyboardInterrupt, EOFError):
+        return None
+    except Exception:  # pragma: no cover - defensive path for terminal UI internals
+        _LOGGER.debug("Fuzzy prompt failed and will fallback", exc_info=True)
+        return _PROMPT_ERROR
+
+
+def _select_provider_legacy(
+    providers: list[dict[str, Any]],
+    console: Console,
+) -> dict[str, Any] | None:
+    """Legacy provider picker that filters after Enter."""
     filtered = providers
 
     while True:
@@ -152,11 +253,125 @@ def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[
             return filtered[0]
 
 
+def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[str, Any] | None:
+    """Display provider list, support search and selection. Returns chosen provider or None."""
+    if not _inquirer_enabled():
+        return _select_provider_legacy(providers, console)
+
+    console.print()
+    console.print(f"[dim]{_t('provider_hint_realtime')}[/dim]")
+
+    id_w = min(
+        28,
+        max(_display_width("ID"), max(_display_width(str(p.get("id", ""))) for p in providers)),
+    )
+    name_w = min(
+        28,
+        max(_display_width("NAME"), max(_display_width(str(p.get("name", ""))) for p in providers)),
+    )
+    mode_w = max(
+        _display_width("MODE"),
+        max(_display_width(_NPM_TO_MODE.get(str(p.get("npm", "")), "?")) for p in providers),
+    )
+    models_w = max(
+        _display_width("MODELS"),
+        max(_display_width(str(len(p.get("models", {})))) for p in providers),
+    )
+
+    header = (
+        f"{_pad_to_width('ID', id_w)}  "
+        f"{_pad_to_width('NAME', name_w)}  "
+        f"{_pad_to_width('MODE', mode_w)}  "
+        f"{' ' * max(models_w - _display_width('MODELS'), 0)}MODELS"
+    )
+    console.print(f"[dim]{header}[/dim]")
+
+    choices: list[dict[str, Any]] = []
+    for p in providers:
+        mode = _NPM_TO_MODE.get(p["npm"], "?")
+        display = (
+            f"{_fit_column(str(p['id']), id_w)}  "
+            f"{_fit_column(str(p['name']), name_w)}  "
+            f"{_fit_column(mode, mode_w)}  "
+            f"{' ' * max(models_w - _display_width(str(len(p['models']))), 0)}{len(p['models'])}"
+        )
+        choices.append({"name": display, "value": p})
+
+    picked = _ask_fuzzy(_t("provider"), choices)
+    if picked is _PROMPT_ERROR:
+        return _select_provider_legacy(providers, console)
+    if not picked:
+        return None
+    return picked
+
+
 def _select_model(provider: dict[str, Any], console: Console) -> tuple[str, dict[str, Any]] | None:
     """Display model list for a provider. Returns (model_id, model_data) or None."""
     models = provider["models"]
     entries = list(models.items())
     entries.sort(key=lambda e: e[1].get("name", e[0]).lower())
+
+    if _inquirer_enabled():
+        console.print()
+        console.print(f"[dim]{_t('model_hint_realtime')}[/dim]")
+        id_w = min(
+            36,
+            max(
+                _display_width(_t("table_id")),
+                max(_display_width(str(mdata.get("id", mid))) for mid, mdata in entries),
+            ),
+        )
+        name_w = min(
+            28,
+            max(
+                _display_width(_t("table_name")),
+                max(_display_width(str(mdata.get("name", mid))) for mid, mdata in entries),
+            ),
+        )
+        context_values = [
+            _format_limit((mdata.get("limit") or {}).get("context")) for _mid, mdata in entries
+        ]
+        output_values = [
+            _format_limit((mdata.get("limit") or {}).get("output")) for _mid, mdata in entries
+        ]
+        context_w = max(
+            _display_width(_t("context")), max(_display_width(v) for v in context_values)
+        )
+        output_w = max(
+            _display_width(_t("max_output")), max(_display_width(v) for v in output_values)
+        )
+        reasoning_w = max(_display_width(_t("reasoning")), _display_width("✓"))
+
+        header = (
+            f"{_pad_to_width(_t('table_id'), id_w)}  "
+            f"{_pad_to_width(_t('table_name'), name_w)}  "
+            f"{' ' * max(context_w - _display_width(_t('context')), 0)}{_t('context')}  "
+            f"{' ' * max(output_w - _display_width(_t('max_output')), 0)}{_t('max_output')}  "
+            f"{_pad_to_width(_t('reasoning'), reasoning_w)}"
+        )
+        console.print(f"[dim]{header}[/dim]")
+
+        choices: list[dict[str, Any]] = []
+        for mid, mdata in entries:
+            model_id = mdata.get("id", mid)
+            limit = mdata.get("limit") or {}
+            context_val = _format_limit(limit.get("context"))
+            output_val = _format_limit(limit.get("output"))
+            reasoning_val = "✓" if mdata.get("reasoning") else ""
+            display = (
+                f"{_fit_column(str(model_id), id_w)}  "
+                f"{_fit_column(str(mdata.get('name', mid)), name_w)}  "
+                f"{' ' * max(context_w - _display_width(context_val), 0)}{context_val}  "
+                f"{' ' * max(output_w - _display_width(output_val), 0)}{output_val}  "
+                f"{_fit_column(reasoning_val, reasoning_w)}"
+            )
+            choices.append({"name": display, "value": (model_id, mdata)})
+
+        picked = _ask_fuzzy(_t("model"), choices)
+        if picked is not _PROMPT_ERROR:
+            if not picked:
+                return None
+            return picked
 
     table = Table(title=_t("models_title", provider["name"]), show_lines=False)
     table.add_column("#", style="dim", width=4, justify="right")
@@ -269,6 +484,43 @@ _CHANNEL_DEFS: list[dict[str, Any]] = [
 ]
 
 
+def _select_channel_realtime(console: Console) -> int | None | object:
+    """Select one channel with realtime filtering via arrow navigation."""
+    console.print(f"[dim]{_t('channels_hint_realtime')}[/dim]")
+    key_w, name_w, fields_w = _channel_layout()
+    header = f"{'KEY'.ljust(key_w)}  {'NAME'.ljust(name_w)}  {'FIELDS'.ljust(fields_w)}"
+    header = f"{_pad_to_width('KEY', key_w)}  {_pad_to_width('NAME', name_w)}  {_pad_to_width('FIELDS', fields_w)}"
+    console.print(f"[dim]{header}[/dim]")
+    choices: list[dict[str, Any]] = []
+    for idx, ch in enumerate(_CHANNEL_DEFS):
+        choices.append(
+            {
+                "name": _channel_display(ch, key_w, name_w, fields_w),
+                "value": idx,
+            }
+        )
+
+    picked = _ask_fuzzy(_t("select_channel_realtime"), choices)
+    if picked is _PROMPT_ERROR:
+        return _PROMPT_ERROR
+    if picked is None:
+        return None
+    if isinstance(picked, int):
+        return picked
+    return None
+
+
+def _render_channel_legacy_list(console: Console) -> None:
+    key_w, name_w, fields_w = _channel_layout()
+    header = (
+        f"{'#':>3}  {_pad_to_width('KEY', key_w)}  "
+        f"{_pad_to_width('NAME', name_w)}  {_pad_to_width('FIELDS', fields_w)}"
+    )
+    console.print(f"\n[dim]{header}[/dim]")
+    for idx, ch in enumerate(_CHANNEL_DEFS, 1):
+        console.print(f"[dim]{idx:>3}[/dim]  {_channel_display(ch, key_w, name_w, fields_w)}")
+
+
 def _configure_channels(data: dict, console: Console) -> dict:
     """Run the interactive channel configuration wizard.
 
@@ -279,69 +531,55 @@ def _configure_channels(data: dict, console: Console) -> dict:
     if not typer.confirm(_t("configure_channels"), default=False):
         return data
 
-    table = Table(title=_t("available_channels"), show_lines=False)
-    table.add_column("#", style="dim", width=4, justify="right")
-    table.add_column(_t("channel"), style="cyan")
-    table.add_column(_t("fields"))
+    selected_index: int | None = None
+    if _inquirer_enabled():
+        selected_index = _select_channel_realtime(console)
+        if selected_index is _PROMPT_ERROR:
+            _render_channel_legacy_list(console)
+            choice = _prompt_number(
+                _t("select_channel_range", len(_CHANNEL_DEFS)), len(_CHANNEL_DEFS)
+            )
+            if choice is None:
+                return data
+            selected_index = choice - 1
+    else:
+        _render_channel_legacy_list(console)
+        choice = _prompt_number(_t("select_channel_range", len(_CHANNEL_DEFS)), len(_CHANNEL_DEFS))
+        if choice is None:
+            return data
+        selected_index = choice - 1
 
-    for idx, ch in enumerate(_CHANNEL_DEFS, 1):
-        field_names = ", ".join(_t(f["label_key"]) for f in ch["fields"])
-        table.add_row(str(idx), ch["name"], field_names)
-
-    console.print()
-    console.print(table)
-
-    raw = typer.prompt(_t("select_channels"), default="")
-    if not raw.strip():
-        return data
-
-    selected_indices: list[int] = []
-    for part in raw.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            n = int(part)
-        except ValueError:
-            console.print(f"[yellow]{_t('skip_invalid', part)}[/yellow]")
-            continue
-        if 1 <= n <= len(_CHANNEL_DEFS):
-            selected_indices.append(n - 1)
-        else:
-            console.print(f"[yellow]{_t('skip_out_of_range', part)}[/yellow]")
-
-    if not selected_indices:
+    if selected_index is None:
         return data
 
     channels_data = data.setdefault("channels", {})
     configured: list[str] = []
 
-    for idx in selected_indices:
-        ch_def = _CHANNEL_DEFS[idx]
-        console.print(f"\n[bold]--- {ch_def['name']} ---[/bold]")
+    ch_def = _CHANNEL_DEFS[selected_index]
+    console.print(f"\n[bold]--- {ch_def['name']} ---[/bold]")
 
-        values: dict[str, Any] = {}
-        cancelled = False
-        for field in ch_def["fields"]:
-            label = _t(field["label_key"])
-            value: str = typer.prompt(f"  {label}", hide_input=field["secret"], default="")
-            if not value.strip():
-                console.print(f"[dim]{_t('skipping_channel', ch_def['name'], label)}[/dim]")
-                cancelled = True
-                break
-            values[field["key"]] = value.strip()
+    values: dict[str, Any] = {}
+    cancelled = False
+    for field in ch_def["fields"]:
+        label = _t(field["label_key"])
+        value: str = typer.prompt(f"  {label}", hide_input=field["secret"], default="")
+        if not value.strip():
+            console.print(f"[dim]{_t('skipping_channel', ch_def['name'], label)}[/dim]")
+            cancelled = True
+            break
+        values[field["key"]] = value.strip()
 
-        if cancelled:
-            continue
+    if cancelled:
+        return data
 
-        ch_data = channels_data.setdefault(ch_def["key"], {})
-        ch_data["enabled"] = True
-        ch_data.update(values)
-        if "extra" in ch_def:
-            ch_data.update(ch_def["extra"])
+    ch_data = channels_data.setdefault(ch_def["key"], {})
+    ch_data["enabled"] = True
+    ch_data.update(values)
+    if "extra" in ch_def:
+        ch_data.update(ch_def["extra"])
 
-        configured.append(ch_def["name"])
-        console.print(f"[green]✓[/green] {ch_def['name']} {_t('configured')}")
+    configured.append(ch_def["name"])
+    console.print(f"[green]✓[/green] {ch_def['name']} {_t('configured')}")
 
     if configured:
         console.print(f"\n[green]✓[/green] {_t('channels_configured', ', '.join(configured))}")
