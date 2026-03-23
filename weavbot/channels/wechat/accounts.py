@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -79,7 +81,14 @@ def save_sync_buf(state_dir: Path, account_key: str, value: str) -> None:
     path = account_sync_buf_path(state_dir, account_key)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"get_updates_buf": value}
-    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    fd, tmp_path = tempfile.mkstemp(prefix=f"{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False))
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def account_credentials_path(state_dir: Path, account_key: str) -> Path:
