@@ -9,6 +9,11 @@ A lightweight personal AI assistant framework.
 
 [中文说明](./README.zh.md)
 
+## Highlights / 亮点
+
+- Interactive onboarding for provider/model/channel setup / 交互式初始化（provider/model/channel 一步配置）
+- Wechat Clawbot support / 支持微信 ClawBot（Wechat Clawbot）：[Wechat channel configuration](https://yankeguo.github.io/weavbot/en/configuration/#channelswechat) | [微信渠道配置](https://yankeguo.github.io/weavbot/zh/configuration/#channelswechat)
+
 ## Installation
 
 ```bash
@@ -27,29 +32,12 @@ To try the latest unreleased features:
 uv tool install git+https://github.com/yankeguo/weavbot.git
 ```
 
-## Onboard (Recommended First Run)
+After installation, run the recommended first steps:
 
-Initialize local config/workspace and run the interactive setup wizard:
+Run onboarding:
 
 ```bash
 weavbot onboard
-```
-
-What `onboard` does:
-
-- Creates `~/.weavbot/config.json` and `~/.weavbot/workspace/`
-- Guides provider/model selection with realtime filtering
-- Configures one chat channel in the wizard (Telegram/Discord/Feishu/DingTalk/Slack/QQ/Wecom/Email/Mochat)
-- Offers optional `ripgrep` install and gateway auto-start setup
-
-For non-interactive or scripted setup, use repeatable `--set key=value`:
-
-```bash
-weavbot onboard \
-  --set providers.openrouter.apiKey=sk-or-v1-xxx \
-  --set providers.openrouter.apiBase=https://openrouter.ai/api/v1 \
-  --set agents.defaults.provider=openrouter \
-  --set agents.defaults.model=openai/gpt-4o-mini
 ```
 
 Detailed CLI docs:
@@ -57,25 +45,6 @@ Detailed CLI docs:
 - 中文: [命令参考](https://yankeguo.github.io/weavbot/zh/cli/)
 
 **Full documentation:** [https://yankeguo.github.io/weavbot/](https://yankeguo.github.io/weavbot/)
-
-## Wechat Channel
-
-Wechat is configured in two phases:
-
-1. Enable it in config (interactive `onboard` only sets placeholder enablement):
-   - `channels.wechat.enabled=true`
-2. Complete QR login and credential binding with:
-
-```bash
-weavbot wechat login
-```
-
-For multi-account setups, put account entries under `channels.wechat.accounts` and optionally limit runtime accounts with `channels.wechat.enabledAccounts`.
-
-Configuration reference:
-
-- English: [Wechat config](https://yankeguo.github.io/weavbot/en/configuration/#channelswechat)
-- 中文: [微信配置](https://yankeguo.github.io/weavbot/zh/configuration/#channelswechat)
 
 ## Credits
 
