@@ -7,6 +7,8 @@
 
 A lightweight personal AI assistant framework.
 
+[中文说明](./README.zh.md)
+
 ## Installation
 
 ```bash
@@ -55,6 +57,25 @@ Detailed CLI docs:
 - 中文: [命令参考](https://yankeguo.github.io/weavbot/zh/cli/)
 
 **Full documentation:** [https://yankeguo.github.io/weavbot/](https://yankeguo.github.io/weavbot/)
+
+## Wechat Channel
+
+Wechat is configured in two phases:
+
+1. Enable it in config (interactive `onboard` only sets placeholder enablement):
+   - `channels.wechat.enabled=true`
+2. Complete QR login and credential binding with:
+
+```bash
+weavbot wechat login
+```
+
+For multi-account setups, put account entries under `channels.wechat.accounts` and optionally limit runtime accounts with `channels.wechat.enabledAccounts`.
+
+Configuration reference:
+
+- English: [Wechat config](https://yankeguo.github.io/weavbot/en/configuration/#channelswechat)
+- 中文: [微信配置](https://yankeguo.github.io/weavbot/zh/configuration/#channelswechat)
 
 ## Credits
 

@@ -193,8 +193,8 @@ OpenAI 兼容模式说明：
 
 说明：
 
-- `onboard` 对 Wechat 仅做占位启用，不执行二维码登录。
-- 请执行 `weavbot wechat login` 扫码并保存账号凭据。
+- `weavbot onboard` 对 Wechat 仅做占位启用（`channels.wechat.enabled=true`），不执行二维码登录。
+- 完成 onboarding 后，请执行 `weavbot wechat login` 扫码并保存账号凭据。
 - 多账号共享同一 workspace，但会话键按账号 + 对端隔离。
 
 ## channels.email

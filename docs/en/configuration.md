@@ -193,8 +193,8 @@ OpenAI-compatible notes:
 
 Notes:
 
-- `onboard` only enables Wechat as a placeholder; QR login is not executed in onboarding.
-- Run `weavbot wechat login` to scan QR code and persist account credentials.
+- `weavbot onboard` only enables Wechat as a placeholder (`channels.wechat.enabled=true`); QR login is not executed in onboarding.
+- Run `weavbot wechat login` to scan QR code and persist account credentials after onboarding.
 - Multi-account runs in one workspace; session keys are scoped by account and peer.
 
 ## channels.email
