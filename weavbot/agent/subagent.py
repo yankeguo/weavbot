@@ -10,6 +10,7 @@ from loguru import logger
 from weavbot.agent.messages import ChatMessage
 from weavbot.agent.tools.base import ToolResult
 from weavbot.agent.tools.edit_file import EditFileTool
+from weavbot.agent.tools.fetch import FetchTool
 from weavbot.agent.tools.glob_file import GlobFileTool
 from weavbot.agent.tools.grep_file import GrepFileTool
 from weavbot.agent.tools.list_dir import ListDirTool
@@ -17,7 +18,6 @@ from weavbot.agent.tools.load_media import LoadMediaTool
 from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.registry import ToolRegistry
 from weavbot.agent.tools.shell import ShellTool
-from weavbot.agent.tools.web_fetch import WebFetchTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
@@ -126,7 +126,7 @@ class SubagentManager:
                     path_append=self.exec_config.path_append,
                 )
             )
-            tools.register(WebFetchTool(proxy=self.web_proxy))
+            tools.register(FetchTool(proxy=self.web_proxy))
 
             system_prompt = self._build_subagent_prompt()
             messages: list[ChatMessage] = [
@@ -250,8 +250,8 @@ Stay focused on the assigned task. Your final response will be reported back to 
 {self.workspace}
 
 ## Available Tools
-read_file, write_file, edit_file, list_dir, glob_file, grep_file, shell, load_media, web_fetch.
-You do NOT have access to message, spawn, or cron.
+read_file, write_file, edit_file, list_dir, glob_file, grep_file, shell, load_media, fetch.
+You do NOT have access to message, spawn, add_cron, list_cron, or remove_cron.
 
 ## Guidelines
 - Before modifying a file, read it first. Do not assume files or directories exist.

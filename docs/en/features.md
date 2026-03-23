@@ -67,7 +67,7 @@ Channels connect the agent to external chat platforms. The flow: **channel** →
 Tools are capabilities the agent invokes via function calls. Each tool implements `name`, `description`, `parameters` (JSON Schema), and `execute()`.
 
 - **ToolRegistry** — registers tools, executes calls, exports OpenAI-format schemas
-- **Built-in tools** — `read_file`, `write_file`, `edit_file`, `list_dir`, `glob_file`, `grep_file`, `shell`, `load_media`, `web_fetch`, `message`, `spawn`, `cron` (plus MCP tools)
+- **Built-in tools** — `read_file`, `write_file`, `edit_file`, `list_dir`, `glob_file`, `grep_file`, `shell`, `load_media`, `fetch`, `message`, `spawn`, `add_cron`, `list_cron`, `remove_cron` (plus MCP tools)
 - **Config** — `tools.exec.timeout`, `tools.exec.pathAppend`, `tools.web.proxy`, `tools.restrictToWorkspace`
 - **Scoping** — main agent has the full set; subagents use a restricted subset
 
@@ -76,7 +76,7 @@ Tools are capabilities the agent invokes via function calls. Each tool implement
 The main agent can spawn background subagents to run long-running tasks via the `spawn` tool.
 
 - **Execution** — in-process asyncio tasks, not separate OS processes (not visible via `ps` or `top`)
-- **Subagent tools** — file tools (read/write/edit/list_dir/glob/grep), `shell`, `load_media`, `web_fetch`; **excludes** `message`, `spawn`, `cron`
+- **Subagent tools** — file tools (read/write/edit/list_dir/glob/grep), `shell`, `load_media`, `fetch`; **excludes** `message`, `spawn`, `add_cron`, `list_cron`, `remove_cron`
 - **Result delivery** — on completion, the subagent posts a result summary to the main agent's session via the message bus
 - **Cancellation** — `/new` and similar commands cancel all subagents for that session
 
@@ -91,10 +91,10 @@ Config: `gateway.heartbeat.enabled`, `gateway.heartbeat.intervalS`.
 
 ## Cron
 
-Scheduled agent runs. Jobs are stored in `workspace/cron/jobs.json`.
+Scheduled agent runs. Jobs are stored in `WB_DATA_PATH/cron.json` (default `~/.weavbot/cron.json`).
 
 - **Schedule types** — `at` (one-time), `every` (interval), `cron` (cron expression, with timezone)
-- **Cron tool** — agent adds/removes jobs with `add`, `list`, `remove`
+- **Cron tools** — agent manages jobs with `add_cron`, `list_cron`, `remove_cron`
 - **Execution** — `CronService` triggers the agent when jobs are due
 
 ## MCP

@@ -1,11 +1,12 @@
 """Configuration schema using Pydantic."""
 
-from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from pydantic_settings import BaseSettings
+
+from weavbot.utils.helpers import ensure_workspace_path
 
 
 class Base(BaseModel):
@@ -241,7 +242,7 @@ class ChannelsConfig(Base):
 class AgentDefaults(Base):
     """Default agent configuration."""
 
-    workspace: str = "~/.weavbot/workspace"
+    workspace: str = "workspace"
     model: str = "anthropic/claude-opus-4-5"
     provider: str = ""  # Provider name — must match a key in the providers dict
     max_tokens: int = 8192  # Max generated tokens (output)
@@ -328,9 +329,9 @@ class Config(BaseSettings):
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
 
     @property
-    def workspace_path(self) -> Path:
+    def workspace_path(self):
         """Get expanded workspace path."""
-        return Path(self.agents.defaults.workspace).expanduser()
+        return ensure_workspace_path(self.agents.defaults.workspace)
 
     def get_provider(self) -> ProviderConfig | None:
         """Get the configured provider by agents.defaults.provider key."""

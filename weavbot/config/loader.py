@@ -8,14 +8,14 @@ from weavbot.config.schema import Config
 
 def get_config_path() -> Path:
     """Get the default configuration file path."""
-    return Path.home() / ".weavbot" / "config.json"
+    return get_data_dir() / "config.json"
 
 
 def get_data_dir() -> Path:
     """Get the weavbot data directory."""
-    from weavbot.utils.helpers import get_data_path
+    from weavbot.utils.helpers import ensure_data_path
 
-    return get_data_path()
+    return ensure_data_path()
 
 
 def load_config(config_path: Path | None = None) -> Config:

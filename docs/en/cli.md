@@ -25,8 +25,8 @@ weavbot onboard
 
 ### What it initializes
 
-- Creates `~/.weavbot/config.json`
-- Creates `~/.weavbot/workspace/`
+- Creates `WB_DATA_PATH/config.json` (default `~/.weavbot/config.json`)
+- Creates `WB_DATA_PATH/workspace/` (default `~/.weavbot/workspace/`)
 - Runs an interactive setup wizard for provider/model/channel
 - Offers optional ripgrep install and auto-start setup
 

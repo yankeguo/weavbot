@@ -14,7 +14,7 @@ nav_order: 2
 weavbot onboard
 ```
 
-This creates `~/.weavbot/config.json` and `~/.weavbot/workspace/`, then launches an **interactive setup wizard** that walks you through:
+This creates `WB_DATA_PATH/config.json` and `WB_DATA_PATH/workspace/` (default `WB_DATA_PATH=~/.weavbot`), then launches an **interactive setup wizard** that walks you through:
 
 1. **Provider selection** — fetches known providers and models from [models.dev](https://models.dev), lets you pick a provider, model, and enter your API key
 2. **Channel configuration** — configure chat channels (Telegram, Discord, Feishu, DingTalk, Slack, QQ, Wecom, Email, Mochat) by entering credentials
@@ -39,7 +39,7 @@ Keys are dot-separated camelCase paths matching the JSON config structure. Value
 
 ## 2. Configure
 
-You can also edit `~/.weavbot/config.json` directly to set your API key and model.
+You can also edit `WB_DATA_PATH/config.json` directly (default `~/.weavbot/config.json`) to set your API key and model.
 
 Providers are a flat dictionary — the key is a free-form name you choose, and each entry specifies a `mode` (`"openai"` or `"anthropic"`) plus credentials:
 

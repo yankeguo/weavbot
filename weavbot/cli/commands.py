@@ -286,7 +286,7 @@ def onboard(
     """Initialize weavbot configuration and workspace."""
     from weavbot.config.loader import get_config_path, load_config, save_config
     from weavbot.config.schema import Config
-    from weavbot.utils.helpers import get_workspace_path
+    from weavbot.utils.helpers import ensure_workspace_path
 
     config_path = get_config_path()
 
@@ -318,7 +318,7 @@ def onboard(
     save_config(config)
 
     # Create workspace
-    workspace = get_workspace_path()
+    workspace = ensure_workspace_path()
 
     if not workspace.exists():
         workspace.mkdir(parents=True, exist_ok=True)
@@ -392,6 +392,7 @@ def gateway(
     from weavbot.cron.types import CronJob
     from weavbot.heartbeat.service import HeartbeatService
     from weavbot.session.manager import SessionManager
+    from weavbot.utils.path_migration import prepare_runtime_paths
 
     if verbose:
         import logging
@@ -401,14 +402,13 @@ def gateway(
     console.print(f"{__logo__} {_t('gateway_starting')}")
 
     config = load_config()
-    sync_workspace_templates(config.workspace_path)
+    runtime_paths = prepare_runtime_paths(config.workspace_path)
     bus = MessageBus()
     provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
 
     # Create cron service first (callback set after agent creation)
-    cron_store_path = config.workspace_path / "cron" / "jobs.json"
-    cron = CronService(cron_store_path)
+    cron = CronService(runtime_paths.cron_store_path)
 
     # Create agent with cron service
     agent = AgentLoop(
@@ -433,7 +433,7 @@ def gateway(
     # Set cron callback (needs agent)
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
-        from weavbot.agent.tools.cron import CronTool
+        from weavbot.agent.tools.add_cron import AddCronTool
         from weavbot.agent.tools.message import MessageTool
 
         reminder_note = (
@@ -443,9 +443,9 @@ def gateway(
         )
 
         # Prevent the agent from scheduling new cron jobs during execution
-        cron_tool = agent.tools.get("cron")
+        cron_tool = agent.tools.get("add_cron")
         cron_token = None
-        if isinstance(cron_tool, CronTool):
+        if isinstance(cron_tool, AddCronTool):
             cron_token = cron_tool.set_cron_context(True)
         try:
             response = await agent.process_direct(
@@ -455,7 +455,7 @@ def gateway(
                 chat_id=job.payload.to or "direct",
             )
         finally:
-            if isinstance(cron_tool, CronTool) and cron_token is not None:
+            if isinstance(cron_tool, AddCronTool) and cron_token is not None:
                 cron_tool.reset_cron_context(cron_token)
 
         message_tool = agent.tools.get("message")
@@ -616,16 +616,16 @@ def agent(
     from weavbot.bus.queue import MessageBus
     from weavbot.config.loader import load_config
     from weavbot.cron.service import CronService
+    from weavbot.utils.path_migration import prepare_runtime_paths
 
     config = load_config()
-    sync_workspace_templates(config.workspace_path)
+    runtime_paths = prepare_runtime_paths(config.workspace_path)
 
     bus = MessageBus()
     provider = _make_provider(config)
 
     # Create cron service for tool usage (no callback needed for CLI unless running)
-    cron_store_path = config.workspace_path / "cron" / "jobs.json"
-    cron = CronService(cron_store_path)
+    cron = CronService(runtime_paths.cron_store_path)
 
     if logs:
         logger.enable("weavbot")

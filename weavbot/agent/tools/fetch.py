@@ -1,4 +1,4 @@
-"""Web fetch tool: fetch URL content and extract readable text/markdown."""
+"""Fetch tool: fetch URL content and extract readable text/markdown."""
 
 import json
 from typing import Any
@@ -26,21 +26,21 @@ def _html_to_output(html: str, fmt: str) -> str:
 def _validate_url(url: str) -> tuple[bool, str]:
     """Validate URL: must be http(s) with valid domain."""
     try:
-        p = urlparse(url)
-        if p.scheme not in ("http", "https"):
-            return False, f"Only http/https allowed, got '{p.scheme or 'none'}'"
-        if not p.netloc:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False, f"Only http/https allowed, got '{parsed.scheme or 'none'}'"
+        if not parsed.netloc:
             return False, "Missing domain"
         return True, ""
-    except Exception as e:
-        return False, str(e)
+    except Exception as exc:
+        return False, str(exc)
 
 
-class WebFetchTool(Tool):
+class FetchTool(Tool):
     """Fetch and extract content from a URL using Readability."""
 
-    name = "web_fetch"
-    description = "Fetch URL and extract readable content (HTML → markdown/text)."
+    name = "fetch"
+    description = "Fetch URL and extract readable content (HTML -> markdown/text)."
     parameters = {
         "type": "object",
         "properties": {
@@ -83,28 +83,30 @@ class WebFetchTool(Tool):
             )
 
         try:
-            logger.debug("WebFetch: {}", "proxy enabled" if self.proxy else "direct connection")
+            logger.debug("Fetch: {}", "proxy enabled" if self.proxy else "direct connection")
             async with httpx.AsyncClient(
                 follow_redirects=True,
                 max_redirects=MAX_REDIRECTS,
                 timeout=30.0,
                 proxy=self.proxy,
             ) as client:
-                r = await client.get(url, headers={"User-Agent": USER_AGENT})
-                r.raise_for_status()
+                response = await client.get(url, headers={"User-Agent": USER_AGENT})
+                response.raise_for_status()
 
-            ctype = r.headers.get("content-type", "")
+            ctype = response.headers.get("content-type", "")
 
             if "application/json" in ctype:
-                text = json.dumps(r.json(), indent=2, ensure_ascii=False)
+                text = json.dumps(response.json(), indent=2, ensure_ascii=False)
                 extractor = "json"
-            elif "text/html" in ctype or r.text[:256].lower().startswith(("<!doctype", "<html")):
-                doc = Document(r.text)
+            elif "text/html" in ctype or response.text[:256].lower().startswith(
+                ("<!doctype", "<html")
+            ):
+                doc = Document(response.text)
                 content = _html_to_output(doc.summary(), fmt)
                 text = f"# {doc.title()}\n\n{content}" if doc.title() else content
                 extractor = "readability"
             else:
-                text = r.text
+                text = response.text
                 extractor = "raw"
 
             truncated = len(text) > effective_max
@@ -114,8 +116,8 @@ class WebFetchTool(Tool):
             return json.dumps(
                 {
                     "url": url,
-                    "finalUrl": str(r.url),
-                    "status": r.status_code,
+                    "finalUrl": str(response.url),
+                    "status": response.status_code,
                     "extractor": extractor,
                     "truncated": truncated,
                     "length": len(text),
@@ -123,9 +125,9 @@ class WebFetchTool(Tool):
                 },
                 ensure_ascii=False,
             )
-        except httpx.ProxyError as e:
-            logger.error("WebFetch proxy error for {}: {}", url, e)
-            return json.dumps({"error": f"Proxy error: {e}", "url": url}, ensure_ascii=False)
-        except Exception as e:
-            logger.error("WebFetch error for {}: {}", url, e)
-            return json.dumps({"error": str(e), "url": url}, ensure_ascii=False)
+        except httpx.ProxyError as exc:
+            logger.error("Fetch proxy error for {}: {}", url, exc)
+            return json.dumps({"error": f"Proxy error: {exc}", "url": url}, ensure_ascii=False)
+        except Exception as exc:
+            logger.error("Fetch error for {}: {}", url, exc)
+            return json.dumps({"error": str(exc), "url": url}, ensure_ascii=False)
