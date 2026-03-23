@@ -5,7 +5,6 @@ from __future__ import annotations
 import copy
 import io
 import json as _json
-import logging
 import os
 import platform
 import shutil
@@ -23,16 +22,16 @@ from wcwidth import wcwidth
 
 try:
     from InquirerPy import inquirer
+    from InquirerPy.utils import get_style
 except ImportError:  # pragma: no cover - runtime fallback when optional dependency missing
     inquirer = None
+    get_style = None  # type: ignore[assignment]
 from rich.console import Console
-from rich.table import Table
 
 from weavbot.config.schema import Config
 from weavbot.i18n import t
 
 MODELS_DEV_URL = "https://models.dev/api.json"
-_LOGGER = logging.getLogger(__name__)
 
 
 def _t(key: str, *args: Any) -> str:
@@ -153,41 +152,52 @@ def _channel_display(ch: dict[str, Any], key_w: int, name_w: int, fields_w: int)
     )
 
 
-def _prompt_number(prompt_text: str, max_val: int) -> int | None:
-    """Prompt for a 1-based number. Returns None if user wants to cancel."""
-    while True:
-        raw = typer.prompt(prompt_text, default="")
-        if not raw:
-            return None
-        try:
-            n = int(raw)
-        except ValueError:
-            typer.echo(_t("enter_number", max_val))
-            continue
-        if 1 <= n <= max_val:
-            return n
-        typer.echo(_t("enter_number", max_val))
-
-
-_PROMPT_ERROR = object()
+_PROMPT_CTRL_C = object()
 _FUZZY_QMARK = ">"
 _FUZZY_PROMPT = ">"
 _FUZZY_POINTER = "●"
 _FUZZY_MARKER = "●"
+_FUZZY_STYLE = (
+    get_style(
+        {
+            "question": "bold ansibrightcyan",
+            "instruction": "bold ansibrightyellow",
+            "long_instruction": "bold ansibrightyellow",
+            "fuzzy_prompt": "bold ansibrightgreen",
+            "fuzzy_info": "ansiwhite",
+            "pointer": "bold ansibrightgreen",
+            "marker": "bold ansibrightgreen",
+            "questionmark": "bold ansibrightcyan",
+            "answermark": "bold ansibrightcyan",
+        },
+        style_override=False,
+    )
+    if get_style is not None
+    else None
+)
 
 
-def _inquirer_enabled() -> bool:
-    return bool(inquirer is not None and sys.stdin.isatty() and sys.stdout.isatty())
-
-
-def _ask_fuzzy(message: str, choices: list[dict[str, Any]]) -> Any | None:
+def _ensure_fuzzy_mode() -> None:
     if inquirer is None:
-        return None
+        raise RuntimeError("InquirerPy is required for interactive setup selection.")
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        raise RuntimeError("Interactive setup selection requires a TTY terminal.")
+
+
+def _ask_fuzzy(
+    message: str,
+    choices: list[dict[str, Any]],
+    hint_text: str | None = None,
+) -> Any | None:
+    _ensure_fuzzy_mode()
     try:
         return inquirer.fuzzy(
             message=message,
             choices=choices,
-            instruction=_t("arrow_filter_instruction"),
+            instruction=hint_text or "",
+            long_instruction="",
+            transformer=lambda _result: "",
+            style=_FUZZY_STYLE,
             match_exact=True,
             qmark=_FUZZY_QMARK,
             amark=_FUZZY_QMARK,
@@ -196,71 +206,21 @@ def _ask_fuzzy(message: str, choices: list[dict[str, Any]]) -> Any | None:
             marker=_FUZZY_MARKER,
         ).execute()
     except (KeyboardInterrupt, EOFError):
-        return None
-    except Exception:  # pragma: no cover - defensive path for terminal UI internals
-        _LOGGER.debug("Fuzzy prompt failed and will fallback", exc_info=True)
-        return _PROMPT_ERROR
+        return _PROMPT_CTRL_C
 
 
-def _select_provider_legacy(
-    providers: list[dict[str, Any]],
-    console: Console,
-) -> dict[str, Any] | None:
-    """Legacy provider picker that filters after Enter."""
-    filtered = providers
-
-    while True:
-        table = Table(title=_t("available_providers"), show_lines=False)
-        table.add_column("#", style="dim", width=4, justify="right")
-        table.add_column(_t("table_id"), style="cyan")
-        table.add_column(_t("table_name"))
-        table.add_column(_t("table_mode"), style="green")
-        table.add_column(_t("table_models"), justify="right")
-
-        for idx, p in enumerate(filtered, 1):
-            mode = _NPM_TO_MODE.get(p["npm"], "?")
-            table.add_row(
-                str(idx),
-                p["id"],
-                p["name"],
-                mode,
-                str(len(p["models"])),
-            )
-
-        console.print()
-        console.print(table)
-        console.print(f"[dim]{_t('provider_hint')}[/dim]")
-
-        raw = typer.prompt(_t("provider"), default="")
-        if not raw:
-            return None
-
-        # Try number selection
-        try:
-            n = int(raw)
-            if 1 <= n <= len(filtered):
-                return filtered[n - 1]
-        except ValueError:
-            pass
-
-        # Text search — filter and loop
-        query = raw.lower()
-        filtered = [p for p in providers if query in p["name"].lower() or query in p["id"].lower()]
-        if not filtered:
-            console.print(f"[yellow]{_t('no_match', raw)}[/yellow]")
-            filtered = providers
-        elif len(filtered) == 1:
-            return filtered[0]
+def _choice_label_for_value(choices: list[dict[str, Any]], picked: Any) -> str:
+    for choice in choices:
+        value = choice.get("value")
+        if value is picked or value == picked:
+            return str(choice.get("name", ""))
+    return str(picked)
 
 
-def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[str, Any] | None:
+def _select_provider(
+    providers: list[dict[str, Any]], console: Console
+) -> dict[str, Any] | None | object:
     """Display provider list, support search and selection. Returns chosen provider or None."""
-    if not _inquirer_enabled():
-        return _select_provider_legacy(providers, console)
-
-    console.print()
-    console.print(f"[dim]{_t('provider_hint_realtime')}[/dim]")
-
     id_w = min(
         28,
         max(_display_width("ID"), max(_display_width(str(p.get("id", ""))) for p in providers)),
@@ -278,14 +238,6 @@ def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[
         max(_display_width(str(len(p.get("models", {})))) for p in providers),
     )
 
-    header = (
-        f"{_pad_to_width('ID', id_w)}  "
-        f"{_pad_to_width('NAME', name_w)}  "
-        f"{_pad_to_width('MODE', mode_w)}  "
-        f"{' ' * max(models_w - _display_width('MODELS'), 0)}MODELS"
-    )
-    console.print(f"[dim]{header}[/dim]")
-
     choices: list[dict[str, Any]] = []
     for p in providers:
         mode = _NPM_TO_MODE.get(p["npm"], "?")
@@ -297,111 +249,72 @@ def _select_provider(providers: list[dict[str, Any]], console: Console) -> dict[
         )
         choices.append({"name": display, "value": p})
 
-    picked = _ask_fuzzy(_t("provider"), choices)
-    if picked is _PROMPT_ERROR:
-        return _select_provider_legacy(providers, console)
+    picked = _ask_fuzzy(_t("provider"), choices, _t("provider_hint_realtime"))
+    if picked is _PROMPT_CTRL_C:
+        return _PROMPT_CTRL_C
     if not picked:
         return None
+    console.print(_choice_label_for_value(choices, picked))
+    console.print()
     return picked
 
 
-def _select_model(provider: dict[str, Any], console: Console) -> tuple[str, dict[str, Any]] | None:
+def _select_model(
+    provider: dict[str, Any],
+    console: Console,
+) -> tuple[str, dict[str, Any]] | None | object:
     """Display model list for a provider. Returns (model_id, model_data) or None."""
     models = provider["models"]
     entries = list(models.items())
     entries.sort(key=lambda e: e[1].get("name", e[0]).lower())
+    id_w = min(
+        36,
+        max(
+            _display_width(_t("table_id")),
+            max(_display_width(str(mdata.get("id", mid))) for mid, mdata in entries),
+        ),
+    )
+    name_w = min(
+        28,
+        max(
+            _display_width(_t("table_name")),
+            max(_display_width(str(mdata.get("name", mid))) for mid, mdata in entries),
+        ),
+    )
+    context_values = [
+        _format_limit((mdata.get("limit") or {}).get("context")) for _mid, mdata in entries
+    ]
+    output_values = [
+        _format_limit((mdata.get("limit") or {}).get("output")) for _mid, mdata in entries
+    ]
+    context_w = max(_display_width(_t("context")), max(_display_width(v) for v in context_values))
+    output_w = max(_display_width(_t("max_output")), max(_display_width(v) for v in output_values))
+    reasoning_w = max(_display_width(_t("reasoning")), _display_width("✓"))
 
-    if _inquirer_enabled():
-        console.print()
-        console.print(f"[dim]{_t('model_hint_realtime')}[/dim]")
-        id_w = min(
-            36,
-            max(
-                _display_width(_t("table_id")),
-                max(_display_width(str(mdata.get("id", mid))) for mid, mdata in entries),
-            ),
-        )
-        name_w = min(
-            28,
-            max(
-                _display_width(_t("table_name")),
-                max(_display_width(str(mdata.get("name", mid))) for mid, mdata in entries),
-            ),
-        )
-        context_values = [
-            _format_limit((mdata.get("limit") or {}).get("context")) for _mid, mdata in entries
-        ]
-        output_values = [
-            _format_limit((mdata.get("limit") or {}).get("output")) for _mid, mdata in entries
-        ]
-        context_w = max(
-            _display_width(_t("context")), max(_display_width(v) for v in context_values)
-        )
-        output_w = max(
-            _display_width(_t("max_output")), max(_display_width(v) for v in output_values)
-        )
-        reasoning_w = max(_display_width(_t("reasoning")), _display_width("✓"))
-
-        header = (
-            f"{_pad_to_width(_t('table_id'), id_w)}  "
-            f"{_pad_to_width(_t('table_name'), name_w)}  "
-            f"{' ' * max(context_w - _display_width(_t('context')), 0)}{_t('context')}  "
-            f"{' ' * max(output_w - _display_width(_t('max_output')), 0)}{_t('max_output')}  "
-            f"{_pad_to_width(_t('reasoning'), reasoning_w)}"
-        )
-        console.print(f"[dim]{header}[/dim]")
-
-        choices: list[dict[str, Any]] = []
-        for mid, mdata in entries:
-            model_id = mdata.get("id", mid)
-            limit = mdata.get("limit") or {}
-            context_val = _format_limit(limit.get("context"))
-            output_val = _format_limit(limit.get("output"))
-            reasoning_val = "✓" if mdata.get("reasoning") else ""
-            display = (
-                f"{_fit_column(str(model_id), id_w)}  "
-                f"{_fit_column(str(mdata.get('name', mid)), name_w)}  "
-                f"{' ' * max(context_w - _display_width(context_val), 0)}{context_val}  "
-                f"{' ' * max(output_w - _display_width(output_val), 0)}{output_val}  "
-                f"{_fit_column(reasoning_val, reasoning_w)}"
-            )
-            choices.append({"name": display, "value": (model_id, mdata)})
-
-        picked = _ask_fuzzy(_t("model"), choices)
-        if picked is not _PROMPT_ERROR:
-            if not picked:
-                return None
-            return picked
-
-    table = Table(title=_t("models_title", provider["name"]), show_lines=False)
-    table.add_column("#", style="dim", width=4, justify="right")
-    table.add_column(_t("table_id"), style="cyan")
-    table.add_column(_t("table_name"))
-    table.add_column(_t("context"), justify="right")
-    table.add_column(_t("max_output"), justify="right")
-    table.add_column(_t("reasoning"), justify="center")
-
-    for idx, (mid, mdata) in enumerate(entries, 1):
+    choices: list[dict[str, Any]] = []
+    for mid, mdata in entries:
+        model_id = mdata.get("id", mid)
         limit = mdata.get("limit") or {}
-        table.add_row(
-            str(idx),
-            mdata.get("id", mid),
-            mdata.get("name", mid),
-            _format_limit(limit.get("context")),
-            _format_limit(limit.get("output")),
-            "✓" if mdata.get("reasoning") else "",
+        context_val = _format_limit(limit.get("context"))
+        output_val = _format_limit(limit.get("output"))
+        reasoning_val = "✓" if mdata.get("reasoning") else ""
+        display = (
+            f"{_fit_column(str(model_id), id_w)}  "
+            f"{_fit_column(str(mdata.get('name', mid)), name_w)}  "
+            f"{' ' * max(context_w - _display_width(context_val), 0)}{context_val}  "
+            f"{' ' * max(output_w - _display_width(output_val), 0)}{output_val}  "
+            f"{_fit_column(reasoning_val, reasoning_w)}"
         )
+        choices.append({"name": display, "value": (model_id, mdata)})
 
-    console.print()
-    console.print(table)
-
-    choice = _prompt_number(_t("model_range", len(entries)), len(entries))
-    if choice is None:
+    picked = _ask_fuzzy(_t("model"), choices, _t("model_hint_realtime"))
+    if picked is _PROMPT_CTRL_C:
+        return _PROMPT_CTRL_C
+    if not picked:
         return None
-
-    mid, mdata = entries[choice - 1]
-    model_id = mdata.get("id", mid)
-    return model_id, mdata
+    console.print(_choice_label_for_value(choices, picked))
+    console.print()
+    return picked
 
 
 _CHANNEL_DEFS: list[dict[str, Any]] = [
@@ -486,11 +399,7 @@ _CHANNEL_DEFS: list[dict[str, Any]] = [
 
 def _select_channel_realtime(console: Console) -> int | None | object:
     """Select one channel with realtime filtering via arrow navigation."""
-    console.print(f"[dim]{_t('channels_hint_realtime')}[/dim]")
     key_w, name_w, fields_w = _channel_layout()
-    header = f"{'KEY'.ljust(key_w)}  {'NAME'.ljust(name_w)}  {'FIELDS'.ljust(fields_w)}"
-    header = f"{_pad_to_width('KEY', key_w)}  {_pad_to_width('NAME', name_w)}  {_pad_to_width('FIELDS', fields_w)}"
-    console.print(f"[dim]{header}[/dim]")
     choices: list[dict[str, Any]] = []
     for idx, ch in enumerate(_CHANNEL_DEFS):
         choices.append(
@@ -500,25 +409,16 @@ def _select_channel_realtime(console: Console) -> int | None | object:
             }
         )
 
-    picked = _ask_fuzzy(_t("select_channel_realtime"), choices)
-    if picked is _PROMPT_ERROR:
-        return _PROMPT_ERROR
+    picked = _ask_fuzzy(_t("select_channel_realtime"), choices, _t("channels_hint_realtime"))
+    if picked is _PROMPT_CTRL_C:
+        return _PROMPT_CTRL_C
     if picked is None:
         return None
     if isinstance(picked, int):
+        console.print(_choice_label_for_value(choices, picked))
+        console.print()
         return picked
     return None
-
-
-def _render_channel_legacy_list(console: Console) -> None:
-    key_w, name_w, fields_w = _channel_layout()
-    header = (
-        f"{'#':>3}  {_pad_to_width('KEY', key_w)}  "
-        f"{_pad_to_width('NAME', name_w)}  {_pad_to_width('FIELDS', fields_w)}"
-    )
-    console.print(f"\n[dim]{header}[/dim]")
-    for idx, ch in enumerate(_CHANNEL_DEFS, 1):
-        console.print(f"[dim]{idx:>3}[/dim]  {_channel_display(ch, key_w, name_w, fields_w)}")
 
 
 def _configure_channels(data: dict, console: Console) -> dict:
@@ -528,26 +428,11 @@ def _configure_channels(data: dict, console: Console) -> dict:
     cancels, the dict is returned unchanged.
     """
     console.print()
-    if not typer.confirm(_t("configure_channels"), default=False):
-        return data
+    console.print(f"[dim]{_t('channels_auto_start_hint')}[/dim]")
 
-    selected_index: int | None = None
-    if _inquirer_enabled():
-        selected_index = _select_channel_realtime(console)
-        if selected_index is _PROMPT_ERROR:
-            _render_channel_legacy_list(console)
-            choice = _prompt_number(
-                _t("select_channel_range", len(_CHANNEL_DEFS)), len(_CHANNEL_DEFS)
-            )
-            if choice is None:
-                return data
-            selected_index = choice - 1
-    else:
-        _render_channel_legacy_list(console)
-        choice = _prompt_number(_t("select_channel_range", len(_CHANNEL_DEFS)), len(_CHANNEL_DEFS))
-        if choice is None:
-            return data
-        selected_index = choice - 1
+    selected_index = _select_channel_realtime(console)
+    if selected_index is _PROMPT_CTRL_C:
+        return data
 
     if selected_index is None:
         return data
@@ -562,7 +447,10 @@ def _configure_channels(data: dict, console: Console) -> dict:
     cancelled = False
     for field in ch_def["fields"]:
         label = _t(field["label_key"])
-        value: str = typer.prompt(f"  {label}", hide_input=field["secret"], default="")
+        try:
+            value: str = typer.prompt(f"  {label}", hide_input=field["secret"], default="")
+        except (KeyboardInterrupt, EOFError, typer.Abort):
+            return data
         if not value.strip():
             console.print(f"[dim]{_t('skipping_channel', ch_def['name'], label)}[/dim]")
             cancelled = True
@@ -897,60 +785,67 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
         if not providers:
             console.print(f"[red]{_t('no_compatible')}[/red]")
         else:
-            provider = _select_provider(providers, console)
-            if provider is not None:
+            while True:
+                provider = _select_provider(providers, console)
+                if provider is _PROMPT_CTRL_C or provider is None:
+                    break
+
                 result = _select_model(provider, console)
-                if result is not None:
-                    model_id, model_data = result
+                if result is _PROMPT_CTRL_C:
+                    console.print(f"[dim]{_t('model_ctrlc_back_to_provider')}[/dim]")
+                    continue
+                if result is None:
+                    break
+
+                model_id, model_data = result
+
+                console.print()
+                if provider.get("doc"):
+                    console.print(f"[dim]{_t('docs')}: {provider['doc']}[/dim]")
+                api_key: str = typer.prompt(_t("api_key"), hide_input=True)
+
+                if api_key.strip():
+                    api_key = api_key.strip()
+                    provider_id: str = provider["id"]
+                    mode = _NPM_TO_MODE[provider["npm"]]
+                    api_base: str | None = provider.get("api") or None
+                    if mode == "anthropic" and api_base:
+                        api_base = api_base.rstrip("/")
+                        if api_base.endswith("/v1"):
+                            api_base = api_base[:-3] or None
+                    limit = model_data.get("limit") or {}
+                    max_tokens: int = limit.get("output", 8192)
+                    max_context: int = limit.get("context", 131072)
 
                     console.print()
-                    if provider.get("doc"):
-                        console.print(f"[dim]{_t('docs')}: {provider['doc']}[/dim]")
-                    api_key: str = typer.prompt(_t("api_key"), hide_input=True)
+                    console.print(f"[bold]{_t('provider_summary')}:[/bold]")
+                    console.print(
+                        f"  {_t('provider_label')}:   [cyan]{provider_id}[/cyan] ({provider['name']})"
+                    )
+                    console.print(f"  {_t('mode')}:       [green]{mode}[/green]")
+                    if api_base:
+                        console.print(f"  {_t('api_base')}:   {api_base}")
+                    console.print(f"  {_t('model')}:      [cyan]{model_id}[/cyan]")
+                    console.print(f"  {_t('max_tokens')}: {max_tokens}")
+                    console.print(f"  {_t('max_context')}: {_format_limit(max_context)}")
+                    console.print(
+                        f"  {_t('api_key')}:    {api_key[:8]}{'*' * max(0, len(api_key) - 8)}"
+                    )
 
-                    if api_key.strip():
-                        api_key = api_key.strip()
-                        provider_id: str = provider["id"]
-                        mode = _NPM_TO_MODE[provider["npm"]]
-                        api_base: str | None = provider.get("api") or None
-                        if mode == "anthropic" and api_base:
-                            api_base = api_base.rstrip("/")
-                            if api_base.endswith("/v1"):
-                                api_base = api_base[:-3] or None
-                        limit = model_data.get("limit") or {}
-                        max_tokens: int = limit.get("output", 8192)
-                        max_context: int = limit.get("context", 131072)
-
-                        console.print()
-                        console.print(f"[bold]{_t('provider_summary')}:[/bold]")
-                        console.print(
-                            f"  {_t('provider_label')}:   [cyan]{provider_id}[/cyan] ({provider['name']})"
-                        )
-                        console.print(f"  {_t('mode')}:       [green]{mode}[/green]")
-                        if api_base:
-                            console.print(f"  {_t('api_base')}:   {api_base}")
-                        console.print(f"  {_t('model')}:      [cyan]{model_id}[/cyan]")
-                        console.print(f"  {_t('max_tokens')}: {max_tokens}")
-                        console.print(f"  {_t('max_context')}: {_format_limit(max_context)}")
-                        console.print(
-                            f"  {_t('api_key')}:    {api_key[:8]}{'*' * max(0, len(api_key) - 8)}"
-                        )
-
-                        if typer.confirm(f"\n{_t('apply_provider')}", default=True):
-                            data.setdefault("providers", {})[provider_id] = {
-                                "mode": mode,
-                                "apiKey": api_key,
-                                **({"apiBase": api_base} if api_base else {}),
-                            }
-                            defaults = data.setdefault("agents", {}).setdefault("defaults", {})
-                            defaults["provider"] = provider_id
-                            defaults["model"] = model_id
-                            defaults["maxTokens"] = max_tokens
-                            defaults["maxContext"] = max_context
-                            changed = True
-                            console.print(
-                                f"[green]✓[/green] {_t('provider_configured', provider_id)}"
-                            )
+                    if typer.confirm(f"\n{_t('apply_provider')}", default=True):
+                        data.setdefault("providers", {})[provider_id] = {
+                            "mode": mode,
+                            "apiKey": api_key,
+                            **({"apiBase": api_base} if api_base else {}),
+                        }
+                        defaults = data.setdefault("agents", {}).setdefault("defaults", {})
+                        defaults["provider"] = provider_id
+                        defaults["model"] = model_id
+                        defaults["maxTokens"] = max_tokens
+                        defaults["maxContext"] = max_context
+                        changed = True
+                        console.print(f"[green]✓[/green] {_t('provider_configured', provider_id)}")
+                break
 
     # --- Channel setup ---
     prev_channels = copy.deepcopy(data.get("channels", {}))
