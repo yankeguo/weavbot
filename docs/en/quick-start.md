@@ -23,6 +23,7 @@ This creates `~/.weavbot/config.json` and `~/.weavbot/workspace/`, then launches
 
 The wizard auto-detects your system language and displays prompts in Chinese when appropriate. Override with `WB_LANG=en` or `WB_LANG=zh`.
 CLI translations are now provided by the standalone `weavbot.i18n` package, with key namespaces such as `cli.setup.*` and `cli.commands.*` for future extension.
+Pickers support arrow-key navigation and type-to-filter. If realtime pickers are unavailable (for example, non-TTY terminals), onboarding automatically falls back to numbered selection mode.
 
 Alternatively, use `--set` to configure values inline (repeatable, Helm-style):
 

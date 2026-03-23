@@ -23,6 +23,7 @@ weavbot onboard
 
 向导会根据系统语言自动选择提示语言，必要时显示中文。可通过 `WB_LANG=en` 或 `WB_LANG=zh` 覆盖。
 CLI 翻译已拆分到独立的 `weavbot.i18n` 包，当前采用 `cli.setup.*` 与 `cli.commands.*` 这类 key 命名空间，便于后续扩展。
+选择器支持方向键移动和输入过滤。若实时选择器不可用（如非 TTY 终端），`onboard` 会自动回退到数字编号选择模式。
 
 也可使用 `--set` 在命令行内联配置（可重复，类似 Helm）：
 
