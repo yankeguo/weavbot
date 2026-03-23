@@ -25,6 +25,35 @@ To try the latest unreleased features:
 uv tool install git+https://github.com/yankeguo/weavbot.git
 ```
 
+## Onboard (Recommended First Run)
+
+Initialize local config/workspace and run the interactive setup wizard:
+
+```bash
+weavbot onboard
+```
+
+What `onboard` does:
+
+- Creates `~/.weavbot/config.json` and `~/.weavbot/workspace/`
+- Guides provider/model selection with realtime filtering
+- Configures one chat channel in the wizard (Telegram/Discord/Feishu/DingTalk/Slack/QQ/Wecom/Email/Mochat)
+- Offers optional `ripgrep` install and gateway auto-start setup
+
+For non-interactive or scripted setup, use repeatable `--set key=value`:
+
+```bash
+weavbot onboard \
+  --set providers.openrouter.apiKey=sk-or-v1-xxx \
+  --set providers.openrouter.apiBase=https://openrouter.ai/api/v1 \
+  --set agents.defaults.provider=openrouter \
+  --set agents.defaults.model=openai/gpt-4o-mini
+```
+
+Detailed CLI docs:
+- English: [CLI Reference](https://yankeguo.github.io/weavbot/en/cli/)
+- 中文: [命令参考](https://yankeguo.github.io/weavbot/zh/cli/)
+
 **Full documentation:** [https://yankeguo.github.io/weavbot/](https://yankeguo.github.io/weavbot/)
 
 ## Credits
