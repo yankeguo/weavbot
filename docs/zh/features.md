@@ -67,7 +67,7 @@ flowchart TB
 工具是代理通过 function call 调用的能力，每个工具实现 `name`、`description`、`parameters`（JSON Schema）、`execute()`。
 
 - **ToolRegistry** — 注册、执行、导出 OpenAI 格式 schema
-- **内置工具** — `read_file`、`write_file`、`edit_file`、`list_dir`、`glob_file`、`grep_file`、`shell`、`load_media`、`web_fetch`、`message`、`spawn`、`cron`（另含 MCP 扩展）
+- **内置工具** — `read_file`、`write_file`、`edit_file`、`list_dir`、`glob_file`、`grep_file`、`shell`、`load_media`、`fetch`、`message`、`spawn`、`cron`（另含 MCP 扩展）
 - **配置** — `tools.exec.timeout`、`tools.exec.pathAppend`、`tools.web.proxy`、`tools.restrictToWorkspace`
 - **作用域** — 主 Agent 拥有完整工具集；子代理使用受限子集
 
@@ -76,7 +76,7 @@ flowchart TB
 主 Agent 可通过 `spawn` 工具创建后台子代理，执行耗时任务。
 
 - **运行方式** — 同进程内 asyncio 任务，非独立 OS 进程（无法用 ps/top 查看）
-- **子代理工具** — 文件类（read/write/edit/list_dir/glob/grep）、`shell`、`load_media`、`web_fetch`；**不含** `message`、`spawn`、`cron`
+- **子代理工具** — 文件类（read/write/edit/list_dir/glob/grep）、`shell`、`load_media`、`fetch`；**不含** `message`、`spawn`、`cron`
 - **结果回传** — 完成后通过消息总线向主 Agent 所在会话发送结果摘要
 - **取消** — `/new` 等操作会取消该会话下所有子代理
 

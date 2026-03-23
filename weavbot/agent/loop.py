@@ -19,6 +19,7 @@ from weavbot.agent.messages import ChatMessage
 from weavbot.agent.subagent import SubagentManager
 from weavbot.agent.tools.cron import CronTool
 from weavbot.agent.tools.edit_file import EditFileTool
+from weavbot.agent.tools.fetch import FetchTool
 from weavbot.agent.tools.glob_file import GlobFileTool
 from weavbot.agent.tools.grep_file import GrepFileTool
 from weavbot.agent.tools.list_dir import ListDirTool
@@ -28,7 +29,6 @@ from weavbot.agent.tools.read_file import ReadFileTool
 from weavbot.agent.tools.registry import ToolRegistry
 from weavbot.agent.tools.shell import ShellTool
 from weavbot.agent.tools.spawn import SpawnTool
-from weavbot.agent.tools.web_fetch import WebFetchTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
@@ -146,7 +146,7 @@ class AgentLoop:
                 path_append=self.exec_config.path_append,
             )
         )
-        self.tools.register(WebFetchTool(proxy=self.web_proxy))
+        self.tools.register(FetchTool(proxy=self.web_proxy))
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
