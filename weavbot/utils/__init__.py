@@ -1,8 +1,8 @@
 """Utility functions for weavbot."""
 
 from weavbot.utils.helpers import (
-    ensure_dir,
     ensure_data_path,
+    ensure_dir,
     ensure_workspace_path,
     resolve_path,
 )
