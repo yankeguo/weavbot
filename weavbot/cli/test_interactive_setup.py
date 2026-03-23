@@ -366,3 +366,100 @@ def test_configure_channels_wechat_placeholder(monkeypatch):
     data: dict = {}
     updated = interactive_setup._configure_channels(data, _make_console())
     assert updated["channels"]["wechat"]["enabled"] is True
+
+
+def test_setup_systemd_prints_manual_commands_without_start(monkeypatch, tmp_path):
+    monkeypatch.setattr(interactive_setup.Path, "home", staticmethod(lambda: tmp_path))
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        interactive_setup.subprocess,
+        "run",
+        lambda cmd, check=True: calls.append(cmd),
+    )
+
+    out = io.StringIO()
+    console = Console(file=out, force_terminal=False, width=120)
+    interactive_setup._setup_systemd("/usr/local/bin/weavbot", console)
+
+    assert calls == [
+        ["systemctl", "--user", "daemon-reload"],
+        ["systemctl", "--user", "enable", "weavbot.service"],
+    ]
+    rendered = out.getvalue()
+    assert "systemctl --user daemon-reload" in rendered
+    assert "systemctl --user enable weavbot.service" in rendered
+    assert "systemctl --user start weavbot.service" in rendered
+
+
+def test_setup_launchd_prints_manual_command_without_load(monkeypatch, tmp_path):
+    monkeypatch.setattr(interactive_setup.Path, "home", staticmethod(lambda: tmp_path))
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        interactive_setup.subprocess,
+        "run",
+        lambda cmd, check=True: calls.append(cmd),
+    )
+
+    out = io.StringIO()
+    console = Console(file=out, force_terminal=False, width=120)
+    interactive_setup._setup_launchd("/usr/local/bin/weavbot", console)
+
+    assert calls == []
+    rendered = out.getvalue()
+    assert "launchctl load" in rendered
+    assert "com.weavbot.gateway.plist" in rendered
+
+
+def test_setup_traycli_prints_manual_command_without_launch(monkeypatch, tmp_path):
+    monkeypatch.setattr(interactive_setup.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData" / "Roaming"))
+
+    class _FakeResponse:
+        def __init__(self, status_code=200, json_data=None, content=b""):
+            self.status_code = status_code
+            self._json_data = json_data or {}
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._json_data
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url):
+            if url.endswith("/releases/latest"):
+                return _FakeResponse(json_data={"tag_name": "v0.1.3"})
+            return _FakeResponse(content=b"traycli-bin")
+
+    monkeypatch.setattr(interactive_setup.httpx, "Client", _FakeClient)
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        interactive_setup.subprocess,
+        "run",
+        lambda cmd, check=True: calls.append(cmd),
+    )
+    monkeypatch.setattr(
+        interactive_setup.subprocess,
+        "Popen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Popen should not be called")),
+    )
+
+    out = io.StringIO()
+    console = Console(file=out, force_terminal=False, width=120)
+    interactive_setup._setup_traycli("C:/weavbot/weavbot.exe", console)
+
+    assert len(calls) == 1
+    assert calls[0][0] == "powershell"
+    rendered = out.getvalue()
+    assert "traycli.exe" in rendered
