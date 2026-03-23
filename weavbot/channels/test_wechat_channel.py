@@ -106,3 +106,40 @@ def test_send_text_routes_to_selected_account(tmp_path: Path):
     assert len(api.sent) == 1
     assert api.sent[0]["to_user_id"] == "u1@im.wechat"
     assert api.sent[0]["context_token"] == "ctx-1"
+
+
+def test_send_falls_back_to_single_account_when_default_missing(tmp_path: Path):
+    class _FakeApi:
+        def __init__(self):
+            self.sent = []
+
+        async def send_message(self, msg):
+            self.sent.append(msg)
+            return {"ret": 0}
+
+        async def get_config(self, *_args, **_kwargs):
+            return {}
+
+    bus = MessageBus()
+    cfg = WechatConfig(enabled=True, token="", account_id="")
+    ch = WechatChannel(cfg, bus, tmp_path)
+    ch._accounts = {
+        "acc-x": ResolvedWechatAccount(
+            key="acc-x",
+            account_id="x@im.bot",
+            token="tok",
+            base_url="https://ilinkai.weixin.qq.com",
+            cdn_base_url="https://novac2c.cdn.weixin.qq.com/c2c",
+            route_tag=None,
+            allow_from=[],
+        )
+    }
+    api = _FakeApi()
+    ch._apis = {"acc-x": api}  # type: ignore[assignment]
+
+    # Simulate message-tool style send without account metadata.
+    msg = OutboundMessage(channel="wechat", chat_id="u2@im.wechat", content="hello", metadata={})
+    asyncio.run(ch.send(msg))
+
+    assert len(api.sent) == 1
+    assert api.sent[0]["to_user_id"] == "u2@im.wechat"

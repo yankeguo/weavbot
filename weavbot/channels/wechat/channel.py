@@ -108,15 +108,21 @@ class WechatChannel(BaseChannel):
     async def send(self, msg: OutboundMessage) -> None:
         metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
         wechat_meta = metadata.get("wechat", {}) if isinstance(metadata.get("wechat"), dict) else {}
-        account_key = (
+        requested_account_key = (
             str(wechat_meta.get("account_key", "")).strip()
             or str(metadata.get("account_key", "")).strip()
             or "default"
         )
+        account_key = self._resolve_outbound_account_key(requested_account_key, msg.chat_id)
         account = self._accounts.get(account_key)
         api = self._apis.get(account_key)
         if not account or not api:
-            logger.warning("Wechat outbound dropped, unknown account_key={}", account_key)
+            logger.warning(
+                "Wechat outbound dropped, unknown account_key={} requested={} chat_id={}",
+                account_key,
+                requested_account_key,
+                msg.chat_id,
+            )
             return
         if self._guard.is_paused(account_key):
             logger.warning("Wechat outbound skipped, account paused: {}", account_key)
@@ -160,6 +166,28 @@ class WechatChannel(BaseChannel):
                 )
         finally:
             await self._typing.cancel_typing(api, account_key, chat_id, context_token or None)
+
+    def _resolve_outbound_account_key(self, requested: str, chat_id: str) -> str:
+        """Resolve outbound account key with safe fallbacks.
+
+        Priority:
+        1) Explicit requested key if exists.
+        2) Most recent inbound context token mapping by chat_id.
+        3) Single-account fallback when only one account is active.
+        4) Keep requested key (will be logged by caller).
+        """
+        if requested in self._accounts:
+            return requested
+
+        if chat_id:
+            for key in self._accounts:
+                if f"{key}:{chat_id}" in self._context_tokens:
+                    return key
+
+        if len(self._accounts) == 1:
+            return next(iter(self._accounts.keys()))
+
+        return requested
 
     @staticmethod
     def _build_bot_message(

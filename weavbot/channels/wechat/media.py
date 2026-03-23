@@ -110,7 +110,8 @@ async def upload_media_file(
             "image_item": {
                 "media": {
                     "encrypt_query_param": download_param,
-                    "aes_key": base64.b64encode(key).decode("ascii"),
+                    # Keep npm behavior: base64(hex-string), not base64(raw-bytes).
+                    "aes_key": base64.b64encode(key_hex.encode("ascii")).decode("ascii"),
                     "encrypt_type": 1,
                 },
                 "mid_size": len(cipher),
@@ -122,7 +123,8 @@ async def upload_media_file(
             "video_item": {
                 "media": {
                     "encrypt_query_param": download_param,
-                    "aes_key": base64.b64encode(key).decode("ascii"),
+                    # Keep npm behavior: base64(hex-string), not base64(raw-bytes).
+                    "aes_key": base64.b64encode(key_hex.encode("ascii")).decode("ascii"),
                     "encrypt_type": 1,
                 },
                 "video_size": len(cipher),
