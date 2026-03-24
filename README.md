@@ -9,7 +9,7 @@
 
 A lightweight personal AI assistant framework.
 
-## Security Notice — March 24, 2026
+**Security Notice — March 24, 2026**
 
 🛡️ 本项目于分叉自主重构初期即移除 LiteLLM 依赖，不受此次上游供应链攻击影响。
 
