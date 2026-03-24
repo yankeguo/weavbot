@@ -7,12 +7,15 @@
 
 A lightweight personal AI assistant framework.
 
-[中文说明](./README.zh.md)
+## Highlights
 
-## Highlights / 亮点
+- Interactive onboarding: configure provider, model, and channel in one flow
+- WeChat Clawbot support: [WeChat channel configuration](https://yankeguo.github.io/weavbot/en/configuration/#channelswechat)
 
-- Interactive onboarding for provider/model/channel setup / 交互式初始化（provider/model/channel 一步配置）
-- Wechat Clawbot support / 支持微信 ClawBot（Wechat Clawbot）：[Wechat channel configuration](https://yankeguo.github.io/weavbot/en/configuration/#channelswechat) | [微信渠道配置](https://yankeguo.github.io/weavbot/zh/configuration/#channelswechat)
+## 亮点
+
+- 交互式向导：一步完成 provider、model、channel 配置
+- 微信 Clawbot 支持：[微信渠道配置](https://yankeguo.github.io/weavbot/zh/configuration/#channelswechat)
 
 ## Installation
 
@@ -40,11 +43,13 @@ Run onboarding:
 weavbot onboard
 ```
 
-Detailed CLI docs:
-- English: [CLI Reference](https://yankeguo.github.io/weavbot/en/cli/)
-- 中文: [命令参考](https://yankeguo.github.io/weavbot/zh/cli/)
+## Full documentation
 
-**Full documentation:** [https://yankeguo.github.io/weavbot/](https://yankeguo.github.io/weavbot/)
+- English: [https://yankeguo.github.io/weavbot/en/](https://yankeguo.github.io/weavbot/en/)
+
+## 完整文档
+
+- 中文: [https://yankeguo.github.io/weavbot/zh/](https://yankeguo.github.io/weavbot/zh/)
 
 ## Credits
 
