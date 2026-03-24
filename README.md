@@ -12,12 +12,12 @@ A lightweight personal AI assistant framework.
 ## Highlights
 
 - Interactive onboarding: configure provider, model, and channel in one flow
-- WeChat Clawbot support: [WeChat channel configuration](https://yankeguo.github.io/weavbot/en/configuration/#channelswechat)
+- WeChat ClawBot support: [WeChat channel configuration](https://yankeguo.github.io/weavbot/en/configuration/#channelswechat)
 
 ## 亮点
 
 - 交互式向导：一步完成 provider、model、channel 配置
-- 微信 Clawbot 支持：[微信渠道配置](https://yankeguo.github.io/weavbot/zh/configuration/#channelswechat)
+- 微信 ClawBot 支持：[微信渠道配置](https://yankeguo.github.io/weavbot/zh/configuration/#channelswechat)
 
 ## Installation
 
