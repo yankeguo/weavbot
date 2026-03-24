@@ -5,6 +5,8 @@
 [![Docs (English)](https://img.shields.io/badge/docs-English-blue)](https://yankeguo.github.io/weavbot/en/)
 [![Docs (中文)](https://img.shields.io/badge/文档-中文-blue)](https://yankeguo.github.io/weavbot/zh/)
 
+![Logo](https://imagedelivery.net/z27-nfL54f0eHFxCGFIatg/a4d02b7b-9a65-4e12-a600-997669806400/standard)
+
 A lightweight personal AI assistant framework.
 
 ## Highlights
