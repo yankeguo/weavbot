@@ -1,3 +1,5 @@
+import pytest
+
 from weavbot.cli.commands import (
     _assemble_heartbeat_response,
     _build_background_notify_contract,
@@ -7,6 +9,7 @@ from weavbot.cli.commands import (
     _looks_like_agent_error,
     _parse_heartbeat_target,
     _pick_heartbeat_target_from_sessions,
+    _suppress_background_progress,
 )
 
 
@@ -119,3 +122,9 @@ def test_looks_like_agent_error_detects_known_failure_texts() -> None:
     assert _looks_like_agent_error("Sorry, I encountered an error calling the AI model.")
     assert _looks_like_agent_error("I reached the maximum number of tool call iterations (40).")
     assert not _looks_like_agent_error("All checks are done. No user notification is required.")
+
+
+@pytest.mark.asyncio
+async def test_suppress_background_progress_is_noop() -> None:
+    assert await _suppress_background_progress("running tool call...", tool_hint=True) is None
+    assert await _suppress_background_progress("step 1", tool_hint=False) is None
