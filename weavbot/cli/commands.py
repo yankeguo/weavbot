@@ -1,6 +1,7 @@
 """CLI commands for weavbot."""
 
 import asyncio
+import json
 import os
 import select
 import signal
@@ -165,6 +166,76 @@ def _assemble_heartbeat_response(progress_items: list[str], final_content: str) 
     if not merged:
         return ""
     return "\n\n".join(merged)
+
+
+def _build_background_notify_contract(
+    *,
+    source: str,
+    channel: str,
+    chat_id: str,
+    target_metadata: dict[str, object] | None = None,
+) -> str:
+    """Build explicit notification contract for background-triggered turns."""
+    metadata_text = "{}"
+    if target_metadata:
+        try:
+            metadata_text = json.dumps(target_metadata, ensure_ascii=False, sort_keys=True)
+        except TypeError:
+            metadata_text = "{}"
+    return (
+        f"[{source} Notification Contract]\n"
+        "- This is a background task run.\n"
+        "- Do NOT send user-facing plain text unless you intentionally notify the user.\n"
+        "- Only notify when necessary by calling the `message` tool.\n"
+        "- For routine/no-op outcomes, finish silently without calling `message`.\n"
+        "- If an important result requires user action, call `message` once with concise content.\n"
+        "- For `message` target routing, prefer current context defaults; if needed, use:\n"
+        f"  - channel: {channel}\n"
+        f"  - chat_id: {chat_id}\n"
+        f"  - metadata: {metadata_text}\n"
+    )
+
+
+def _build_heartbeat_execute_input(
+    tasks: str, *, channel: str, chat_id: str, target_metadata: dict[str, object]
+) -> str:
+    """Compose heartbeat execution input with explicit notify contract."""
+    task_text = (tasks or "").strip() or "(empty heartbeat tasks)"
+    return (
+        "[Heartbeat Task]\n"
+        f"{task_text}\n\n"
+        f"{_build_background_notify_contract(source='Heartbeat', channel=channel, chat_id=chat_id, target_metadata=target_metadata)}"
+    )
+
+
+def _build_cron_execute_input(
+    *,
+    job_name: str,
+    instruction: str,
+    channel: str,
+    chat_id: str,
+) -> str:
+    """Compose cron execution input with explicit notify contract."""
+    return (
+        "[Scheduled Task] Timer finished.\n\n"
+        f"Task '{job_name}' has been triggered.\n"
+        f"Scheduled instruction: {instruction}\n\n"
+        f"{_build_background_notify_contract(source='Cron', channel=channel, chat_id=chat_id)}"
+    )
+
+
+def _looks_like_agent_error(text: str) -> bool:
+    """Best-effort classifier for user-visible execution failure texts."""
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return False
+    error_markers = (
+        "sorry, i encountered an error",
+        "error calling the ai model",
+        "maximum number of tool call iterations",
+        "context is too large to process safely",
+    )
+    return any(marker in normalized for marker in error_markers)
 
 
 def _parse_heartbeat_target(key: str) -> tuple[str, str, dict[str, object]] | None:
@@ -435,11 +506,15 @@ def gateway(
         """Execute a cron job through the agent."""
         from weavbot.agent.tools.add_cron import AddCronTool
         from weavbot.agent.tools.message import MessageTool
+        from weavbot.bus.events import OutboundMessage
 
-        reminder_note = (
-            "[Scheduled Task] Timer finished.\n\n"
-            f"Task '{job.name}' has been triggered.\n"
-            f"Scheduled instruction: {job.payload.message}"
+        channel = job.payload.channel or "cli"
+        chat_id = job.payload.to or "direct"
+        reminder_note = _build_cron_execute_input(
+            job_name=job.name,
+            instruction=job.payload.message,
+            channel=channel,
+            chat_id=chat_id,
         )
 
         # Prevent the agent from scheduling new cron jobs during execution
@@ -451,26 +526,41 @@ def gateway(
             response = await agent.process_direct(
                 reminder_note,
                 session_key=f"cron:{job.id}",
-                channel=job.payload.channel or "cli",
-                chat_id=job.payload.to or "direct",
+                channel=channel,
+                chat_id=chat_id,
             )
+        except Exception as e:
+            logger.exception("Cron job execution failed: id={}, name={}", job.id, job.name)
+            err_content = f"[Cron Error] Task '{job.name}' failed: {e}"
+            if job.payload.to and channel != "cli":
+                await bus.publish_outbound(
+                    OutboundMessage(channel=channel, chat_id=job.payload.to, content=err_content)
+                )
+            return err_content
         finally:
             if isinstance(cron_tool, AddCronTool) and cron_token is not None:
                 cron_tool.reset_cron_context(cron_token)
 
         message_tool = agent.tools.get("message")
         if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
-            return response
+            return response or ""
 
-        if job.payload.deliver and job.payload.to and response:
-            from weavbot.bus.events import OutboundMessage
-
-            await bus.publish_outbound(
-                OutboundMessage(
-                    channel=job.payload.channel or "cli", chat_id=job.payload.to, content=response
+        if response and _looks_like_agent_error(response):
+            err_content = f"[Cron Error] Task '{job.name}' failed: {response}"
+            if job.payload.to and channel != "cli":
+                await bus.publish_outbound(
+                    OutboundMessage(channel=channel, chat_id=job.payload.to, content=err_content)
                 )
-            )
-        return response
+            return err_content
+
+        logger.info(
+            "Cron job completed without outbound notify: id={}, name={}, channel={}, chat_id={}",
+            job.id,
+            job.name,
+            channel,
+            chat_id,
+        )
+        return ""
 
     cron.on_job = on_cron_job
 
@@ -491,20 +581,25 @@ def gateway(
     # Create heartbeat service
     async def on_heartbeat_execute(tasks: str) -> str:
         """Phase 2: execute heartbeat tasks through the full agent loop."""
-        channel, chat_id, _target_meta = _pick_heartbeat_target()
+        channel, chat_id, target_meta = _pick_heartbeat_target()
         session_key = _heartbeat_session_key(channel, chat_id)
-        progress_items: list[str] = []
-
-        async def _collect_progress(content: str, *, tool_hint: bool = False) -> None:
-            _collect_heartbeat_progress(progress_items, content, tool_hint=tool_hint)
-
-        final_content = await agent.process_direct(
+        execute_input = _build_heartbeat_execute_input(
             tasks,
-            session_key=session_key,
             channel=channel,
             chat_id=chat_id,
-            on_progress=_collect_progress,
+            target_metadata=target_meta,
         )
+        try:
+            final_content = await agent.process_direct(
+                execute_input,
+                session_key=session_key,
+                channel=channel,
+                chat_id=chat_id,
+            )
+        except Exception as e:
+            logger.exception("Heartbeat execute failed: channel={}, chat_id={}", channel, chat_id)
+            return f"[Heartbeat Error] Task execution failed: {e}"
+
         message_tool = agent.tools.get("message")
         if bool(getattr(message_tool, "_sent_in_turn", False)):
             logger.info(
@@ -514,17 +609,15 @@ def gateway(
                 chat_id,
             )
             return ""
-        assembled = _assemble_heartbeat_response(progress_items, final_content)
+        if final_content and _looks_like_agent_error(final_content):
+            return f"[Heartbeat Error] {final_content}"
         logger.info(
-            "Heartbeat execute assembled response: channel={}, chat_id={}, "
-            "progress_items_count={}, final_len={}, assembled_len={}",
+            "Heartbeat execute completed without outbound notify: channel={}, chat_id={}, final_len={}",
             channel,
             chat_id,
-            len(progress_items),
             len(final_content or ""),
-            len(assembled),
         )
-        return assembled
+        return ""
 
     async def on_heartbeat_notify(response: str) -> None:
         """Deliver a heartbeat response to the user's channel."""
