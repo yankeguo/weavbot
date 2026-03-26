@@ -1,6 +1,10 @@
 from weavbot.cli.commands import (
     _assemble_heartbeat_response,
+    _build_background_notify_contract,
+    _build_cron_execute_input,
+    _build_heartbeat_execute_input,
     _collect_heartbeat_progress,
+    _looks_like_agent_error,
     _parse_heartbeat_target,
     _pick_heartbeat_target_from_sessions,
 )
@@ -67,3 +71,51 @@ def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> No
     assert channel == "cli"
     assert chat_id == "direct"
     assert metadata == {}
+
+
+def test_background_notify_contract_mentions_message_and_target_context() -> None:
+    contract = _build_background_notify_contract(
+        source="Heartbeat",
+        channel="wechat",
+        chat_id="u_123",
+        target_metadata={"wechat": {"account_key": "acc-a"}},
+    )
+    assert "Only notify when necessary by calling the `message` tool." in contract
+    assert "channel: wechat" in contract
+    assert "chat_id: u_123" in contract
+    assert '"account_key": "acc-a"' in contract
+
+
+def test_build_heartbeat_execute_input_includes_contract_and_tasks() -> None:
+    text = _build_heartbeat_execute_input(
+        "check pending reviews",
+        channel="telegram",
+        chat_id="1001",
+        target_metadata={"foo": "bar"},
+    )
+    assert "[Heartbeat Task]" in text
+    assert "check pending reviews" in text
+    assert "[Heartbeat Notification Contract]" in text
+    assert "channel: telegram" in text
+    assert "chat_id: 1001" in text
+    assert '"foo": "bar"' in text
+
+
+def test_build_cron_execute_input_includes_contract_and_instruction() -> None:
+    text = _build_cron_execute_input(
+        job_name="daily-check",
+        instruction="collect report and notify if needed",
+        channel="slack",
+        chat_id="C123",
+    )
+    assert "Task 'daily-check' has been triggered." in text
+    assert "Scheduled instruction: collect report and notify if needed" in text
+    assert "[Cron Notification Contract]" in text
+    assert "channel: slack" in text
+    assert "chat_id: C123" in text
+
+
+def test_looks_like_agent_error_detects_known_failure_texts() -> None:
+    assert _looks_like_agent_error("Sorry, I encountered an error calling the AI model.")
+    assert _looks_like_agent_error("I reached the maximum number of tool call iterations (40).")
+    assert not _looks_like_agent_error("All checks are done. No user notification is required.")
