@@ -238,6 +238,12 @@ def _looks_like_agent_error(text: str) -> bool:
     return any(marker in normalized for marker in error_markers)
 
 
+async def _suppress_background_progress(_content: str, *, tool_hint: bool = False) -> None:
+    """Drop background progress/tool-hint updates to avoid user-facing noise."""
+    _ = tool_hint
+    return None
+
+
 def _parse_heartbeat_target(key: str) -> tuple[str, str, dict[str, object]] | None:
     """Parse a session key into heartbeat delivery target fields.
 
@@ -528,6 +534,7 @@ def gateway(
                 session_key=f"cron:{job.id}",
                 channel=channel,
                 chat_id=chat_id,
+                on_progress=_suppress_background_progress,
             )
         except Exception as e:
             logger.exception("Cron job execution failed: id={}, name={}", job.id, job.name)
@@ -595,6 +602,7 @@ def gateway(
                 session_key=session_key,
                 channel=channel,
                 chat_id=chat_id,
+                on_progress=_suppress_background_progress,
             )
         except Exception as e:
             logger.exception("Heartbeat execute failed: channel={}, chat_id={}", channel, chat_id)
