@@ -22,6 +22,10 @@ class _FakeCronService:
         deliver: bool,
         channel: str,
         to: str,
+        interactive_channel: str | None = None,
+        interactive_chat_id: str | None = None,
+        interactive_session_key: str | None = None,
+        interactive_metadata: dict | None = None,
         delete_after_run: bool,
     ) -> CronJob:
         self.last_added = {
@@ -31,13 +35,26 @@ class _FakeCronService:
             "deliver": deliver,
             "channel": channel,
             "to": to,
+            "interactive_channel": interactive_channel,
+            "interactive_chat_id": interactive_chat_id,
+            "interactive_session_key": interactive_session_key,
+            "interactive_metadata": interactive_metadata or {},
             "delete_after_run": delete_after_run,
         }
         job = CronJob(
             id=f"job-{len(self.jobs) + 1}",
             name=name,
             schedule=schedule,
-            payload=CronPayload(message=message, deliver=deliver, channel=channel, to=to),
+            payload=CronPayload(
+                message=message,
+                deliver=deliver,
+                channel=channel,
+                to=to,
+                interactive_channel=interactive_channel,
+                interactive_chat_id=interactive_chat_id,
+                interactive_session_key=interactive_session_key,
+                interactive_metadata=interactive_metadata or {},
+            ),
             delete_after_run=delete_after_run,
         )
         self.jobs.append(job)
@@ -98,6 +115,9 @@ def test_add_cron_adds_interval_job():
     assert svc.last_added is not None
     assert svc.last_added["channel"] == "telegram"
     assert svc.last_added["to"] == "u1"
+    assert svc.last_added["interactive_channel"] == "telegram"
+    assert svc.last_added["interactive_chat_id"] == "u1"
+    assert svc.last_added["interactive_session_key"] == "telegram:u1"
     assert svc.last_added["schedule"].kind == "every"
     assert svc.last_added["schedule"].every_ms == 120_000
 

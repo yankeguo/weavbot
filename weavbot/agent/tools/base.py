@@ -14,6 +14,11 @@ class ToolExecutionContext:
     session_key: str
     message_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Optional interactive delivery target for background turns (heartbeat/cron).
+    interactive_channel: str | None = None
+    interactive_chat_id: str | None = None
+    interactive_session_key: str | None = None
+    interactive_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -51,7 +51,12 @@ def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
 
 def test_parse_heartbeat_target_wechat_scoped_key() -> None:
     parsed = _parse_heartbeat_target("wechat:bot-main:u_123")
-    assert parsed == ("wechat", "u_123", {"wechat": {"account_key": "bot-main"}})
+    assert parsed == (
+        "wechat",
+        "u_123",
+        "wechat:bot-main:u_123",
+        {"wechat": {"account_key": "bot-main"}},
+    )
 
 
 def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata() -> None:
@@ -59,9 +64,12 @@ def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata() -> 
         {"key": "feishu:oc_legacy"},
         {"key": "wechat:acc-a:u_new"},
     ]
-    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    channel, chat_id, session_key, metadata = _pick_heartbeat_target_from_sessions(
+        sessions, {"wechat"}
+    )
     assert channel == "wechat"
     assert chat_id == "u_new"
+    assert session_key == "wechat:acc-a:u_new"
     assert metadata == {"wechat": {"account_key": "acc-a"}}
 
 
@@ -70,9 +78,12 @@ def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> No
         {"key": "feishu:oc_legacy"},
         {"key": "cli:direct"},
     ]
-    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    channel, chat_id, session_key, metadata = _pick_heartbeat_target_from_sessions(
+        sessions, {"wechat"}
+    )
     assert channel == "cli"
     assert chat_id == "direct"
+    assert session_key == "cli:direct"
     assert metadata == {}
 
 
@@ -82,10 +93,36 @@ def test_pick_heartbeat_target_ignores_background_sessions() -> None:
         {"key": "cron:job-1"},
         {"key": "telegram:2002"},
     ]
-    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"telegram"})
+    channel, chat_id, session_key, metadata = _pick_heartbeat_target_from_sessions(
+        sessions, {"telegram"}
+    )
     assert channel == "telegram"
     assert chat_id == "2002"
+    assert session_key == "telegram:2002"
     assert metadata == {}
+
+
+def test_pick_heartbeat_target_prefers_session_interactive_snapshot() -> None:
+    sessions = [
+        {
+            "key": "telegram:1001",
+            "metadata": {
+                "interactive_target": {
+                    "channel": "slack",
+                    "chat_id": "C111",
+                    "session_key": "slack:C111:T222",
+                    "metadata": {"slack": {"thread_ts": "T222", "channel_type": "channel"}},
+                }
+            },
+        }
+    ]
+    channel, chat_id, session_key, metadata = _pick_heartbeat_target_from_sessions(
+        sessions, {"slack", "telegram"}
+    )
+    assert channel == "slack"
+    assert chat_id == "C111"
+    assert session_key == "slack:C111:T222"
+    assert metadata == {"slack": {"thread_ts": "T222", "channel_type": "channel"}}
 
 
 def test_background_notify_contract_mentions_message_and_target_context() -> None:

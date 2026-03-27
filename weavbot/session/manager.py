@@ -241,6 +241,7 @@ class SessionManager:
                                     "key": key,
                                     "created_at": data.get("created_at"),
                                     "updated_at": data.get("updated_at"),
+                                    "metadata": data.get("metadata", {}),
                                     "path": str(path),
                                 }
                             )

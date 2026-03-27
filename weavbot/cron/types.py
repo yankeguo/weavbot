@@ -1,6 +1,7 @@
 """Cron types."""
 
 from dataclasses import dataclass, field
+from typing import Any
 from typing import Literal
 
 
@@ -29,6 +30,10 @@ class CronPayload:
     deliver: bool = False
     channel: str | None = None  # e.g. "telegram"
     to: str | None = None  # e.g. phone number
+    interactive_channel: str | None = None
+    interactive_chat_id: str | None = None
+    interactive_session_key: str | None = None
+    interactive_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

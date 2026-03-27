@@ -94,6 +94,14 @@ class AddCronTool(Tool):
             deliver=True,
             channel=context.channel,
             to=context.chat_id,
+            interactive_channel=context.interactive_channel or context.channel,
+            interactive_chat_id=context.interactive_chat_id or context.chat_id,
+            interactive_session_key=context.interactive_session_key or context.session_key,
+            interactive_metadata=(
+                context.interactive_metadata
+                if context.interactive_channel and context.interactive_chat_id
+                else context.metadata
+            ),
             delete_after_run=delete_after,
         )
         return f"Created job '{job.name}' (id: {job.id})"

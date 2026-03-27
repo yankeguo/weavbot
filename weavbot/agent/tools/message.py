@@ -62,10 +62,17 @@ class MessageTool(Tool):
         media: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
-        channel = channel or context.channel
-        chat_id = chat_id or context.chat_id
+        channel = channel or context.interactive_channel or context.channel
+        chat_id = chat_id or context.interactive_chat_id or context.chat_id
         message_id = message_id or context.message_id
-        if channel == context.channel and chat_id == context.chat_id:
+        if (
+            channel == context.interactive_channel
+            and chat_id == context.interactive_chat_id
+            and context.interactive_channel
+            and context.interactive_chat_id
+        ):
+            metadata = dict(context.interactive_metadata or {})
+        elif channel == context.channel and chat_id == context.chat_id:
             metadata = dict(context.metadata or {})
         else:
             # Do not inherit channel-specific routing (e.g. thread_ts) when targeting another chat.

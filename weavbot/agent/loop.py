@@ -188,6 +188,10 @@ class AgentLoop:
         session_key: str,
         message_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        interactive_channel: str | None = None,
+        interactive_chat_id: str | None = None,
+        interactive_session_key: str | None = None,
+        interactive_metadata: dict[str, Any] | None = None,
     ) -> ToolExecutionContext:
         """Create per-call tool execution context."""
         return ToolExecutionContext(
@@ -196,6 +200,77 @@ class AgentLoop:
             session_key=session_key,
             message_id=message_id,
             metadata=dict(metadata or {}),
+            interactive_channel=interactive_channel,
+            interactive_chat_id=interactive_chat_id,
+            interactive_session_key=interactive_session_key,
+            interactive_metadata=dict(interactive_metadata or {}),
+        )
+
+    @staticmethod
+    def _extract_interactive_route_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+        """Extract only routing-relevant metadata for interactive reply targets."""
+        src = metadata if isinstance(metadata, dict) else {}
+        out: dict[str, Any] = {}
+
+        slack_meta = src.get("slack")
+        if isinstance(slack_meta, dict):
+            thread_ts = slack_meta.get("thread_ts")
+            channel_type = slack_meta.get("channel_type")
+            filtered_slack: dict[str, Any] = {}
+            if isinstance(thread_ts, str) and thread_ts.strip():
+                filtered_slack["thread_ts"] = thread_ts
+            if isinstance(channel_type, str) and channel_type.strip():
+                filtered_slack["channel_type"] = channel_type
+            if filtered_slack:
+                out["slack"] = filtered_slack
+
+        wechat_meta = src.get("wechat")
+        if isinstance(wechat_meta, dict):
+            account_key = wechat_meta.get("account_key")
+            context_token = wechat_meta.get("context_token")
+            filtered_wechat: dict[str, Any] = {}
+            if isinstance(account_key, str) and account_key.strip():
+                filtered_wechat["account_key"] = account_key
+            if isinstance(context_token, str) and context_token.strip():
+                filtered_wechat["context_token"] = context_token
+            if filtered_wechat:
+                out["wechat"] = filtered_wechat
+
+        return out
+
+    @classmethod
+    def _build_interactive_target(
+        cls,
+        *,
+        channel: str,
+        chat_id: str,
+        session_key: str,
+        metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Build a normalized interactive routing target snapshot."""
+        return {
+            "channel": channel,
+            "chat_id": chat_id,
+            "session_key": session_key,
+            "metadata": cls._extract_interactive_route_metadata(metadata),
+        }
+
+    @staticmethod
+    def _resolve_saved_interactive_target(
+        session: Session,
+    ) -> tuple[str | None, str | None, str | None, dict[str, Any]]:
+        """Read persisted interactive target from session metadata."""
+        raw = session.metadata.get("interactive_target")
+        raw = raw if isinstance(raw, dict) else {}
+        channel = raw.get("channel")
+        chat_id = raw.get("chat_id")
+        session_key = raw.get("session_key")
+        metadata = raw.get("metadata")
+        return (
+            channel if isinstance(channel, str) and channel.strip() else None,
+            chat_id if isinstance(chat_id, str) and chat_id.strip() else None,
+            session_key if isinstance(session_key, str) and session_key.strip() else None,
+            dict(metadata) if isinstance(metadata, dict) else {},
         )
 
     @staticmethod
@@ -711,6 +786,10 @@ class AgentLoop:
         msg: InboundMessage,
         session_key: str | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
+        interactive_channel: str | None = None,
+        interactive_chat_id: str | None = None,
+        interactive_session_key: str | None = None,
+        interactive_metadata: dict[str, Any] | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
         # System messages: parse origin from chat_id ("channel:chat_id")
@@ -727,6 +806,10 @@ class AgentLoop:
                 session_key=key,
                 message_id=msg.metadata.get("message_id"),
                 metadata=msg.metadata,
+                interactive_channel=interactive_channel,
+                interactive_chat_id=interactive_chat_id,
+                interactive_session_key=interactive_session_key,
+                interactive_metadata=interactive_metadata,
             )
             history, messages = await self._build_initial_messages_with_compaction(
                 session,
@@ -751,12 +834,39 @@ class AgentLoop:
 
         key = session_key or msg.session_key
         session = self.sessions.get_or_create(key)
+        saved_interactive = self._resolve_saved_interactive_target(session)
+        if msg.channel not in {"cli", "system"}:
+            current_interactive = self._build_interactive_target(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                session_key=key,
+                metadata=msg.metadata,
+            )
+            session.metadata["interactive_target"] = current_interactive
+            saved_interactive = (
+                str(current_interactive["channel"]),
+                str(current_interactive["chat_id"]),
+                str(current_interactive["session_key"]),
+                dict(current_interactive["metadata"]),
+            )
+        resolved_interactive_channel = interactive_channel or saved_interactive[0]
+        resolved_interactive_chat_id = interactive_chat_id or saved_interactive[1]
+        resolved_interactive_session_key = interactive_session_key or saved_interactive[2]
+        resolved_interactive_metadata = (
+            dict(interactive_metadata)
+            if isinstance(interactive_metadata, dict)
+            else dict(saved_interactive[3])
+        )
         tool_context = self._build_tool_context(
             channel=msg.channel,
             chat_id=msg.chat_id,
             session_key=key,
             message_id=msg.metadata.get("message_id"),
             metadata=msg.metadata,
+            interactive_channel=resolved_interactive_channel,
+            interactive_chat_id=resolved_interactive_chat_id,
+            interactive_session_key=resolved_interactive_session_key,
+            interactive_metadata=resolved_interactive_metadata,
         )
 
         # Slash commands
@@ -872,6 +982,10 @@ class AgentLoop:
         chat_id: str = "direct",
         metadata: dict[str, Any] | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
+        interactive_channel: str | None = None,
+        interactive_chat_id: str | None = None,
+        interactive_session_key: str | None = None,
+        interactive_metadata: dict[str, Any] | None = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
@@ -883,6 +997,12 @@ class AgentLoop:
             metadata=dict(metadata or {}),
         )
         response = await self._process_message(
-            msg, session_key=session_key, on_progress=on_progress
+            msg,
+            session_key=session_key,
+            on_progress=on_progress,
+            interactive_channel=interactive_channel,
+            interactive_chat_id=interactive_chat_id,
+            interactive_session_key=interactive_session_key,
+            interactive_metadata=interactive_metadata,
         )
         return response.content if response else ""
