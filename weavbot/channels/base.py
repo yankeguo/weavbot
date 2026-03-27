@@ -9,7 +9,7 @@ from loguru import logger
 
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelStore, ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 
 
 class BaseChannel(ABC):
@@ -150,7 +150,6 @@ class BaseChannel(ABC):
             content=content,
             media=image_media,
             metadata=message_metadata or {},
-            channel_metadata=channel_metadata or {},
         )
         if self.channel_store:
             await self.channel_store.upsert(

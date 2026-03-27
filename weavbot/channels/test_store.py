@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from weavbot.channels.store import ChannelStore, ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 
 
 @pytest.mark.asyncio
@@ -56,3 +56,33 @@ async def test_channel_store_concurrent_upsert_and_resolve_same_key(tmp_path) ->
     assert resolved.channel == "slack"
     assert resolved.chat_id in {"C111", "C222", "C333"}
     assert (tmp_path / "channels" / f"{key}.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_most_recent_session_key_prefers_latest_upsert(tmp_path) -> None:
+    store = ChannelStore(tmp_path / "channels")
+    await store.upsert(
+        "slack_older",
+        ChannelEndpoint(channel="slack", chat_id="C1", metadata={}),
+    )
+    await asyncio.sleep(0.02)
+    await store.upsert(
+        "slack_newer",
+        ChannelEndpoint(channel="slack", chat_id="C2", metadata={}),
+    )
+    assert await store.most_recent_session_key(enabled_channels={"slack"}) == "slack_newer"
+
+
+@pytest.mark.asyncio
+async def test_most_recent_session_key_skips_internal_and_cli(tmp_path) -> None:
+    store = ChannelStore(tmp_path / "channels")
+    await store.upsert(
+        "cron_job1",
+        ChannelEndpoint(channel="slack", chat_id="C9", metadata={}),
+    )
+    await asyncio.sleep(0.02)
+    await store.upsert(
+        "slack_user",
+        ChannelEndpoint(channel="slack", chat_id="C1", metadata={}),
+    )
+    assert await store.most_recent_session_key(enabled_channels={"slack"}) == "slack_user"

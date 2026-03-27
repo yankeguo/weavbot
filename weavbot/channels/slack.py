@@ -14,7 +14,7 @@ from slackify_markdown import slackify_markdown
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 from weavbot.config.schema import SlackConfig
 from weavbot.utils.helpers import build_session_key
 

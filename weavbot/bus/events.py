@@ -19,16 +19,19 @@ class InboundMessage:
     adapters typically build it with :func:`~weavbot.utils.helpers.build_session_key`,
     but callers may set a custom key when they need a distinct session (e.g. multi-account).
 
-    Internal channels include ``system`` (e.g. subagent handoff with
-    ``metadata["_original_session_key"]`` for routing) and ``cli`` for terminal
-    runs. ``sender_id`` identifies who sent the message for allowlists and logs;
-    delivery routing uses ``session_key`` and the store, not ``sender_id``.
+    Internal channels include ``system`` (e.g. subagent handoff) and ``cli`` for
+    terminal runs. ``sender_id`` identifies who sent the message for allowlists
+    and logs; delivery routing uses ``session_key`` and the store, not ``sender_id``.
 
-    Metadata is split into:
-    - ``metadata``: per-turn message metadata that is echoed back on outbound messages.
-      Example: ``message_id`` for reply/quote, ``_progress`` / ``_tool_hint`` for streaming.
-    - ``channel_metadata``: routing metadata persisted to :class:`~weavbot.channels.store.ChannelEndpoint`
-      for resolving outbound delivery details (thread ids, account keys, req ids, ...).
+    ``original_session_key`` (optional) is the parent user-facing session for
+    routing replies when ``session_key`` names a child or background partition
+    (heartbeat, cron, subagent); same role as
+    :class:`~weavbot.agent.tools.base.ToolExecutionContext` ``original_session_key``.
+
+    ``metadata`` holds per-turn message metadata echoed on outbound messages
+    (e.g. ``message_id``, ``_progress`` / ``_tool_hint`` for streaming). Legacy
+    ``metadata["_original_session_key"]`` for system messages is supported during
+    migration; prefer ``original_session_key``.
     """
 
     channel: str  # Platform name: telegram, slack, wecom, system, cli, ...
@@ -47,9 +50,9 @@ class InboundMessage:
     metadata: dict[str, Any] = field(
         default_factory=dict
     )  # message-level metadata (echoed on outbound), e.g. message_id, _progress
-    channel_metadata: dict[str, Any] = field(
-        default_factory=dict
-    )  # routing metadata persisted to ChannelEndpoint, e.g. slack.thread_ts, wechat.context_token
+    original_session_key: str | None = (
+        None  # parent session for outbound when session_key is internal
+    )
 
 
 @dataclass

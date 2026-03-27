@@ -9,7 +9,7 @@ from weavbot.agent.loop import AgentLoop
 from weavbot.agent.messages import ChatMessage, ToolCallRequest
 from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelStore, ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 from weavbot.providers.base import LLMProvider, LLMResponse
 from weavbot.utils.helpers import build_session_key
 
@@ -105,7 +105,7 @@ async def test_process_direct_prefers_interactive_route_for_cron_internal_sessio
     out = await loop.process_direct(
         "cron task",
         session_key=session_key,
-        interactive_session_key=interactive_session_key,
+        original_session_key=interactive_session_key,
     )
 
     assert out == "ok"
@@ -143,9 +143,8 @@ async def test_system_message_upserts_internal_session_with_original_session_key
         chat_id="subagent",
         session_key=session_key,
         content="subagent done",
-        metadata={
-            "_original_session_key": original_key,
-        },
+        metadata={},
+        original_session_key=original_key,
     )
 
     out = await loop._process_message(msg)
@@ -185,7 +184,7 @@ async def test_process_direct_message_tool_to_interactive_target_skips_extra_fin
     out = await loop.process_direct(
         "run cron",
         session_key=internal_key,
-        interactive_session_key=interactive_key,
+        original_session_key=interactive_key,
     )
 
     assert out == ""
@@ -258,7 +257,8 @@ async def test_system_message_uses_original_session_key_routing(tmp_path) -> Non
         chat_id="subagent",
         session_key=sub_key,
         content="subagent done",
-        metadata={"_original_session_key": original_key},
+        metadata={},
+        original_session_key=original_key,
     )
 
     out = await loop._process_message(msg)

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 from weavbot.channels.wechat.accounts import resolve_accounts
 from weavbot.channels.wechat.channel import WechatChannel
 from weavbot.channels.wechat.session_guard import SessionGuard
@@ -43,8 +43,9 @@ def test_session_guard_pause_and_expire():
 
 def test_handle_inbound_sets_account_scoped_session_key(tmp_path: Path):
     bus = MessageBus()
+    store = ChannelStore(tmp_path / "channels")
     cfg = WechatConfig(enabled=True, token="t", account_id="acc@im.bot")
-    ch = WechatChannel(cfg, bus, tmp_path)
+    ch = WechatChannel(cfg, bus, tmp_path, channel_store=store)
     account = ResolvedWechatAccount(
         key="acc-key",
         account_id="acc@im.bot",
@@ -65,14 +66,17 @@ def test_handle_inbound_sets_account_scoped_session_key(tmp_path: Path):
                 "item_list": [{"type": ITEM_TYPE_TEXT, "text_item": {"text": "hello"}}],
             },
         )
-        return await bus.consume_inbound()
+        inbound = await bus.consume_inbound()
+        ep = await store.resolve(inbound.session_key)
+        return inbound, ep
 
-    inbound = asyncio.run(run_case())
+    inbound, ep = asyncio.run(run_case())
     assert inbound.channel == "wechat"
     assert inbound.chat_id == "u1@im.wechat"
     assert inbound.session_key == "wechat_acc-key_u1@im.wechat"
     assert inbound.metadata["message_id"] == 1
-    assert inbound.channel_metadata["wechat"]["context_token"] == "ctx-1"
+    assert ep is not None
+    assert ep.metadata["wechat"]["context_token"] == "ctx-1"
 
 
 def test_send_text_routes_to_selected_account(tmp_path: Path):

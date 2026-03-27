@@ -5,14 +5,14 @@ import pytest
 
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 from weavbot.channels.wecom import EVENT_ENTER_CHAT, WecomChannel
 from weavbot.config.schema import WecomConfig
 
 
-def _make_channel(tmp_path):
+def _make_channel(tmp_path, channel_store: ChannelStore | None = None):
     cfg = WecomConfig(bot_id="bot-id", secret="bot-secret")
-    return WecomChannel(cfg, MessageBus(), tmp_path)
+    return WecomChannel(cfg, MessageBus(), tmp_path, channel_store=channel_store)
 
 
 def test_parse_mixed_message(tmp_path):
@@ -66,7 +66,8 @@ def test_guess_media_type(tmp_path):
 
 
 def test_event_callback_publishes_inbound(tmp_path):
-    channel = _make_channel(tmp_path)
+    store = ChannelStore(tmp_path / "channels")
+    channel = _make_channel(tmp_path, channel_store=store)
 
     async def run_case():
         frame = {
@@ -81,14 +82,16 @@ def test_event_callback_publishes_inbound(tmp_path):
         }
         await channel._handle_event_callback(frame)
         msg = await channel.bus.consume_inbound()
-        return msg
+        ep = await store.resolve(msg.session_key)
+        return msg, ep
 
-    inbound = asyncio.run(run_case())
+    inbound, ep = asyncio.run(run_case())
     assert inbound.channel == "wecom"
     assert inbound.sender_id == "u1"
     assert inbound.metadata["message_id"] == "msg-1"
-    assert inbound.channel_metadata["req_id"] == "req-1"
-    assert inbound.channel_metadata["wecom"]["event_type"] == "feedback_event"
+    assert ep is not None
+    assert ep.metadata["req_id"] == "req-1"
+    assert ep.metadata["wecom"]["event_type"] == "feedback_event"
 
 
 def test_send_enter_chat_uses_welcome_command(tmp_path):

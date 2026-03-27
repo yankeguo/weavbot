@@ -252,7 +252,8 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
             chat_id="subagent",
             session_key=session_key,
             content=announce_content,
-            metadata={"_original_session_key": original_session_key},
+            metadata={},
+            original_session_key=original_session_key,
         )
 
         await self.bus.publish_inbound(msg)

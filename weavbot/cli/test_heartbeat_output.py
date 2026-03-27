@@ -1,6 +1,6 @@
 import pytest
 
-from weavbot.channels.store import ChannelStore, ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 from weavbot.cli.commands import (
     _assemble_heartbeat_response,
     _build_background_notify_contract,
@@ -8,10 +8,11 @@ from weavbot.cli.commands import (
     _build_heartbeat_execute_input,
     _collect_heartbeat_progress,
     _looks_like_agent_error,
-    _pick_heartbeat_target_from_sessions,
+    _pick_heartbeat_route,
     _should_print_cli_progress,
     _suppress_background_progress,
 )
+from weavbot.utils.helpers import build_session_key
 
 
 def test_should_print_cli_progress_matches_channel_manager_gating() -> None:
@@ -69,102 +70,65 @@ def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata(tmp_path) -> None:
+async def test_pick_heartbeat_route_resolves_wechat_from_store_recent(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
+    sk = "wechat_acc-a_u_new"
     await store.upsert(
-        "wechat_acc-a_u_new",
+        sk,
         ChannelEndpoint(
             channel="wechat",
             chat_id="u_new",
             metadata={"wechat": {"account_key": "acc-a"}},
         ),
     )
-    sessions = [
-        {"key": "feishu:oc_legacy"},
-        {
-            "key": "wechat_acc-a_u_new",
-            "metadata": {
-                "interactive_target": {
-                    "session_key": "wechat_acc-a_u_new",
-                    "metadata": {"wechat": {"account_key": "acc-a"}},
-                }
-            },
-        },
-    ]
-    target = await _pick_heartbeat_target_from_sessions(sessions, {"wechat"}, store)
+    target = await _pick_heartbeat_route({"wechat"}, store)
     assert target.channel == "wechat"
     assert target.chat_id == "u_new"
-    assert target.session_key == "wechat_acc-a_u_new"
+    assert target.session_key == sk
     assert target.metadata == {"wechat": {"account_key": "acc-a"}}
 
 
 @pytest.mark.asyncio
-async def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session(tmp_path) -> None:
+async def test_pick_heartbeat_route_fallbacks_to_cli_when_no_last_key(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
-    sessions = [
-        {"key": "feishu:oc_legacy"},
-        {"key": "cli:direct"},
-    ]
-    target = await _pick_heartbeat_target_from_sessions(sessions, {"wechat"}, store)
+    target = await _pick_heartbeat_route({"wechat"}, store)
     assert target.channel == "cli"
     assert target.chat_id == "direct"
-    assert target.session_key == "cli_direct"
+    assert target.session_key == build_session_key("cli", "direct")
     assert target.metadata == {}
 
 
 @pytest.mark.asyncio
-async def test_pick_heartbeat_target_ignores_background_sessions(tmp_path) -> None:
+async def test_pick_heartbeat_route_resolves_telegram_from_store_recent(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
+    sk = "telegram_2002"
     await store.upsert(
-        "telegram_2002",
+        sk,
         ChannelEndpoint(channel="telegram", chat_id="2002", metadata={}),
     )
-    sessions = [
-        {"key": "heartbeat:telegram:1001:2026-03-26"},
-        {"key": "cron:job-1"},
-        {
-            "key": "telegram_2002",
-            "metadata": {
-                "interactive_target": {
-                    "session_key": "telegram_2002",
-                    "metadata": {},
-                }
-            },
-        },
-    ]
-    target = await _pick_heartbeat_target_from_sessions(sessions, {"telegram"}, store)
+    target = await _pick_heartbeat_route({"telegram"}, store)
     assert target.channel == "telegram"
     assert target.chat_id == "2002"
-    assert target.session_key == "telegram_2002"
+    assert target.session_key == sk
     assert target.metadata == {}
 
 
 @pytest.mark.asyncio
-async def test_pick_heartbeat_target_prefers_session_interactive_snapshot(tmp_path) -> None:
+async def test_pick_heartbeat_route_resolves_slack_from_store_recent(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
+    sk = "slack_C111_T222"
     await store.upsert(
-        "slack_C111_T222",
+        sk,
         ChannelEndpoint(
             channel="slack",
             chat_id="C111",
             metadata={"slack": {"thread_ts": "T222", "channel_type": "channel"}},
         ),
     )
-    sessions = [
-        {
-            "key": "telegram:1001",
-            "metadata": {
-                "interactive_target": {
-                    "session_key": "slack_C111_T222",
-                    "metadata": {"slack": {"thread_ts": "T222", "channel_type": "channel"}},
-                }
-            },
-        }
-    ]
-    target = await _pick_heartbeat_target_from_sessions(sessions, {"slack", "telegram"}, store)
+    target = await _pick_heartbeat_route({"slack", "telegram"}, store)
     assert target.channel == "slack"
     assert target.chat_id == "C111"
-    assert target.session_key == "slack_C111_T222"
+    assert target.session_key == sk
     assert target.metadata == {"slack": {"thread_ts": "T222", "channel_type": "channel"}}
 
 

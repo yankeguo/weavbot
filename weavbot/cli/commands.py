@@ -270,52 +270,21 @@ def _should_print_cli_progress(ch: object | None, *, is_tool_hint: bool) -> bool
     return True
 
 
-async def _extract_interactive_target(
-    item: dict[str, object], enabled_channels: set[str], channel_store: "ChannelStore"
-) -> RouteTarget | None:
-    """Extract interactive delivery target from session pointer then resolve via ChannelStore."""
-    key = str(item.get("key") or "")
-    if key.startswith(("heartbeat:", "heartbeat_", "cron:", "cron_", "system:", "system_")):
-        return None
-
-    meta = item.get("metadata")
-    session_meta = meta if isinstance(meta, dict) else {}
-    if bool(session_meta.get("_cron_in_job")) or bool(session_meta.get("_heartbeat_in_job")):
-        return None
-    raw_target = (
-        session_meta.get("interactive_target")
-        if isinstance(session_meta.get("interactive_target"), dict)
-        else None
-    )
-    payload = raw_target if isinstance(raw_target, dict) else {}
-    target_session_key = str(payload.get("session_key") or "").strip()
-    if not target_session_key:
-        return None
-    resolved = await channel_store.resolve(target_session_key)
-    if (
-        resolved
-        and resolved.channel not in {"cli", "system"}
-        and resolved.channel in enabled_channels
-    ):
-        return RouteTarget(
-            channel=str(resolved.channel),
-            chat_id=str(resolved.chat_id),
-            session_key=target_session_key,
-            metadata=dict(resolved.metadata or {}),
-        )
-    return None
-
-
-async def _pick_heartbeat_target_from_sessions(
-    sessions: list[dict[str, object]],
+async def _pick_heartbeat_route(
     enabled_channels: set[str],
     channel_store: "ChannelStore",
 ) -> RouteTarget:
-    """Pick routable heartbeat target from recent user-facing sessions."""
-    for item in sessions:
-        target = await _extract_interactive_target(item, enabled_channels, channel_store)
-        if target:
-            return target
+    """Pick heartbeat delivery target from the most recently upserted user-facing ChannelStore entry."""
+    key = await channel_store.most_recent_session_key(enabled_channels=enabled_channels)
+    if key:
+        resolved = await channel_store.resolve(key)
+        if resolved and resolved.channel not in {"cli", "system"}:
+            return RouteTarget(
+                channel=str(resolved.channel),
+                chat_id=str(resolved.chat_id),
+                session_key=key,
+                metadata=dict(resolved.metadata or {}),
+            )
     return RouteTarget(
         channel="cli",
         chat_id="direct",
@@ -646,9 +615,8 @@ def gateway(
                 reminder_note,
                 session_key=build_session_key("cron", job.id),
                 metadata={"_cron_in_job": True},
-                channel_metadata=cron_route_metadata,
                 on_progress=_suppress_background_progress,
-                interactive_session_key=(
+                original_session_key=(
                     interactive_target.session_key if interactive_target else None
                 ),
             )
@@ -689,8 +657,7 @@ def gateway(
 
     async def _pick_heartbeat_target() -> RouteTarget:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
-        return await _pick_heartbeat_target_from_sessions(
-            session_manager.list_sessions(),
+        return await _pick_heartbeat_route(
             set(channels.enabled_channels),
             channel_store,
         )
@@ -716,9 +683,8 @@ def gateway(
                 execute_input,
                 session_key=session_key,
                 metadata={},
-                channel_metadata=dict(target.metadata or {}),
                 on_progress=_suppress_background_progress,
-                interactive_session_key=target.session_key,
+                original_session_key=target.session_key,
             )
         except Exception as e:
             logger.exception(

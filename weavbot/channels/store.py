@@ -14,6 +14,17 @@ import aiofiles.os
 import aiofiles.ospath
 from loguru import logger
 
+_INTERNAL_SESSION_PREFIXES = frozenset({"system", "cli", "cron", "heartbeat"})
+
+
+def is_internal_session_key(session_key: str) -> bool:
+    """True when session_key is a reserved internal partition (cron, heartbeat, ...)."""
+    key = (session_key or "").strip()
+    if not key:
+        return False
+    prefix, _, _ = key.partition("_")
+    return prefix in _INTERNAL_SESSION_PREFIXES
+
 
 @dataclass
 class ChannelEndpoint:
@@ -153,3 +164,45 @@ class ChannelStore:
         key = session_key
         async with self._endpoints_lock:
             return self._endpoints.get(key)
+
+    async def most_recent_session_key(
+        self,
+        *,
+        enabled_channels: set[str] | None = None,
+        exclude_internal_session_keys: bool = True,
+        exclude_channels: frozenset[str] | None = None,
+    ) -> str | None:
+        """Return session_key with the newest ``updated_at`` among stored endpoints.
+
+        Used for global \"last user-facing interaction\" when no separate pointer file
+        is maintained: channel adapters upsert on each message, refreshing ``updated_at``.
+
+        - Skips internal partition keys (``cron_*``, ``heartbeat_*``, ...) when
+          ``exclude_internal_session_keys`` is True.
+        - Skips endpoints whose ``channel`` is in ``exclude_channels`` (default ``cli``,
+          ``system``).
+        - When ``enabled_channels`` is set, only considers endpoints whose ``channel`` is
+          in that set.
+        """
+        await self._ensure_loaded()
+        skip_ch = exclude_channels if exclude_channels is not None else frozenset({"cli", "system"})
+        async with self._endpoints_lock:
+            items = list(self._endpoints.items())
+        best_key: str | None = None
+        best_dt: datetime | None = None
+        for sk, ep in items:
+            if exclude_internal_session_keys and is_internal_session_key(sk):
+                continue
+            if ep.channel in skip_ch:
+                continue
+            if enabled_channels is not None and ep.channel not in enabled_channels:
+                continue
+            raw = str(ep.updated_at or "").strip()
+            try:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if best_dt is None or dt > best_dt:
+                best_dt = dt
+                best_key = sk
+        return best_key

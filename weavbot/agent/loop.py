@@ -8,7 +8,7 @@ import re
 from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, TypedDict
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
@@ -35,7 +35,7 @@ from weavbot.agent.tools.spawn import SpawnTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelStore, ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore, is_internal_session_key
 from weavbot.providers.base import LLMProvider
 from weavbot.session.manager import Session, SessionManager
 from weavbot.utils.helpers import build_session_key, validate_session_key
@@ -43,13 +43,6 @@ from weavbot.utils.helpers import build_session_key, validate_session_key
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
     from weavbot.cron.service import CronService
-
-
-class InteractiveSessionPointer(TypedDict):
-    """Minimal interactive session pointer persisted on sessions."""
-
-    session_key: str
-    metadata: dict[str, Any]
 
 
 class AgentLoop:
@@ -69,7 +62,6 @@ class AgentLoop:
     _DEFAULT_SAFETY_TOKENS = 1536
     _DEFAULT_SAFETY_RATIO = 0.02
     _CALIBRATION_ALPHA = 0.2
-    _INTERNAL_SESSION_PREFIXES = ("system", "cli", "cron", "heartbeat")
 
     def __init__(
         self,
@@ -136,15 +128,6 @@ class AgentLoop:
         self._processing_lock = asyncio.Lock()
         self._register_default_tools()
 
-    @classmethod
-    def _is_internal_session_key(cls, session_key: str) -> bool:
-        """Return True when session key belongs to an internal logical channel."""
-        key = (session_key or "").strip()
-        if not key:
-            return False
-        prefix, _, _ = key.partition("_")
-        return prefix in cls._INTERNAL_SESSION_PREFIXES
-
     async def _upsert_internal_session_target(
         self,
         *,
@@ -156,7 +139,7 @@ class AgentLoop:
         """Persist routing target for internal session keys into ChannelStore."""
         if not self.channel_store:
             return
-        if not self._is_internal_session_key(session_key):
+        if not is_internal_session_key(session_key):
             return
         route_channel = (channel or "").strip()
         route_chat_id = (chat_id or "").strip()
@@ -295,37 +278,14 @@ class AgentLoop:
 
         return out
 
-    @classmethod
-    def _build_interactive_pointer(
-        cls,
-        *,
-        session_key: str,
-        metadata: dict[str, Any] | None,
-    ) -> InteractiveSessionPointer:
-        """Build a normalized interactive session pointer snapshot."""
-        skey = str(session_key or "").strip()
-        if not skey:
-            raise ValueError("interactive target requires non-empty session_key")
-        return {
-            "session_key": skey,
-            "metadata": cls._extract_interactive_route_metadata(metadata),
-        }
-
-    @staticmethod
-    def _resolve_saved_interactive_pointer(
-        session: Session,
-    ) -> InteractiveSessionPointer | None:
-        """Read persisted interactive session pointer from session metadata."""
-        raw = session.metadata.get("interactive_target")
-        payload = raw if isinstance(raw, dict) else {}
-        session_key = str(payload.get("session_key") or "").strip()
-        metadata = payload.get("metadata")
-        if not session_key:
+    async def _last_interactive_from_store(self) -> str | None:
+        """Most recently upserted user-facing session (by ChannelEndpoint.updated_at)."""
+        if not self.channel_store:
             return None
-        return {
-            "session_key": session_key,
-            "metadata": dict(metadata) if isinstance(metadata, dict) else {},
-        }
+        return await self.channel_store.most_recent_session_key(
+            enabled_channels=None,
+            exclude_internal_session_keys=True,
+        )
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -850,17 +810,14 @@ class AgentLoop:
         msg: InboundMessage,
         session_key: str | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        interactive_session_key: str | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
         turn_meta = msg.metadata or {}
         if msg.channel == "system":
             key = session_key or msg.session_key
-            target_session_key = (
-                interactive_session_key
-                or str(turn_meta.get("_original_session_key") or "").strip()
-                or key
-            )
+            osk_msg = str(msg.original_session_key or "").strip()
+            osk_legacy = str(turn_meta.get("_original_session_key") or "").strip()
+            target_session_key = osk_msg or osk_legacy or key
             resolved_route_target = await self._resolve_channel_endpoint(target_session_key)
             if not resolved_route_target:
                 logger.warning(
@@ -910,18 +867,9 @@ class AgentLoop:
 
         key = session_key or msg.session_key
         session = self.sessions.get_or_create(key)
-        saved_interactive = self._resolve_saved_interactive_pointer(session)
-        if msg.channel not in {"cli", "system"}:
-            current_interactive = self._build_interactive_pointer(
-                session_key=key,
-                metadata=msg.channel_metadata,
-            )
-            session.metadata["interactive_target"] = current_interactive
-            saved_interactive = current_interactive
-        resolved_interactive_session_key = interactive_session_key or (
-            str(saved_interactive["session_key"]) if saved_interactive else None
-        )
-        target_session_key = resolved_interactive_session_key or key
+        osk = str(msg.original_session_key or "").strip()
+        last_from_store = await self._last_interactive_from_store()
+        target_session_key = osk or last_from_store or key
         route_target = await self._resolve_channel_endpoint(target_session_key)
         if not route_target and target_session_key == build_session_key("cli", "direct"):
             route_target = ChannelEndpoint(channel="cli", chat_id="direct", metadata={})
@@ -1050,19 +998,17 @@ class AgentLoop:
         content: str,
         session_key: str = "cli_direct",
         metadata: dict[str, Any] | None = None,
-        channel_metadata: dict[str, Any] | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        interactive_session_key: str | None = None,
+        original_session_key: str | None = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage).
 
-        ``metadata`` carries per-turn flags (e.g. ``_cron_in_job``). Routing hints for
-        interactive pointer snapshots use ``channel_metadata``, matching bus-originated
-        :class:`~weavbot.bus.events.InboundMessage` construction in channel adapters.
+        ``metadata`` carries per-turn flags (e.g. ``_cron_in_job``). ``original_session_key``
+        is the parent user-facing session for routing when ``session_key`` is internal.
         """
         await self._connect_mcp()
         normalized_session_key = validate_session_key(session_key)
-        target_session_key = interactive_session_key or normalized_session_key
+        target_session_key = original_session_key or normalized_session_key
         route_target = await self._resolve_channel_endpoint(target_session_key)
         if not route_target and target_session_key == build_session_key("cli", "direct"):
             route_target = ChannelEndpoint(channel="cli", chat_id="direct", metadata={})
@@ -1086,12 +1032,11 @@ class AgentLoop:
             session_key=normalized_session_key,
             content=content,
             metadata=dict(metadata or {}),
-            channel_metadata=dict(channel_metadata or {}),
+            original_session_key=original_session_key,
         )
         response = await self._process_message(
             msg,
             session_key=normalized_session_key,
             on_progress=on_progress,
-            interactive_session_key=interactive_session_key,
         )
         return response.content if response else ""

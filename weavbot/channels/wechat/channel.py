@@ -12,7 +12,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelEndpoint
+from weavbot.channels.store import ChannelEndpoint, ChannelStore
 from weavbot.channels.wechat.accounts import resolve_accounts, resolve_state_dir
 from weavbot.channels.wechat.api import WechatApiClient
 from weavbot.channels.wechat.media import (
