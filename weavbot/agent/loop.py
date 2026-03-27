@@ -18,7 +18,7 @@ from weavbot.agent.memory import MemoryStore
 from weavbot.agent.messages import ChatMessage
 from weavbot.agent.subagent import SubagentManager
 from weavbot.agent.tools.add_cron import AddCronTool
-from weavbot.agent.tools.base import ToolExecutionContext
+from weavbot.agent.tools.base import DeliveryTarget, ToolExecutionContext
 from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.fetch import FetchTool
 from weavbot.agent.tools.glob_file import GlobFileTool
@@ -188,10 +188,7 @@ class AgentLoop:
         session_key: str,
         message_id: str | None = None,
         metadata: dict[str, Any] | None = None,
-        interactive_channel: str | None = None,
-        interactive_chat_id: str | None = None,
-        interactive_session_key: str | None = None,
-        interactive_metadata: dict[str, Any] | None = None,
+        interactive: DeliveryTarget | None = None,
     ) -> ToolExecutionContext:
         """Create per-call tool execution context."""
         return ToolExecutionContext(
@@ -200,10 +197,7 @@ class AgentLoop:
             session_key=session_key,
             message_id=message_id,
             metadata=dict(metadata or {}),
-            interactive_channel=interactive_channel,
-            interactive_chat_id=interactive_chat_id,
-            interactive_session_key=interactive_session_key,
-            interactive_metadata=dict(interactive_metadata or {}),
+            interactive=interactive,
         )
 
     @staticmethod
@@ -246,32 +240,26 @@ class AgentLoop:
         chat_id: str,
         session_key: str,
         metadata: dict[str, Any] | None,
-    ) -> dict[str, Any]:
+    ) -> DeliveryTarget:
         """Build a normalized interactive routing target snapshot."""
-        return {
-            "channel": channel,
-            "chat_id": chat_id,
-            "session_key": session_key,
-            "metadata": cls._extract_interactive_route_metadata(metadata),
-        }
+        target = DeliveryTarget.from_optional(
+            channel=channel,
+            chat_id=chat_id,
+            session_key=session_key,
+            metadata=cls._extract_interactive_route_metadata(metadata),
+        )
+        # channel/chat_id are guaranteed by caller, keep hard guard for type checkers.
+        if target is None:
+            raise ValueError("interactive target requires non-empty channel/chat_id")
+        return target
 
     @staticmethod
     def _resolve_saved_interactive_target(
         session: Session,
-    ) -> tuple[str | None, str | None, str | None, dict[str, Any]]:
+    ) -> DeliveryTarget | None:
         """Read persisted interactive target from session metadata."""
         raw = session.metadata.get("interactive_target")
-        raw = raw if isinstance(raw, dict) else {}
-        channel = raw.get("channel")
-        chat_id = raw.get("chat_id")
-        session_key = raw.get("session_key")
-        metadata = raw.get("metadata")
-        return (
-            channel if isinstance(channel, str) and channel.strip() else None,
-            chat_id if isinstance(chat_id, str) and chat_id.strip() else None,
-            session_key if isinstance(session_key, str) and session_key.strip() else None,
-            dict(metadata) if isinstance(metadata, dict) else {},
-        )
+        return DeliveryTarget.from_dict(raw if isinstance(raw, dict) else None)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -786,10 +774,7 @@ class AgentLoop:
         msg: InboundMessage,
         session_key: str | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        interactive_channel: str | None = None,
-        interactive_chat_id: str | None = None,
-        interactive_session_key: str | None = None,
-        interactive_metadata: dict[str, Any] | None = None,
+        interactive: DeliveryTarget | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
         # System messages: parse origin from chat_id ("channel:chat_id")
@@ -806,10 +791,7 @@ class AgentLoop:
                 session_key=key,
                 message_id=msg.metadata.get("message_id"),
                 metadata=msg.metadata,
-                interactive_channel=interactive_channel,
-                interactive_chat_id=interactive_chat_id,
-                interactive_session_key=interactive_session_key,
-                interactive_metadata=interactive_metadata,
+                interactive=interactive,
             )
             history, messages = await self._build_initial_messages_with_compaction(
                 session,
@@ -842,31 +824,16 @@ class AgentLoop:
                 session_key=key,
                 metadata=msg.metadata,
             )
-            session.metadata["interactive_target"] = current_interactive
-            saved_interactive = (
-                str(current_interactive["channel"]),
-                str(current_interactive["chat_id"]),
-                str(current_interactive["session_key"]),
-                dict(current_interactive["metadata"]),
-            )
-        resolved_interactive_channel = interactive_channel or saved_interactive[0]
-        resolved_interactive_chat_id = interactive_chat_id or saved_interactive[1]
-        resolved_interactive_session_key = interactive_session_key or saved_interactive[2]
-        resolved_interactive_metadata = (
-            dict(interactive_metadata)
-            if isinstance(interactive_metadata, dict)
-            else dict(saved_interactive[3])
-        )
+            session.metadata["interactive_target"] = current_interactive.to_dict()
+            saved_interactive = current_interactive
+        resolved_interactive = interactive or saved_interactive
         tool_context = self._build_tool_context(
             channel=msg.channel,
             chat_id=msg.chat_id,
             session_key=key,
             message_id=msg.metadata.get("message_id"),
             metadata=msg.metadata,
-            interactive_channel=resolved_interactive_channel,
-            interactive_chat_id=resolved_interactive_chat_id,
-            interactive_session_key=resolved_interactive_session_key,
-            interactive_metadata=resolved_interactive_metadata,
+            interactive=resolved_interactive,
         )
 
         # Slash commands
@@ -982,10 +949,7 @@ class AgentLoop:
         chat_id: str = "direct",
         metadata: dict[str, Any] | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        interactive_channel: str | None = None,
-        interactive_chat_id: str | None = None,
-        interactive_session_key: str | None = None,
-        interactive_metadata: dict[str, Any] | None = None,
+        interactive: DeliveryTarget | None = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
@@ -1000,9 +964,6 @@ class AgentLoop:
             msg,
             session_key=session_key,
             on_progress=on_progress,
-            interactive_channel=interactive_channel,
-            interactive_chat_id=interactive_chat_id,
-            interactive_session_key=interactive_session_key,
-            interactive_metadata=interactive_metadata,
+            interactive=interactive,
         )
         return response.content if response else ""

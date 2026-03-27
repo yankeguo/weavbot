@@ -6,19 +6,62 @@ from typing import Any
 
 
 @dataclass
-class ToolExecutionContext:
-    """Per-tool-call runtime routing context."""
+class DeliveryTarget:
+    """Normalized message delivery target."""
 
     channel: str
     chat_id: str
     session_key: str
-    message_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    # Optional interactive delivery target for background turns (heartbeat/cron).
-    interactive_channel: str | None = None
-    interactive_chat_id: str | None = None
-    interactive_session_key: str | None = None
-    interactive_metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_optional(
+        cls,
+        *,
+        channel: str | None,
+        chat_id: str | None,
+        session_key: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> "DeliveryTarget | None":
+        """Build target when channel/chat_id are both available."""
+        ch = (channel or "").strip()
+        cid = (chat_id or "").strip()
+        if not ch or not cid:
+            return None
+        skey = (session_key or "").strip() or f"{ch}:{cid}"
+        return cls(channel=ch, chat_id=cid, session_key=skey, metadata=dict(metadata or {}))
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any] | None) -> "DeliveryTarget | None":
+        """Build target from persisted dict representation."""
+        payload = raw if isinstance(raw, dict) else {}
+        return cls.from_optional(
+            channel=payload.get("channel"),
+            chat_id=payload.get("chat_id"),
+            session_key=payload.get("session_key"),
+            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert target to dict for persistence/transport."""
+        return {
+            "channel": self.channel,
+            "chat_id": self.chat_id,
+            "session_key": self.session_key,
+            "metadata": dict(self.metadata or {}),
+        }
+
+    def matches(self, *, channel: str, chat_id: str) -> bool:
+        """Check whether the given route points to this target."""
+        return channel == self.channel and chat_id == self.chat_id
+
+
+@dataclass
+class ToolExecutionContext(DeliveryTarget):
+    """Per-tool-call runtime routing context."""
+
+    message_id: str | None = None
+    interactive: DeliveryTarget | None = None
 
 
 @dataclass

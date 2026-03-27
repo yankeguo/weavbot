@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from weavbot.agent.tools.add_cron import AddCronTool
-from weavbot.agent.tools.base import ToolExecutionContext
+from weavbot.agent.tools.base import DeliveryTarget, ToolExecutionContext
 from weavbot.agent.tools.message import MessageTool
 from weavbot.agent.tools.spawn import SpawnTool
 from weavbot.bus.events import OutboundMessage
@@ -107,10 +107,12 @@ def test_add_cron_tool_routes_delivery_from_execution_context() -> None:
         channel="wechat",
         chat_id="peer-1",
         session_key="wechat:peer-1",
-        interactive_channel="wechat",
-        interactive_chat_id="peer-1",
-        interactive_session_key="wechat:bot-a:peer-1",
-        interactive_metadata={"wechat": {"account_key": "bot-a"}},
+        interactive=DeliveryTarget(
+            channel="wechat",
+            chat_id="peer-1",
+            session_key="wechat:bot-a:peer-1",
+            metadata={"wechat": {"account_key": "bot-a"}},
+        ),
     )
     out = asyncio.run(tool.execute(context=ctx, message="drink water", interval=60))
     assert out.startswith("Created job")
@@ -209,10 +211,12 @@ async def test_message_tool_prefers_interactive_target_from_context() -> None:
         session_key="heartbeat:slack:C111:2026-03-27",
         message_id="m-hb",
         metadata={"_cron_in_job": True},
-        interactive_channel="slack",
-        interactive_chat_id="C111",
-        interactive_session_key="slack:C111:T333",
-        interactive_metadata={"slack": {"thread_ts": "T333", "channel_type": "channel"}},
+        interactive=DeliveryTarget(
+            channel="slack",
+            chat_id="C111",
+            session_key="slack:C111:T333",
+            metadata={"slack": {"thread_ts": "T333", "channel_type": "channel"}},
+        ),
     )
     await tool.execute(context=ctx, content="heartbeat ping")
     assert len(sent) == 1

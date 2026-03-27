@@ -20,6 +20,7 @@ from rich.markdown import Markdown
 from rich.text import Text
 
 from weavbot import __logo__, __version__
+from weavbot.agent.tools.base import DeliveryTarget
 from weavbot.config.schema import Config
 from weavbot.i18n import t
 from weavbot.utils.helpers import sync_workspace_templates
@@ -244,10 +245,10 @@ async def _suppress_background_progress(_content: str, *, tool_hint: bool = Fals
     return None
 
 
-def _parse_heartbeat_target(key: str) -> tuple[str, str, str, dict[str, object]] | None:
+def _parse_heartbeat_target(key: str) -> DeliveryTarget | None:
     """Parse a session key into heartbeat delivery target fields.
 
-    Returns (channel, chat_id, session_key, metadata) or None for invalid keys.
+    Returns routable target or None for invalid keys.
     """
     text = (key or "").strip()
     if not text:
@@ -257,7 +258,12 @@ def _parse_heartbeat_target(key: str) -> tuple[str, str, str, dict[str, object]]
     if text.startswith("wechat:"):
         parts = text.split(":", 2)
         if len(parts) == 3 and parts[1] and parts[2]:
-            return "wechat", parts[2], text, {"wechat": {"account_key": parts[1]}}
+            return DeliveryTarget(
+                channel="wechat",
+                chat_id=parts[2],
+                session_key=text,
+                metadata={"wechat": {"account_key": parts[1]}},
+            )
         return None
 
     if ":" not in text:
@@ -265,12 +271,12 @@ def _parse_heartbeat_target(key: str) -> tuple[str, str, str, dict[str, object]]
     channel, chat_id = text.split(":", 1)
     if not channel or not chat_id:
         return None
-    return channel, chat_id, text, {}
+    return DeliveryTarget(channel=channel, chat_id=chat_id, session_key=text, metadata={})
 
 
 def _extract_interactive_target(
     item: dict[str, object], enabled_channels: set[str]
-) -> tuple[str, str, str, dict[str, object]] | None:
+) -> DeliveryTarget | None:
     """Extract interactive delivery target from session item metadata or key fallback."""
     key = str(item.get("key") or "")
     if key.startswith(("heartbeat:", "cron:", "system:")):
@@ -278,47 +284,33 @@ def _extract_interactive_target(
 
     meta = item.get("metadata")
     session_meta = meta if isinstance(meta, dict) else {}
-    target = session_meta.get("interactive_target")
-    target = target if isinstance(target, dict) else {}
-    channel = target.get("channel")
-    chat_id = target.get("chat_id")
-    session_key = target.get("session_key")
-    target_meta = target.get("metadata")
-    if (
-        isinstance(channel, str)
-        and channel not in {"cli", "system"}
-        and isinstance(chat_id, str)
-        and chat_id
-        and channel in enabled_channels
-    ):
-        normalized_session_key = (
-            session_key
-            if isinstance(session_key, str) and session_key.strip()
-            else f"{channel}:{chat_id}"
-        )
-        normalized_meta = dict(target_meta) if isinstance(target_meta, dict) else {}
-        return channel, chat_id, normalized_session_key, normalized_meta
+    target = DeliveryTarget.from_dict(
+        session_meta.get("interactive_target")
+        if isinstance(session_meta.get("interactive_target"), dict)
+        else None
+    )
+    if target and target.channel not in {"cli", "system"} and target.channel in enabled_channels:
+        return target
 
     parsed = _parse_heartbeat_target(key)
     if not parsed:
         return None
-    parsed_channel, parsed_chat_id, parsed_session_key, parsed_meta = parsed
-    if parsed_channel in {"cli", "system"}:
+    if parsed.channel in {"cli", "system"}:
         return None
-    if parsed_channel in enabled_channels and parsed_chat_id:
-        return parsed_channel, parsed_chat_id, parsed_session_key, parsed_meta
+    if parsed.channel in enabled_channels and parsed.chat_id:
+        return parsed
     return None
 
 
 def _pick_heartbeat_target_from_sessions(
     sessions: list[dict[str, object]], enabled_channels: set[str]
-) -> tuple[str, str, str, dict[str, object]]:
+) -> DeliveryTarget:
     """Pick routable heartbeat target from recent user-facing sessions."""
     for item in sessions:
         target = _extract_interactive_target(item, enabled_channels)
         if target:
             return target
-    return "cli", "direct", "cli:direct", {}
+    return DeliveryTarget(channel="cli", chat_id="direct", session_key="cli:direct", metadata={})
 
 
 async def _read_interactive_input_async() -> str:
@@ -551,25 +543,19 @@ def gateway(
 
         channel = job.payload.channel or "cli"
         chat_id = job.payload.to or "direct"
-        interactive_channel = job.payload.interactive_channel
-        interactive_chat_id = job.payload.interactive_chat_id
-        interactive_session_key = job.payload.interactive_session_key
-        interactive_metadata = dict(job.payload.interactive_metadata or {})
-        if not interactive_channel or not interactive_chat_id:
-            (
-                fallback_channel,
-                fallback_chat_id,
-                fallback_session_key,
-                fallback_metadata,
-            ) = _pick_heartbeat_target_from_sessions(
+        interactive_target = DeliveryTarget.from_optional(
+            channel=job.payload.interactive_channel,
+            chat_id=job.payload.interactive_chat_id,
+            session_key=job.payload.interactive_session_key,
+            metadata=job.payload.interactive_metadata,
+        )
+        if interactive_target is None:
+            fallback_target = _pick_heartbeat_target_from_sessions(
                 session_manager.list_sessions(),
                 set(channels.enabled_channels),
             )
-            if fallback_channel != "cli":
-                interactive_channel = fallback_channel
-                interactive_chat_id = fallback_chat_id
-                interactive_session_key = fallback_session_key
-                interactive_metadata = fallback_metadata
+            if fallback_target.channel != "cli":
+                interactive_target = fallback_target
         reminder_note = _build_cron_execute_input(
             job_name=job.name,
             instruction=job.payload.message,
@@ -585,10 +571,7 @@ def gateway(
                 chat_id=chat_id,
                 metadata={"_cron_in_job": True},
                 on_progress=_suppress_background_progress,
-                interactive_channel=interactive_channel,
-                interactive_chat_id=interactive_chat_id,
-                interactive_session_key=interactive_session_key,
-                interactive_metadata=interactive_metadata,
+                interactive=interactive_target,
             )
         except Exception as e:
             logger.exception("Cron job execution failed: id={}, name={}", job.id, job.name)
@@ -620,9 +603,9 @@ def gateway(
 
     # Create channel manager
     channels = ChannelManager(config, bus)
-    last_heartbeat_target: tuple[str, str, str, dict[str, object]] | None = None
+    last_heartbeat_target: DeliveryTarget | None = None
 
-    def _pick_heartbeat_target() -> tuple[str, str, str, dict[str, object]]:
+    def _pick_heartbeat_target() -> DeliveryTarget:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
         return _pick_heartbeat_target_from_sessions(
             session_manager.list_sessions(),
@@ -637,38 +620,37 @@ def gateway(
     async def on_heartbeat_execute(tasks: str) -> str:
         """Phase 2: execute heartbeat tasks through the full agent loop."""
         nonlocal last_heartbeat_target
-        channel, chat_id, target_session_key, target_meta = _pick_heartbeat_target()
-        last_heartbeat_target = (channel, chat_id, target_session_key, target_meta)
-        session_key = _heartbeat_session_key(channel, chat_id)
+        target = _pick_heartbeat_target()
+        last_heartbeat_target = target
+        session_key = _heartbeat_session_key(target.channel, target.chat_id)
         execute_input = _build_heartbeat_execute_input(
             tasks,
-            channel=channel,
-            chat_id=chat_id,
-            target_metadata=target_meta,
+            channel=target.channel,
+            chat_id=target.chat_id,
+            target_metadata=target.metadata,
         )
         try:
             final_content = await agent.process_direct(
                 execute_input,
                 session_key=session_key,
-                channel=channel,
-                chat_id=chat_id,
-                metadata=target_meta,
+                channel=target.channel,
+                chat_id=target.chat_id,
+                metadata=target.metadata,
                 on_progress=_suppress_background_progress,
-                interactive_channel=channel,
-                interactive_chat_id=chat_id,
-                interactive_session_key=target_session_key,
-                interactive_metadata=target_meta,
+                interactive=target,
             )
         except Exception as e:
-            logger.exception("Heartbeat execute failed: channel={}, chat_id={}", channel, chat_id)
+            logger.exception(
+                "Heartbeat execute failed: channel={}, chat_id={}", target.channel, target.chat_id
+            )
             return f"[Heartbeat Error] Task execution failed: {e}"
 
         if final_content and _looks_like_agent_error(final_content):
             return f"[Heartbeat Error] {final_content}"
         logger.info(
             "Heartbeat execute completed without outbound notify: channel={}, chat_id={}, final_len={}",
-            channel,
-            chat_id,
+            target.channel,
+            target.chat_id,
             len(final_content or ""),
         )
         return ""
@@ -679,20 +661,22 @@ def gateway(
         from weavbot.bus.events import OutboundMessage
 
         target = last_heartbeat_target or _pick_heartbeat_target()
-        channel, chat_id, _, target_meta = target
-        if channel == "cli":
+        if target.channel == "cli":
             logger.warning("Heartbeat notify skipped because no recent routable user target found")
             return  # No external channel available to deliver to
         logger.info(
             "Heartbeat notify deliver: channel={}, chat_id={}, content_len={}, meta_keys={}",
-            channel,
-            chat_id,
+            target.channel,
+            target.chat_id,
             len(response or ""),
-            sorted(target_meta.keys()),
+            sorted(target.metadata.keys()),
         )
         await bus.publish_outbound(
             OutboundMessage(
-                channel=channel, chat_id=chat_id, content=response, metadata=target_meta
+                channel=target.channel,
+                chat_id=target.chat_id,
+                content=response,
+                metadata=target.metadata,
             )
         )
 

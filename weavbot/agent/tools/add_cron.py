@@ -87,6 +87,7 @@ class AddCronTool(Tool):
         else:
             return "Error: either interval, expr, or at is required"
 
+        interactive_target = context.interactive
         job = self._cron.add_job(
             name=message[:30],
             schedule=schedule,
@@ -94,13 +95,17 @@ class AddCronTool(Tool):
             deliver=True,
             channel=context.channel,
             to=context.chat_id,
-            interactive_channel=context.interactive_channel or context.channel,
-            interactive_chat_id=context.interactive_chat_id or context.chat_id,
-            interactive_session_key=context.interactive_session_key or context.session_key,
+            interactive_channel=(
+                interactive_target.channel if interactive_target else context.channel
+            ),
+            interactive_chat_id=(
+                interactive_target.chat_id if interactive_target else context.chat_id
+            ),
+            interactive_session_key=(
+                interactive_target.session_key if interactive_target else context.session_key
+            ),
             interactive_metadata=(
-                context.interactive_metadata
-                if context.interactive_channel and context.interactive_chat_id
-                else context.metadata
+                interactive_target.metadata if interactive_target else context.metadata
             ),
             delete_after_run=delete_after,
         )

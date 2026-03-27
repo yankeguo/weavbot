@@ -103,19 +103,7 @@ class CronService:
                                 expr=j["schedule"].get("expr"),
                                 tz=j["schedule"].get("tz"),
                             ),
-                            payload=CronPayload(
-                                kind=j["payload"].get("kind", "agent_turn"),
-                                message=j["payload"].get("message", ""),
-                                deliver=j["payload"].get("deliver", False),
-                                channel=j["payload"].get("channel"),
-                                to=j["payload"].get("to"),
-                                interactive_channel=j["payload"].get("interactiveChannel"),
-                                interactive_chat_id=j["payload"].get("interactiveChatId"),
-                                interactive_session_key=j["payload"].get("interactiveSessionKey"),
-                                interactive_metadata=dict(
-                                    j["payload"].get("interactiveMetadata") or {}
-                                ),
-                            ),
+                            payload=CronPayload.from_store_dict(j.get("payload", {})),
                             state=CronJobState(
                                 next_run_at_ms=j.get("state", {}).get("nextRunAtMs"),
                                 last_run_at_ms=j.get("state", {}).get("lastRunAtMs"),
@@ -157,17 +145,7 @@ class CronService:
                         "expr": j.schedule.expr,
                         "tz": j.schedule.tz,
                     },
-                    "payload": {
-                        "kind": j.payload.kind,
-                        "message": j.payload.message,
-                        "deliver": j.payload.deliver,
-                        "channel": j.payload.channel,
-                        "to": j.payload.to,
-                        "interactiveChannel": j.payload.interactive_channel,
-                        "interactiveChatId": j.payload.interactive_chat_id,
-                        "interactiveSessionKey": j.payload.interactive_session_key,
-                        "interactiveMetadata": j.payload.interactive_metadata,
-                    },
+                    "payload": j.payload.to_store_dict(),
                     "state": {
                         "nextRunAtMs": j.state.next_run_at_ms,
                         "lastRunAtMs": j.state.last_run_at_ms,

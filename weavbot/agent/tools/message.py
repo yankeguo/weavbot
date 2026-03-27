@@ -62,16 +62,20 @@ class MessageTool(Tool):
         media: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
-        channel = channel or context.interactive_channel or context.channel
-        chat_id = chat_id or context.interactive_chat_id or context.chat_id
+        interactive_target = context.interactive
+        channel = (
+            channel
+            or (interactive_target.channel if interactive_target else None)
+            or context.channel
+        )
+        chat_id = (
+            chat_id
+            or (interactive_target.chat_id if interactive_target else None)
+            or context.chat_id
+        )
         message_id = message_id or context.message_id
-        if (
-            channel == context.interactive_channel
-            and chat_id == context.interactive_chat_id
-            and context.interactive_channel
-            and context.interactive_chat_id
-        ):
-            metadata = dict(context.interactive_metadata or {})
+        if interactive_target and interactive_target.matches(channel=channel, chat_id=chat_id):
+            metadata = dict(interactive_target.metadata or {})
         elif channel == context.channel and chat_id == context.chat_id:
             metadata = dict(context.metadata or {})
         else:
