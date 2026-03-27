@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore
 from weavbot.config.schema import Config
+
+if TYPE_CHECKING:
+    from weavbot.bus.queue import MessageBus
 
 
 class ChannelManager:
