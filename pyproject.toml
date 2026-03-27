@@ -44,6 +44,7 @@ dependencies = [
     # Pin chardet for requests compatibility (requests expects chardet<6)
     "chardet>=3.0.2,<6",
     "anthropic>=0.84.0",
+    "aiofiles>=25.1.0",
 ]
 
 [project.optional-dependencies]

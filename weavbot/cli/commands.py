@@ -255,7 +255,7 @@ async def _suppress_background_progress(_content: str, *, tool_hint: bool = Fals
     return None
 
 
-def _extract_interactive_target(
+async def _extract_interactive_target(
     item: dict[str, object], enabled_channels: set[str], channel_store: "ChannelStore"
 ) -> RouteTarget | None:
     """Extract interactive delivery target from session pointer then resolve via ChannelStore."""
@@ -276,7 +276,7 @@ def _extract_interactive_target(
     target_session_key = str(payload.get("session_key") or "").strip()
     if not target_session_key:
         return None
-    resolved = channel_store.resolve(target_session_key)
+    resolved = await channel_store.resolve(target_session_key)
     if (
         resolved
         and resolved.channel not in {"cli", "system"}
@@ -291,14 +291,14 @@ def _extract_interactive_target(
     return None
 
 
-def _pick_heartbeat_target_from_sessions(
+async def _pick_heartbeat_target_from_sessions(
     sessions: list[dict[str, object]],
     enabled_channels: set[str],
     channel_store: "ChannelStore",
 ) -> RouteTarget:
     """Pick routable heartbeat target from recent user-facing sessions."""
     for item in sessions:
-        target = _extract_interactive_target(item, enabled_channels, channel_store)
+        target = await _extract_interactive_target(item, enabled_channels, channel_store)
         if target:
             return target
     return RouteTarget(
@@ -587,7 +587,7 @@ def gateway(
         from weavbot.bus.events import OutboundMessage
 
         primary = (
-            channel_store.resolve(job.payload.original_session_key)
+            await channel_store.resolve(job.payload.original_session_key)
             if job.payload.original_session_key
             else None
         )
@@ -595,7 +595,7 @@ def gateway(
         chat_id = primary.chat_id if primary else "direct"
 
         ikey = job.payload.interactive_session_key
-        interactive_resolved = channel_store.resolve(ikey) if ikey else None
+        interactive_resolved = await channel_store.resolve(ikey) if ikey else None
         interactive_target = _resolve_cron_interactive_target(
             job_id=job.id,
             interactive_session_key=ikey,
@@ -671,9 +671,9 @@ def gateway(
     channels = ChannelManager(config, bus, channel_store=channel_store)
     last_heartbeat_target: RouteTarget | None = None
 
-    def _pick_heartbeat_target() -> RouteTarget:
+    async def _pick_heartbeat_target() -> RouteTarget:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
-        return _pick_heartbeat_target_from_sessions(
+        return await _pick_heartbeat_target_from_sessions(
             session_manager.list_sessions(),
             set(channels.enabled_channels),
             channel_store,
@@ -687,7 +687,7 @@ def gateway(
     async def on_heartbeat_execute(tasks: str) -> str:
         """Phase 2: execute heartbeat tasks through the full agent loop."""
         nonlocal last_heartbeat_target
-        target = _pick_heartbeat_target()
+        target = await _pick_heartbeat_target()
         last_heartbeat_target = target
         session_key = _heartbeat_session_key(target.session_key)
         execute_input = _build_heartbeat_execute_input(
@@ -724,7 +724,7 @@ def gateway(
         nonlocal last_heartbeat_target
         from weavbot.bus.events import OutboundMessage
 
-        target = last_heartbeat_target or _pick_heartbeat_target()
+        target = last_heartbeat_target or await _pick_heartbeat_target()
         if target.channel == "cli":
             logger.warning("Heartbeat notify skipped because no recent routable user target found")
             return  # No external channel available to deliver to

@@ -250,7 +250,7 @@ class ChannelManager:
                     ):
                         continue
 
-                target = self.channel_store.resolve(msg.session_key)
+                target = await self.channel_store.resolve(msg.session_key)
                 if not target:
                     logger.warning("No channel target for session_key: {}", msg.session_key)
                     continue

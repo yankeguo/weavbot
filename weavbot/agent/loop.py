@@ -145,7 +145,7 @@ class AgentLoop:
         prefix, _, _ = key.partition("_")
         return prefix in cls._INTERNAL_SESSION_PREFIXES
 
-    def _upsert_internal_session_target(
+    async def _upsert_internal_session_target(
         self,
         *,
         session_key: str,
@@ -162,7 +162,7 @@ class AgentLoop:
         route_chat_id = (chat_id or "").strip()
         if not route_channel or not route_chat_id:
             return
-        self.channel_store.upsert(
+        await self.channel_store.upsert(
             session_key,
             ChannelTarget(
                 channel=route_channel,
@@ -171,14 +171,14 @@ class AgentLoop:
             ),
         )
 
-    def _resolve_channel_target(self, session_key: str | None) -> ChannelTarget | None:
+    async def _resolve_channel_target(self, session_key: str | None) -> ChannelTarget | None:
         """Resolve a session key from ChannelStore, when available."""
         if not self.channel_store:
             return None
         key = str(session_key or "").strip()
         if not key:
             return None
-        return self.channel_store.resolve(key)
+        return await self.channel_store.resolve(key)
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
@@ -859,7 +859,7 @@ class AgentLoop:
                 or str(msg.metadata.get("_original_session_key") or "").strip()
                 or key
             )
-            resolved_route_target = self._resolve_channel_target(target_session_key)
+            resolved_route_target = await self._resolve_channel_target(target_session_key)
             if not resolved_route_target:
                 logger.warning(
                     "System message missing routable target: session_key={}, target_session_key={}, sender={}",
@@ -874,7 +874,7 @@ class AgentLoop:
             logger.info("Processing system message from {}", msg.sender_id)
             route_target = resolved_route_target
             if route_target and route_target.channel and route_target.chat_id:
-                self._upsert_internal_session_target(
+                await self._upsert_internal_session_target(
                     session_key=key,
                     channel=str(route_target.channel),
                     chat_id=str(route_target.chat_id),
@@ -920,7 +920,7 @@ class AgentLoop:
             str(saved_interactive["session_key"]) if saved_interactive else None
         )
         target_session_key = resolved_interactive_session_key or key
-        route_target = self._resolve_channel_target(target_session_key)
+        route_target = await self._resolve_channel_target(target_session_key)
         if not route_target and target_session_key == InboundMessage.default_session_key(
             "cli", "direct"
         ):
@@ -937,7 +937,7 @@ class AgentLoop:
                 session_key=msg.session_key,
                 content="Message dropped: unresolved target session.",
             )
-        self._upsert_internal_session_target(
+        await self._upsert_internal_session_target(
             session_key=key,
             channel=str(route_target.channel),
             chat_id=str(route_target.chat_id),
@@ -1057,7 +1057,7 @@ class AgentLoop:
         await self._connect_mcp()
         normalized_session_key = validate_session_key(session_key)
         target_session_key = interactive_session_key or normalized_session_key
-        route_target = self._resolve_channel_target(target_session_key)
+        route_target = await self._resolve_channel_target(target_session_key)
         if not route_target and target_session_key == InboundMessage.default_session_key(
             "cli", "direct"
         ):
@@ -1069,7 +1069,7 @@ class AgentLoop:
                 target_session_key,
             )
             return "Direct message dropped: unresolved target session."
-        self._upsert_internal_session_target(
+        await self._upsert_internal_session_target(
             session_key=normalized_session_key,
             channel=str(route_target.channel),
             chat_id=str(route_target.chat_id),

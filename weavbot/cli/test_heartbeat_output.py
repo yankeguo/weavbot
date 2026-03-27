@@ -49,9 +49,10 @@ def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
     assert assembled == ""
 
 
-def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
-    store.upsert(
+    await store.upsert(
         "wechat_acc-a_u_new",
         ChannelTarget(
             channel="wechat",
@@ -71,29 +72,34 @@ def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata(tmp_p
             },
         },
     ]
-    target = _pick_heartbeat_target_from_sessions(sessions, {"wechat"}, store)
+    target = await _pick_heartbeat_target_from_sessions(sessions, {"wechat"}, store)
     assert target.channel == "wechat"
     assert target.chat_id == "u_new"
     assert target.session_key == "wechat_acc-a_u_new"
     assert target.metadata == {"wechat": {"account_key": "acc-a"}}
 
 
-def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
     sessions = [
         {"key": "feishu:oc_legacy"},
         {"key": "cli:direct"},
     ]
-    target = _pick_heartbeat_target_from_sessions(sessions, {"wechat"}, store)
+    target = await _pick_heartbeat_target_from_sessions(sessions, {"wechat"}, store)
     assert target.channel == "cli"
     assert target.chat_id == "direct"
     assert target.session_key == "cli_direct"
     assert target.metadata == {}
 
 
-def test_pick_heartbeat_target_ignores_background_sessions(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_pick_heartbeat_target_ignores_background_sessions(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
-    store.upsert("telegram_2002", ChannelTarget(channel="telegram", chat_id="2002", metadata={}))
+    await store.upsert(
+        "telegram_2002",
+        ChannelTarget(channel="telegram", chat_id="2002", metadata={}),
+    )
     sessions = [
         {"key": "heartbeat:telegram:1001:2026-03-26"},
         {"key": "cron:job-1"},
@@ -107,16 +113,17 @@ def test_pick_heartbeat_target_ignores_background_sessions(tmp_path) -> None:
             },
         },
     ]
-    target = _pick_heartbeat_target_from_sessions(sessions, {"telegram"}, store)
+    target = await _pick_heartbeat_target_from_sessions(sessions, {"telegram"}, store)
     assert target.channel == "telegram"
     assert target.chat_id == "2002"
     assert target.session_key == "telegram_2002"
     assert target.metadata == {}
 
 
-def test_pick_heartbeat_target_prefers_session_interactive_snapshot(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_pick_heartbeat_target_prefers_session_interactive_snapshot(tmp_path) -> None:
     store = ChannelStore(tmp_path / "channels")
-    store.upsert(
+    await store.upsert(
         "slack_C111_T222",
         ChannelTarget(
             channel="slack",
@@ -135,7 +142,7 @@ def test_pick_heartbeat_target_prefers_session_interactive_snapshot(tmp_path) ->
             },
         }
     ]
-    target = _pick_heartbeat_target_from_sessions(sessions, {"slack", "telegram"}, store)
+    target = await _pick_heartbeat_target_from_sessions(sessions, {"slack", "telegram"}, store)
     assert target.channel == "slack"
     assert target.chat_id == "C111"
     assert target.session_key == "slack_C111_T222"

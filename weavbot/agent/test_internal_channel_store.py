@@ -72,7 +72,7 @@ async def test_process_direct_upserts_cli_internal_session_to_channel_store(tmp_
     out = await loop.process_direct("hello", session_key=session_key)
 
     assert out == "ok"
-    target = loop.channel_store.resolve(session_key) if loop.channel_store else None
+    target = await loop.channel_store.resolve(session_key) if loop.channel_store else None
     assert target is not None
     assert target.channel == "cli"
     assert target.chat_id == "direct"
@@ -90,7 +90,7 @@ async def test_process_direct_prefers_interactive_route_for_cron_internal_sessio
     session_key = build_session_key("cron", "job-1")
     interactive_session_key = build_session_key("slack", "C111", "T333")
     assert loop.channel_store is not None
-    loop.channel_store.upsert(
+    await loop.channel_store.upsert(
         interactive_session_key,
         ChannelTarget(
             channel="slack",
@@ -109,7 +109,7 @@ async def test_process_direct_prefers_interactive_route_for_cron_internal_sessio
     )
 
     assert out == "ok"
-    target = loop.channel_store.resolve(session_key) if loop.channel_store else None
+    target = await loop.channel_store.resolve(session_key) if loop.channel_store else None
     assert target is not None
     assert target.channel == "slack"
     assert target.chat_id == "C111"
@@ -129,7 +129,7 @@ async def test_system_message_upserts_internal_session_with_original_session_key
     original_key = build_session_key("slack", "C999", "T111")
     session_key = build_session_key("system", "sub", "task-42")
     assert loop.channel_store is not None
-    loop.channel_store.upsert(
+    await loop.channel_store.upsert(
         original_key,
         ChannelTarget(
             channel="slack",
@@ -152,7 +152,7 @@ async def test_system_message_upserts_internal_session_with_original_session_key
 
     assert out is not None
     assert out.content == "ok"
-    target = loop.channel_store.resolve(session_key) if loop.channel_store else None
+    target = await loop.channel_store.resolve(session_key) if loop.channel_store else None
     assert target is not None
     assert target.channel == "slack"
     assert target.chat_id == "C999"
@@ -173,7 +173,7 @@ async def test_process_direct_message_tool_to_interactive_target_skips_extra_fin
     internal_key = build_session_key("cron", "job-42")
     interactive_key = build_session_key("slack", "C111", "T333")
     assert loop.channel_store is not None
-    loop.channel_store.upsert(
+    await loop.channel_store.upsert(
         interactive_key,
         ChannelTarget(
             channel="slack",
@@ -208,7 +208,7 @@ async def test_system_message_prefers_channel_store_target_over_chat_id_split(tm
         channel_store=store,
     )
     session_key = build_session_key("system", build_session_key("slack", "C999", "T111"))
-    store.upsert(
+    await store.upsert(
         session_key,
         ChannelTarget(
             channel="slack",
@@ -228,7 +228,7 @@ async def test_system_message_prefers_channel_store_target_over_chat_id_split(tm
     out = await loop._process_message(msg)
 
     assert out is not None
-    target = store.resolve(session_key)
+    target = await store.resolve(session_key)
     assert target is not None
     assert target.chat_id == "C999"
 
@@ -244,7 +244,7 @@ async def test_system_message_uses_original_session_key_routing(tmp_path) -> Non
     )
     original_key = build_session_key("slack", "C777", "T888")
     sub_key = build_session_key("system", "sub", "task-1")
-    store.upsert(
+    await store.upsert(
         original_key,
         ChannelTarget(
             channel="slack",
@@ -265,7 +265,7 @@ async def test_system_message_uses_original_session_key_routing(tmp_path) -> Non
 
     assert out is not None
     assert out.content == "ok"
-    target = store.resolve(sub_key)
+    target = await store.resolve(sub_key)
     assert target is not None
     assert target.channel == "slack"
     assert target.chat_id == "C777"

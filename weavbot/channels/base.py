@@ -149,7 +149,7 @@ class BaseChannel(ABC):
             metadata=metadata or {},
         )
         if self.channel_store:
-            self.channel_store.upsert(
+            await self.channel_store.upsert(
                 msg.session_key,
                 ChannelTarget(
                     channel=self.name,
