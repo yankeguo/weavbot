@@ -76,20 +76,35 @@ class ChannelStore:
     def upsert(self, session_key: str, target: ChannelTarget) -> None:
         try:
             key = build_session_key(str(session_key or "").strip())
-        except ValueError:
+        except ValueError as e:
+            logger.warning(
+                "ChannelStore upsert ignored invalid session_key '{}': {}", session_key, e
+            )
             return
         target.updated_at = datetime.now().isoformat()
-        self._targets[key] = target
         self.dir.mkdir(parents=True, exist_ok=True)
-        (self.dir / f"{key}.json").write_text(
-            json.dumps(target.to_dict(), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        dest = self.dir / f"{key}.json"
+        tmp = self.dir / f".{key}.json.tmp"
+        payload = json.dumps(target.to_dict(), indent=2, ensure_ascii=False)
+        try:
+            tmp.write_text(payload, encoding="utf-8")
+            tmp.replace(dest)
+        except Exception as e:
+            logger.error("ChannelStore upsert failed for key '{}': {}", key, e)
+            try:
+                tmp.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return
+        self._targets[key] = target
 
     def delete(self, session_key: str) -> None:
         try:
             key = build_session_key(str(session_key or "").strip())
-        except ValueError:
+        except ValueError as e:
+            logger.warning(
+                "ChannelStore delete ignored invalid session_key '{}': {}", session_key, e
+            )
             return
         if key in self._targets:
             del self._targets[key]
@@ -98,6 +113,9 @@ class ChannelStore:
     def resolve(self, session_key: str) -> ChannelTarget | None:
         try:
             key = build_session_key(str(session_key or "").strip())
-        except ValueError:
+        except ValueError as e:
+            logger.warning(
+                "ChannelStore resolve ignored invalid session_key '{}': {}", session_key, e
+            )
             return None
         return self._targets.get(key)

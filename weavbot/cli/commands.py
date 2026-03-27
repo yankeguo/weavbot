@@ -362,6 +362,51 @@ def _pick_heartbeat_target_from_sessions(
     )
 
 
+def _resolve_cron_interactive_target(
+    *,
+    job_id: str,
+    interactive_session_key: str | None,
+    interactive_resolved: object | None,
+    original_session_key: str | None,
+    primary: object | None,
+) -> RouteTarget | None:
+    """Resolve cron interactive target without falling back to unrelated sessions."""
+    if interactive_session_key and interactive_resolved:
+        channel = str(getattr(interactive_resolved, "channel", "") or "").strip()
+        chat_id = str(getattr(interactive_resolved, "chat_id", "") or "").strip()
+        if channel and chat_id:
+            return RouteTarget(
+                channel=channel,
+                chat_id=chat_id,
+                session_key=interactive_session_key,
+                metadata=dict(getattr(interactive_resolved, "metadata", {}) or {}),
+            )
+
+    if original_session_key and primary:
+        channel = str(getattr(primary, "channel", "") or "").strip()
+        chat_id = str(getattr(primary, "chat_id", "") or "").strip()
+        if channel and chat_id:
+            return RouteTarget(
+                channel=channel,
+                chat_id=chat_id,
+                session_key=original_session_key,
+                metadata=dict(getattr(primary, "metadata", {}) or {}),
+            )
+
+    if interactive_session_key:
+        logger.warning(
+            "Cron interactive_session_key could not be resolved: job_id={}, interactive_session_key={}",
+            job_id,
+            interactive_session_key,
+        )
+    else:
+        logger.warning(
+            "Cron job missing interactive_session_key and original route: job_id={}",
+            job_id,
+        )
+    return None
+
+
 async def _read_interactive_input_async() -> str:
     """Read user input using prompt_toolkit (handles paste, history, display).
 
@@ -604,23 +649,13 @@ def gateway(
 
         ikey = job.payload.interactive_session_key
         interactive_resolved = channel_store.resolve(ikey) if ikey else None
-        interactive_target = (
-            RouteTarget(
-                channel=interactive_resolved.channel,
-                chat_id=interactive_resolved.chat_id,
-                session_key=ikey,
-                metadata=interactive_resolved.metadata,
-            )
-            if interactive_resolved
-            else None
+        interactive_target = _resolve_cron_interactive_target(
+            job_id=job.id,
+            interactive_session_key=ikey,
+            interactive_resolved=interactive_resolved,
+            original_session_key=job.payload.original_session_key,
+            primary=primary,
         )
-        if interactive_target is None:
-            fallback_target = _pick_heartbeat_target_from_sessions(
-                session_manager.list_sessions(),
-                set(channels.enabled_channels),
-            )
-            if fallback_target.channel != "cli":
-                interactive_target = fallback_target
         reminder_note = _build_cron_execute_input(
             job_name=job.name,
             instruction=job.payload.message,

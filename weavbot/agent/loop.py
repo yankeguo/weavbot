@@ -253,6 +253,19 @@ class AgentLoop:
         )
 
     @staticmethod
+    def _resolve_message_target_session_key(
+        *,
+        context: ToolExecutionContext,
+        args: dict[str, Any] | None,
+    ) -> str:
+        """Resolve message target using the same precedence as MessageTool."""
+        payload = args if isinstance(args, dict) else {}
+        explicit_target = str(payload.get("session_key") or "").strip()
+        return (
+            explicit_target or (context.original_session_key or "").strip() or context.session_key
+        )
+
+    @staticmethod
     def _extract_interactive_route_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
         """Extract only routing-relevant metadata for interactive reply targets."""
         src = metadata if isinstance(metadata, dict) else {}
@@ -710,14 +723,11 @@ class AgentLoop:
                         and isinstance(result, str)
                         and result.startswith("Message sent to session ")
                     ):
-                        args = tool_call.arguments if isinstance(tool_call.arguments, dict) else {}
-                        explicit_target = str(args.get("session_key") or "").strip()
-                        resolved_target = (
-                            explicit_target
-                            or (tool_context.original_session_key or "").strip()
-                            or tool_context.session_key
+                        resolved_target = self._resolve_message_target_session_key(
+                            context=tool_context,
+                            args=tool_call.arguments,
                         )
-                        if resolved_target == tool_context.session_key:
+                        if resolved_target:
                             message_sent_in_turn = True
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
@@ -855,10 +865,17 @@ class AgentLoop:
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
         if msg.channel == "system":
+            key = session_key or msg.session_key
             channel = str(msg.metadata.get("_origin_channel") or "").strip()
             chat_id = str(msg.metadata.get("_origin_chat_id") or "").strip()
             if not channel or not chat_id:
-                if "_" in msg.chat_id:
+                resolved_route_target = self._resolve_channel_target(
+                    interactive_session_key
+                ) or self._resolve_channel_target(key)
+                if resolved_route_target:
+                    channel = str(resolved_route_target.channel)
+                    chat_id = str(resolved_route_target.chat_id)
+                elif "_" in msg.chat_id:
                     channel, chat_id = msg.chat_id.split("_", 1)
                 elif ":" in msg.chat_id:
                     # Legacy compatibility for pre-build_session_key system chat_id format.
@@ -866,7 +883,6 @@ class AgentLoop:
                 else:
                     channel, chat_id = "cli", msg.chat_id
             logger.info("Processing system message from {}", msg.sender_id)
-            key = session_key or msg.session_key
             route_target = self._resolve_channel_target(interactive_session_key) or ChannelTarget(
                 channel=channel,
                 chat_id=chat_id,
@@ -882,7 +898,7 @@ class AgentLoop:
             session = self.sessions.get_or_create(key)
             tool_context = self._build_tool_context(
                 session_key=key,
-                original_session_key=interactive_session_key,
+                original_session_key=interactive_session_key or key,
                 message_id=msg.metadata.get("message_id"),
             )
             history, messages = await self._build_initial_messages_with_compaction(
