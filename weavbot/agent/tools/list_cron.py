@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.cron.service import CronService
 
 
@@ -28,7 +28,8 @@ class ListCronTool(Tool):
             "required": [],
         }
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def execute(self, *, context: ToolExecutionContext, **kwargs: Any) -> str:
+        _ = context
         jobs = self._cron.list_jobs()
         if not jobs:
             return "No scheduled jobs."

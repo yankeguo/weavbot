@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.utils import resolve_path
 
 
@@ -33,7 +33,10 @@ class WriteFileTool(Tool):
             "required": ["path", "content"],
         }
 
-    async def execute(self, path: str, content: str, **kwargs: Any) -> str:
+    async def execute(
+        self, *, context: ToolExecutionContext, path: str, content: str, **kwargs: Any
+    ) -> str:
+        _ = context
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             file_path.parent.mkdir(parents=True, exist_ok=True)

@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.utils import resolve_path
 
 # Constants (from read.ts)
@@ -122,11 +122,14 @@ class ReadFileTool(Tool):
 
     async def execute(
         self,
+        *,
+        context: ToolExecutionContext,
         path: str,
         offset: int | None = None,
         limit: int | None = None,
         **kwargs: Any,
     ) -> str:
+        _ = context
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if not file_path.exists():

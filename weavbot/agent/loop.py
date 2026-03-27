@@ -18,6 +18,7 @@ from weavbot.agent.memory import MemoryStore
 from weavbot.agent.messages import ChatMessage
 from weavbot.agent.subagent import SubagentManager
 from weavbot.agent.tools.add_cron import AddCronTool
+from weavbot.agent.tools.base import ToolExecutionContext
 from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.fetch import FetchTool
 from weavbot.agent.tools.glob_file import GlobFileTool
@@ -179,12 +180,23 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
-    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
-        """Update context for all tools that need routing info."""
-        for name in ("message", "spawn", "add_cron"):
-            if tool := self.tools.get(name):
-                if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
+    @staticmethod
+    def _build_tool_context(
+        *,
+        channel: str,
+        chat_id: str,
+        session_key: str,
+        message_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ToolExecutionContext:
+        """Create per-call tool execution context."""
+        return ToolExecutionContext(
+            channel=channel,
+            chat_id=chat_id,
+            session_key=session_key,
+            message_id=message_id,
+            metadata=dict(metadata or {}),
+        )
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -438,6 +450,7 @@ class AgentLoop:
         self,
         session: Session,
         initial_messages: list[ChatMessage],
+        tool_context: ToolExecutionContext,
         on_progress: Callable[..., Awaitable[None]] | None = None,
     ) -> tuple[str | None, list[str], list[ChatMessage], dict[str, int]]:
         """Run the agent iteration loop. Returns (final_content, tools_used, messages, turn_usage)."""
@@ -560,7 +573,9 @@ class AgentLoop:
                     tools_used.append(tool_call.name)
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
-                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    result = await self.tools.execute(
+                        tool_call.name, tool_call.arguments, context=tool_context
+                    )
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -706,14 +721,22 @@ class AgentLoop:
             logger.info("Processing system message from {}", msg.sender_id)
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
-            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+            tool_context = self._build_tool_context(
+                channel=channel,
+                chat_id=chat_id,
+                session_key=key,
+                message_id=msg.metadata.get("message_id"),
+                metadata=msg.metadata,
+            )
             history, messages = await self._build_initial_messages_with_compaction(
                 session,
                 msg.content,
                 channel=channel,
                 chat_id=chat_id,
             )
-            final_content, _, all_msgs, turn_usage = await self._run_agent_loop(session, messages)
+            final_content, _, all_msgs, turn_usage = await self._run_agent_loop(
+                session, messages, tool_context
+            )
             self._save_turn(session, all_msgs, 1 + len(history))
             self._record_session_token_usage(session, turn_usage)
             self.sessions.save(session)
@@ -728,6 +751,13 @@ class AgentLoop:
 
         key = session_key or msg.session_key
         session = self.sessions.get_or_create(key)
+        tool_context = self._build_tool_context(
+            channel=msg.channel,
+            chat_id=msg.chat_id,
+            session_key=key,
+            message_id=msg.metadata.get("message_id"),
+            metadata=msg.metadata,
+        )
 
         # Slash commands
         cmd = msg.content.strip().lower()
@@ -760,7 +790,6 @@ class AgentLoop:
                 content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
 
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
@@ -789,6 +818,7 @@ class AgentLoop:
         final_content, _, all_msgs, turn_usage = await self._run_agent_loop(
             session,
             initial_messages,
+            tool_context,
             on_progress=on_progress or _bus_progress,
         )
 

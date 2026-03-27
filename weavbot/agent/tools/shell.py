@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 
 _MAX_OUTPUT_LEN = 30_000
 
@@ -99,12 +99,15 @@ class ShellTool(Tool):
 
     async def execute(
         self,
+        *,
+        context: ToolExecutionContext,
         command: str,
         workdir: str | None = None,
         timeout: int | None = None,
         entrypoint: str | None = None,
         **kwargs: Any,
     ) -> str:
+        _ = context
         if workdir:
             wd = Path(workdir).expanduser()
             if not wd.is_absolute():

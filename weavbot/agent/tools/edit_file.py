@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterator
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.utils import resolve_path
 
 # --- Line ending helpers ---
@@ -312,12 +312,15 @@ Usage:
 
     async def execute(
         self,
+        *,
+        context: ToolExecutionContext,
         path: str,
         old_text: str,
         new_text: str,
         replace_all: bool = False,
         **kwargs: Any,
     ) -> str:
+        _ = context
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if file_path.exists() and file_path.is_dir():

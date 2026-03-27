@@ -6,6 +6,17 @@ from typing import Any
 
 
 @dataclass
+class ToolExecutionContext:
+    """Per-tool-call runtime routing context."""
+
+    channel: str
+    chat_id: str
+    session_key: str
+    message_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ToolResult:
     """Result from a tool that includes media file references."""
 
@@ -49,11 +60,12 @@ class Tool(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, **kwargs: Any) -> str | ToolResult:
+    async def execute(self, *, context: ToolExecutionContext, **kwargs: Any) -> str | ToolResult:
         """
         Execute the tool with given parameters.
 
         Args:
+            context: Runtime execution context for routing/session information.
             **kwargs: Tool-specific parameters.
 
         Returns:

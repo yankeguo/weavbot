@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.agent.tools.registry import ToolRegistry
 
 
@@ -34,9 +34,10 @@ class MCPToolWrapper(Tool):
     def parameters(self) -> dict[str, Any]:
         return self._parameters
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def execute(self, *, context: ToolExecutionContext, **kwargs: Any) -> str:
         from mcp import types
 
+        _ = context
         try:
             result = await asyncio.wait_for(
                 self._session.call_tool(self._original_name, arguments=kwargs),

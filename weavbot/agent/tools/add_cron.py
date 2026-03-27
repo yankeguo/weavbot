@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.cron.service import CronService
 from weavbot.cron.types import CronSchedule
 
@@ -15,14 +15,7 @@ class AddCronTool(Tool):
 
     def __init__(self, cron_service: CronService):
         self._cron = cron_service
-        self._channel = ""
-        self._chat_id = ""
         self._in_cron_context: ContextVar[bool] = ContextVar("cron_in_context", default=False)
-
-    def set_context(self, channel: str, chat_id: str) -> None:
-        """Set the current session context for delivery."""
-        self._channel = channel
-        self._chat_id = chat_id
 
     def set_cron_context(self, active: bool):
         """Mark whether the tool is executing inside a cron job callback."""
@@ -68,6 +61,8 @@ class AddCronTool(Tool):
 
     async def execute(
         self,
+        *,
+        context: ToolExecutionContext,
         message: str,
         interval: int | None = None,
         expr: str | None = None,
@@ -79,7 +74,7 @@ class AddCronTool(Tool):
             return "Error: cannot schedule new jobs from within a cron job execution"
         if not message:
             return "Error: message is required for add"
-        if not self._channel or not self._chat_id:
+        if not context.channel or not context.chat_id:
             return "Error: no session context (channel/chat_id)"
         if tz and not expr:
             return "Error: tz can only be used with expr"
@@ -107,8 +102,8 @@ class AddCronTool(Tool):
             schedule=schedule,
             message=message,
             deliver=True,
-            channel=self._channel,
-            to=self._chat_id,
+            channel=context.channel,
+            to=context.chat_id,
             delete_after_run=delete_after,
         )
         return f"Created job '{job.name}' (id: {job.id})"

@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 
 if TYPE_CHECKING:
     from weavbot.agent.subagent import SubagentManager
@@ -13,15 +13,6 @@ class SpawnTool(Tool):
 
     def __init__(self, manager: "SubagentManager"):
         self._manager = manager
-        self._origin_channel = "cli"
-        self._origin_chat_id = "direct"
-        self._session_key = "cli:direct"
-
-    def set_context(self, channel: str, chat_id: str) -> None:
-        """Set the origin context for subagent announcements."""
-        self._origin_channel = channel
-        self._origin_chat_id = chat_id
-        self._session_key = f"{channel}:{chat_id}"
 
     @property
     def name(self) -> str:
@@ -55,12 +46,19 @@ class SpawnTool(Tool):
             "required": ["task"],
         }
 
-    async def execute(self, task: str, label: str | None = None, **kwargs: Any) -> str:
+    async def execute(
+        self,
+        *,
+        context: ToolExecutionContext,
+        task: str,
+        label: str | None = None,
+        **kwargs: Any,
+    ) -> str:
         """Spawn a subagent to execute the given task."""
         return await self._manager.spawn(
             task=task,
             label=label,
-            origin_channel=self._origin_channel,
-            origin_chat_id=self._origin_chat_id,
-            session_key=self._session_key,
+            origin_channel=context.channel,
+            origin_chat_id=context.chat_id,
+            session_key=context.session_key,
         )

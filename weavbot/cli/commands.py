@@ -271,9 +271,12 @@ def _parse_heartbeat_target(key: str) -> tuple[str, str, dict[str, object]] | No
 def _pick_heartbeat_target_from_sessions(
     sessions: list[dict[str, object]], enabled_channels: set[str]
 ) -> tuple[str, str, dict[str, object]]:
-    """Pick routable heartbeat target from session list."""
+    """Pick routable heartbeat target from recent user-facing sessions."""
     for item in sessions:
-        parsed = _parse_heartbeat_target(str(item.get("key") or ""))
+        key = str(item.get("key") or "")
+        if key.startswith(("heartbeat:", "cron:", "system:")):
+            continue
+        parsed = _parse_heartbeat_target(key)
         if not parsed:
             continue
         channel, chat_id, metadata = parsed
@@ -573,6 +576,7 @@ def gateway(
 
     # Create channel manager
     channels = ChannelManager(config, bus)
+    last_heartbeat_target: tuple[str, str, dict[str, object]] | None = None
 
     def _pick_heartbeat_target() -> tuple[str, str, dict[str, object]]:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
@@ -588,7 +592,9 @@ def gateway(
     # Create heartbeat service
     async def on_heartbeat_execute(tasks: str) -> str:
         """Phase 2: execute heartbeat tasks through the full agent loop."""
+        nonlocal last_heartbeat_target
         channel, chat_id, target_meta = _pick_heartbeat_target()
+        last_heartbeat_target = (channel, chat_id, target_meta)
         session_key = _heartbeat_session_key(channel, chat_id)
         execute_input = _build_heartbeat_execute_input(
             tasks,
@@ -629,10 +635,13 @@ def gateway(
 
     async def on_heartbeat_notify(response: str) -> None:
         """Deliver a heartbeat response to the user's channel."""
+        nonlocal last_heartbeat_target
         from weavbot.bus.events import OutboundMessage
 
-        channel, chat_id, target_meta = _pick_heartbeat_target()
+        target = last_heartbeat_target or _pick_heartbeat_target()
+        channel, chat_id, target_meta = target
         if channel == "cli":
+            logger.warning("Heartbeat notify skipped because no recent routable user target found")
             return  # No external channel available to deliver to
         logger.info(
             "Heartbeat notify deliver: channel={}, chat_id={}, content_len={}, meta_keys={}",

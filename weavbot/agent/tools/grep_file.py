@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.utils import resolve_path
 
 _LIMIT = 100
@@ -62,11 +62,14 @@ class GrepFileTool(Tool):
 
     async def execute(
         self,
+        *,
+        context: ToolExecutionContext,
         pattern: str,
         path: str | None = None,
         glob: str | None = None,
         **kwargs: Any,
     ) -> str:
+        _ = context
         try:
             if not pattern:
                 return "Error: pattern is required"

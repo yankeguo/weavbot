@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.utils import resolve_path
 
 
@@ -30,7 +30,8 @@ class ListDirTool(Tool):
             "required": ["path"],
         }
 
-    async def execute(self, path: str, **kwargs: Any) -> str:
+    async def execute(self, *, context: ToolExecutionContext, path: str, **kwargs: Any) -> str:
+        _ = context
         try:
             dir_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if not dir_path.exists():

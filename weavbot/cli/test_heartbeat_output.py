@@ -76,6 +76,18 @@ def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> No
     assert metadata == {}
 
 
+def test_pick_heartbeat_target_ignores_background_sessions() -> None:
+    sessions = [
+        {"key": "heartbeat:telegram:1001:2026-03-26"},
+        {"key": "cron:job-1"},
+        {"key": "telegram:2002"},
+    ]
+    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"telegram"})
+    assert channel == "telegram"
+    assert chat_id == "2002"
+    assert metadata == {}
+
+
 def test_background_notify_contract_mentions_message_and_target_context() -> None:
     contract = _build_background_notify_contract(
         source="Heartbeat",

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from weavbot.agent.tools.base import Tool, ToolResult
+from weavbot.agent.tools.base import Tool, ToolExecutionContext, ToolResult
 
 
 class ToolRegistry:
@@ -35,7 +35,9 @@ class ToolRegistry:
         """Get all tool definitions in OpenAI format."""
         return [tool.to_schema() for tool in self._tools.values()]
 
-    async def execute(self, name: str, params: dict[str, Any]) -> str | ToolResult:
+    async def execute(
+        self, name: str, params: dict[str, Any], *, context: ToolExecutionContext
+    ) -> str | ToolResult:
         """Execute a tool by name with given parameters."""
         _hint = "\n\n[Analyze the error above and try a different approach.]"
 
@@ -47,7 +49,7 @@ class ToolRegistry:
             errors = tool.validate_params(params)
             if errors:
                 return f"Error: Invalid parameters for tool '{name}': " + "; ".join(errors) + _hint
-            result = await tool.execute(**params)
+            result = await tool.execute(context=context, **params)
             if isinstance(result, str) and result.startswith("Error"):
                 return result + _hint
             return result

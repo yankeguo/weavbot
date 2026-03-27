@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from loguru import logger
 from markdownify import markdownify
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
 MAX_REDIRECTS = 5  # Limit redirects to prevent DoS attacks
@@ -67,11 +67,14 @@ class FetchTool(Tool):
 
     async def execute(
         self,
+        *,
+        context: ToolExecutionContext,
         url: str,
         fmt: str = "markdown",
         max_chars: int | None = None,
         **kwargs: Any,
     ) -> str:
+        _ = context
         from readability import Document
 
         effective_max = max_chars if max_chars is not None else self.max_chars

@@ -8,7 +8,7 @@ from pathlib import Path
 from loguru import logger
 
 from weavbot.agent.messages import ChatMessage
-from weavbot.agent.tools.base import ToolResult
+from weavbot.agent.tools.base import ToolExecutionContext, ToolResult
 from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.fetch import FetchTool
 from weavbot.agent.tools.glob_file import GlobFileTool
@@ -137,6 +137,11 @@ class SubagentManager:
             max_iterations = 15
             iteration = 0
             final_result: str | None = None
+            tool_context = ToolExecutionContext(
+                channel=origin["channel"],
+                chat_id=origin["chat_id"],
+                session_key=f"{origin['channel']}:{origin['chat_id']}",
+            )
 
             while iteration < max_iterations:
                 iteration += 1
@@ -167,7 +172,11 @@ class SubagentManager:
                             tool_call.name,
                             args_str,
                         )
-                        result = await tools.execute(tool_call.name, tool_call.arguments)
+                        result = await tools.execute(
+                            tool_call.name,
+                            tool_call.arguments,
+                            context=tool_context,
+                        )
                         if isinstance(result, ToolResult):
                             content = result.content
                             media = result.media

@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool
+from weavbot.agent.tools.base import Tool, ToolExecutionContext
 from weavbot.utils import resolve_path
 
 _LIMIT = 100
@@ -49,10 +49,13 @@ class GlobFileTool(Tool):
 
     async def execute(
         self,
+        *,
+        context: ToolExecutionContext,
         pattern: str,
         path: str | None = None,
         **kwargs: Any,
     ) -> str:
+        _ = context
         try:
             search_path_str = path if path is not None else "."
             base = resolve_path(search_path_str, self._workspace, self._restrict_to_workspace)

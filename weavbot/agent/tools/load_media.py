@@ -4,7 +4,7 @@ import mimetypes
 from pathlib import Path
 from typing import Any
 
-from weavbot.agent.tools.base import Tool, ToolResult
+from weavbot.agent.tools.base import Tool, ToolExecutionContext, ToolResult
 from weavbot.utils import resolve_path
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -64,7 +64,10 @@ class LoadMediaTool(Tool):
             "required": ["path"],
         }
 
-    async def execute(self, path: str, **kwargs: Any) -> str | ToolResult:
+    async def execute(
+        self, *, context: ToolExecutionContext, path: str, **kwargs: Any
+    ) -> str | ToolResult:
+        _ = context
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if not file_path.exists():
