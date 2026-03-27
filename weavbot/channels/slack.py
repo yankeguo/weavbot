@@ -199,7 +199,7 @@ class SlackChannel(BaseChannel):
                 sender_id=sender_id,
                 chat_id=chat_id,
                 content=text,
-                metadata={
+                channel_metadata={
                     "slack": {
                         "event": event,
                         "thread_ts": thread_ts,

@@ -440,7 +440,7 @@ class TelegramChannel(BaseChannel):
             chat_id=str_chat_id,
             content=content,
             media=media_paths,
-            metadata={
+            message_metadata={
                 "message_id": message.message_id,
                 "user_id": user.id,
                 "username": user.username,
@@ -462,7 +462,7 @@ class TelegramChannel(BaseChannel):
                 chat_id=buf["chat_id"],
                 content=content,
                 media=list(dict.fromkeys(buf["media"])),
-                metadata=buf["metadata"],
+                message_metadata=buf["metadata"],
             )
         finally:
             self._media_group_tasks.pop(key, None)

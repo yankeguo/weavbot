@@ -96,7 +96,8 @@ class BaseChannel(ABC):
         chat_id: str,
         content: str,
         media: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
+        message_metadata: dict[str, Any] | None = None,
+        channel_metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Handle an incoming message from the chat platform.
@@ -110,7 +111,8 @@ class BaseChannel(ABC):
             chat_id: The chat/channel identifier.
             content: Message text content.
             media: Optional list of local media file paths.
-            metadata: Optional channel-specific metadata.
+            message_metadata: Optional per-turn message metadata (echoed on outbound).
+            channel_metadata: Optional routing metadata persisted to ChannelTarget.
         """
         resolved_key = str(session_key or "").strip()
         if not resolved_key:
@@ -147,7 +149,8 @@ class BaseChannel(ABC):
             session_key=resolved_key,
             content=content,
             media=image_media,
-            metadata=metadata or {},
+            metadata=message_metadata or {},
+            channel_metadata=channel_metadata or {},
         )
         if self.channel_store:
             await self.channel_store.upsert(
@@ -155,7 +158,7 @@ class BaseChannel(ABC):
                 ChannelTarget(
                     channel=self.name,
                     chat_id=str(chat_id),
-                    metadata=dict(metadata or {}),
+                    metadata=dict(channel_metadata or {}),
                 ),
             )
 

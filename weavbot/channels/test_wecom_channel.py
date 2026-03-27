@@ -86,8 +86,9 @@ def test_event_callback_publishes_inbound(tmp_path):
     inbound = asyncio.run(run_case())
     assert inbound.channel == "wecom"
     assert inbound.sender_id == "u1"
-    assert inbound.metadata["req_id"] == "req-1"
-    assert inbound.metadata["wecom"]["event_type"] == "feedback_event"
+    assert inbound.metadata["message_id"] == "msg-1"
+    assert inbound.channel_metadata["req_id"] == "req-1"
+    assert inbound.channel_metadata["wecom"]["event_type"] == "feedback_event"
 
 
 def test_send_enter_chat_uses_welcome_command(tmp_path):

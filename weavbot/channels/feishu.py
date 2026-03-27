@@ -855,7 +855,7 @@ class FeishuChannel(BaseChannel):
                 chat_id=reply_to,
                 content=content,
                 media=media_paths,
-                metadata={
+                message_metadata={
                     "message_id": message_id,
                     "chat_type": chat_type,
                     "msg_type": msg_type,

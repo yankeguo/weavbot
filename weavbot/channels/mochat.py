@@ -851,17 +851,17 @@ class MochatChannel(BaseChannel):
             sender_id=last.author,
             chat_id=target_id,
             content=body,
-            metadata={
+            message_metadata={
                 "message_id": last.message_id,
                 "timestamp": last.timestamp,
                 "is_group": is_group,
-                "group_id": last.group_id,
                 "sender_name": last.sender_name,
                 "sender_username": last.sender_username,
                 "target_kind": target_kind,
                 "was_mentioned": was_mentioned,
                 "buffered_count": len(entries),
             },
+            channel_metadata={"group_id": last.group_id} if last.group_id else {},
         )
 
     async def _cancel_delay_timers(self) -> None:

@@ -71,7 +71,8 @@ def test_handle_inbound_sets_account_scoped_session_key(tmp_path: Path):
     assert inbound.channel == "wechat"
     assert inbound.chat_id == "u1@im.wechat"
     assert inbound.session_key == "wechat_acc-key_u1@im.wechat"
-    assert inbound.metadata["wechat"]["context_token"] == "ctx-1"
+    assert inbound.metadata["message_id"] == 1
+    assert inbound.channel_metadata["wechat"]["context_token"] == "ctx-1"
 
 
 def test_send_text_routes_to_selected_account(tmp_path: Path):

@@ -139,7 +139,7 @@ class QQChannel(BaseChannel):
                 sender_id=user_id,
                 chat_id=user_id,
                 content=content,
-                metadata={"message_id": data.id},
+                message_metadata={"message_id": data.id},
             )
         except Exception:
             logger.exception("Error handling QQ message")

@@ -267,7 +267,8 @@ class WechatChannel(BaseChannel):
             chat_id=sender_id,
             content=content,
             media=media,
-            metadata=metadata,
+            channel_metadata=metadata,
+            message_metadata={"message_id": msg.get("message_id")},
         )
 
     async def _extract_inbound_content(

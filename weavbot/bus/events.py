@@ -23,6 +23,12 @@ class InboundMessage:
     ``metadata["_original_session_key"]`` for routing) and ``cli`` for terminal
     runs. ``sender_id`` identifies who sent the message for allowlists and logs;
     delivery routing uses ``session_key`` and the store, not ``sender_id``.
+
+    Metadata is split into:
+    - ``metadata``: per-turn message metadata that is echoed back on outbound messages.
+      Example: ``message_id`` for reply/quote, ``_progress`` / ``_tool_hint`` for streaming.
+    - ``channel_metadata``: routing metadata persisted to :class:`~weavbot.channels.store.ChannelTarget`
+      for resolving outbound delivery details (thread ids, account keys, req ids, ...).
     """
 
     channel: str  # Platform name: telegram, slack, wecom, system, cli, ...
@@ -40,7 +46,10 @@ class InboundMessage:
     media: list[str] = field(default_factory=list)  # Local image file paths for multimodal input
     metadata: dict[str, Any] = field(
         default_factory=dict
-    )  # e.g. message_id, channel-specific blobs, _progress
+    )  # message-level metadata (echoed on outbound), e.g. message_id, _progress
+    channel_metadata: dict[str, Any] = field(
+        default_factory=dict
+    )  # routing metadata persisted to ChannelTarget, e.g. slack.thread_ts, wechat.context_token
 
 
 @dataclass
@@ -53,4 +62,4 @@ class OutboundMessage:
     media: list[str] = field(default_factory=list)  # Local paths for attachments to send
     metadata: dict[str, Any] = field(
         default_factory=dict
-    )  # Echo/propagate inbound fields; e.g. message_id for Telegram quotes
+    )  # Echo/propagate inbound *message metadata*; e.g. message_id for Telegram quotes

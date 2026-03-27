@@ -912,7 +912,7 @@ class AgentLoop:
         if msg.channel not in {"cli", "system"}:
             current_interactive = self._build_interactive_pointer(
                 session_key=key,
-                metadata=msg.metadata,
+                metadata=msg.channel_metadata,
             )
             session.metadata["interactive_target"] = current_interactive
             saved_interactive = current_interactive
