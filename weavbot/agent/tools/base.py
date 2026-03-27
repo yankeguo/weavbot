@@ -1,73 +1,19 @@
 """Base class for agent tools."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from weavbot.utils.helpers import build_session_key
-
 
 @dataclass
-class DeliveryTarget:
-    """Normalized message delivery target."""
-
-    channel: str
-    chat_id: str
-    session_key: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    @classmethod
-    def from_optional(
-        cls,
-        *,
-        channel: str | None,
-        chat_id: str | None,
-        session_key: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> "DeliveryTarget | None":
-        """Build target when channel/chat_id are both available."""
-        ch = (channel or "").strip()
-        cid = (chat_id or "").strip()
-        if not ch or not cid:
-            return None
-        skey = (
-            build_session_key((session_key or "").strip())
-            if (session_key or "").strip()
-            else build_session_key(ch, cid)
-        )
-        return cls(channel=ch, chat_id=cid, session_key=skey, metadata=dict(metadata or {}))
-
-    @classmethod
-    def from_dict(cls, raw: dict[str, Any] | None) -> "DeliveryTarget | None":
-        """Build target from persisted dict representation."""
-        payload = raw if isinstance(raw, dict) else {}
-        return cls.from_optional(
-            channel=payload.get("channel"),
-            chat_id=payload.get("chat_id"),
-            session_key=payload.get("session_key"),
-            metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert target to dict for persistence/transport."""
-        return {
-            "channel": self.channel,
-            "chat_id": self.chat_id,
-            "session_key": self.session_key,
-            "metadata": dict(self.metadata or {}),
-        }
-
-    def matches(self, *, channel: str, chat_id: str) -> bool:
-        """Check whether the given route points to this target."""
-        return channel == self.channel and chat_id == self.chat_id
-
-
-@dataclass
-class ToolExecutionContext(DeliveryTarget):
+class ToolExecutionContext:
     """Per-tool-call runtime routing context."""
 
+    session_key: str
+    interactive_session_key: str | None = None
     message_id: str | None = None
-    interactive: DeliveryTarget | None = None
 
 
 @dataclass

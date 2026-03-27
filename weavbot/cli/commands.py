@@ -6,6 +6,7 @@ import os
 import select
 import signal
 import sys
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
@@ -20,7 +21,6 @@ from rich.markdown import Markdown
 from rich.text import Text
 
 from weavbot import __logo__, __version__
-from weavbot.agent.tools.base import DeliveryTarget
 from weavbot.bus.events import InboundMessage
 from weavbot.config.schema import Config
 from weavbot.i18n import t
@@ -36,6 +36,17 @@ app.add_typer(wechat_app, name="wechat")
 
 console = Console()
 EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q"}
+
+
+@dataclass
+class RouteTarget:
+    """Minimal routable target selected from session metadata."""
+
+    channel: str
+    chat_id: str
+    session_key: str
+    metadata: dict[str, object] = field(default_factory=dict)
+
 
 # ---------------------------------------------------------------------------
 # CLI input: prompt_toolkit for editing, paste, history, and display
@@ -245,7 +256,7 @@ async def _suppress_background_progress(_content: str, *, tool_hint: bool = Fals
     return None
 
 
-def _parse_heartbeat_target(key: str) -> DeliveryTarget | None:
+def _parse_heartbeat_target(key: str) -> RouteTarget | None:
     """Parse a session key into heartbeat delivery target fields.
 
     Returns routable target or None for invalid keys.
@@ -258,7 +269,7 @@ def _parse_heartbeat_target(key: str) -> DeliveryTarget | None:
     if text.startswith("wechat_"):
         parts = text.split("_", 2)
         if len(parts) == 3 and parts[1] and parts[2]:
-            return DeliveryTarget(
+            return RouteTarget(
                 channel="wechat",
                 chat_id=parts[2],
                 session_key=text,
@@ -270,7 +281,7 @@ def _parse_heartbeat_target(key: str) -> DeliveryTarget | None:
     if text.startswith("wechat:"):
         legacy_parts = text.split(":", 2)
         if len(legacy_parts) == 3 and legacy_parts[1] and legacy_parts[2]:
-            return DeliveryTarget(
+            return RouteTarget(
                 channel="wechat",
                 chat_id=legacy_parts[2],
                 session_key=build_session_key(*legacy_parts),
@@ -283,7 +294,7 @@ def _parse_heartbeat_target(key: str) -> DeliveryTarget | None:
     channel, chat_id = text.split("_", 1)
     if not channel or not chat_id:
         return None
-    return DeliveryTarget(channel=channel, chat_id=chat_id, session_key=text, metadata={})
+    return RouteTarget(channel=channel, chat_id=chat_id, session_key=text, metadata={})
 
 
 def _parse_cli_session_route(session_key: str) -> tuple[str, str]:
@@ -299,7 +310,7 @@ def _parse_cli_session_route(session_key: str) -> tuple[str, str]:
 
 def _extract_interactive_target(
     item: dict[str, object], enabled_channels: set[str]
-) -> DeliveryTarget | None:
+) -> RouteTarget | None:
     """Extract interactive delivery target from session item metadata or key fallback."""
     key = str(item.get("key") or "")
     if key.startswith(("heartbeat:", "heartbeat_", "cron:", "cron_", "system:", "system_")):
@@ -309,9 +320,25 @@ def _extract_interactive_target(
     session_meta = meta if isinstance(meta, dict) else {}
     if bool(session_meta.get("_cron_in_job")) or bool(session_meta.get("_heartbeat_in_job")):
         return None
-    target = DeliveryTarget.from_dict(
+    raw_target = (
         session_meta.get("interactive_target")
         if isinstance(session_meta.get("interactive_target"), dict)
+        else None
+    )
+    payload = raw_target if isinstance(raw_target, dict) else {}
+    channel = str(payload.get("channel") or "").strip()
+    chat_id = str(payload.get("chat_id") or "").strip()
+    session_key = str(payload.get("session_key") or "").strip()
+    target = (
+        RouteTarget(
+            channel=channel,
+            chat_id=chat_id,
+            session_key=session_key,
+            metadata=dict(payload.get("metadata") or {})
+            if isinstance(payload.get("metadata"), dict)
+            else {},
+        )
+        if channel and chat_id and session_key
         else None
     )
     if target and target.channel not in {"cli", "system"} and target.channel in enabled_channels:
@@ -321,13 +348,13 @@ def _extract_interactive_target(
 
 def _pick_heartbeat_target_from_sessions(
     sessions: list[dict[str, object]], enabled_channels: set[str]
-) -> DeliveryTarget:
+) -> RouteTarget:
     """Pick routable heartbeat target from recent user-facing sessions."""
     for item in sessions:
         target = _extract_interactive_target(item, enabled_channels)
         if target:
             return target
-    return DeliveryTarget(
+    return RouteTarget(
         channel="cli",
         chat_id="direct",
         session_key=InboundMessage.default_session_key("cli", "direct"),
@@ -559,6 +586,7 @@ def gateway(
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        channel_store=channel_store,
     )
 
     # Set cron callback (needs agent)
@@ -568,11 +596,23 @@ def gateway(
 
         channel = job.payload.channel or "cli"
         chat_id = job.payload.to or "direct"
-        interactive_target = DeliveryTarget.from_optional(
-            channel=job.payload.interactive_channel,
-            chat_id=job.payload.interactive_chat_id,
-            session_key=job.payload.interactive_session_key,
-            metadata=job.payload.interactive_metadata,
+        interactive_target = (
+            RouteTarget(
+                channel=str(job.payload.interactive_channel or "").strip(),
+                chat_id=str(job.payload.interactive_chat_id or "").strip(),
+                session_key=str(job.payload.interactive_session_key or "").strip(),
+                metadata=(
+                    dict(job.payload.interactive_metadata or {})
+                    if isinstance(job.payload.interactive_metadata, dict)
+                    else {}
+                ),
+            )
+            if (
+                str(job.payload.interactive_channel or "").strip()
+                and str(job.payload.interactive_chat_id or "").strip()
+                and str(job.payload.interactive_session_key or "").strip()
+            )
+            else None
         )
         if interactive_target is None:
             fallback_target = _pick_heartbeat_target_from_sessions(
@@ -596,7 +636,9 @@ def gateway(
                 chat_id=chat_id,
                 metadata={"_cron_in_job": True},
                 on_progress=_suppress_background_progress,
-                interactive=interactive_target,
+                interactive_session_key=(
+                    interactive_target.session_key if interactive_target else None
+                ),
             )
         except Exception as e:
             logger.exception("Cron job execution failed: id={}, name={}", job.id, job.name)
@@ -630,9 +672,9 @@ def gateway(
 
     # Create channel manager
     channels = ChannelManager(config, bus, channel_store=channel_store)
-    last_heartbeat_target: DeliveryTarget | None = None
+    last_heartbeat_target: RouteTarget | None = None
 
-    def _pick_heartbeat_target() -> DeliveryTarget:
+    def _pick_heartbeat_target() -> RouteTarget:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
         return _pick_heartbeat_target_from_sessions(
             session_manager.list_sessions(),
@@ -664,7 +706,7 @@ def gateway(
                 chat_id=target.chat_id,
                 metadata=target.metadata,
                 on_progress=_suppress_background_progress,
-                interactive=target,
+                interactive_session_key=target.session_key,
             )
         except Exception as e:
             logger.exception(
@@ -773,8 +815,10 @@ def agent(
     """Interact with the agent directly."""
     from weavbot.agent.loop import AgentLoop
     from weavbot.bus.queue import MessageBus
+    from weavbot.channels.store import ChannelStore
     from weavbot.config.loader import load_config
     from weavbot.cron.service import CronService
+    from weavbot.utils.helpers import ensure_data_path
     from weavbot.utils.path_migration import prepare_runtime_paths
 
     config = load_config()
@@ -782,6 +826,7 @@ def agent(
 
     bus = MessageBus()
     provider = _make_provider(config)
+    channel_store = ChannelStore(ensure_data_path() / "channels.json")
 
     # Create cron service for tool usage (no callback needed for CLI unless running)
     cron = CronService(runtime_paths.cron_store_path)
@@ -807,6 +852,7 @@ def agent(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        channel_store=channel_store,
     )
 
     try:

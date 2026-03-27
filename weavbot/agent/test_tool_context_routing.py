@@ -3,10 +3,11 @@ import asyncio
 import pytest
 
 from weavbot.agent.tools.add_cron import AddCronTool
-from weavbot.agent.tools.base import DeliveryTarget, ToolExecutionContext
+from weavbot.agent.tools.base import ToolExecutionContext
 from weavbot.agent.tools.message import MessageTool
 from weavbot.agent.tools.spawn import SpawnTool
 from weavbot.bus.events import OutboundMessage
+from weavbot.channels.store import ChannelTarget
 from weavbot.cron.types import CronJob, CronPayload, CronSchedule
 
 
@@ -82,37 +83,52 @@ class _FakeCronService:
         )
 
 
+class _FakeChannelStore:
+    def __init__(self, mapping: dict[str, ChannelTarget] | None = None):
+        self.mapping = dict(mapping or {})
+
+    def resolve(self, session_key: str):
+        return self.mapping.get(session_key)
+
+
 def test_spawn_tool_uses_execution_context_for_origin() -> None:
     manager = _FakeSpawnManager()
-    tool = SpawnTool(manager=manager)
-    ctx = ToolExecutionContext(
-        channel="telegram",
-        chat_id="u1",
-        session_key="telegram:chan-1:thread-9",
-        metadata={"slack": {"thread_ts": "thread-9"}},
+    store = _FakeChannelStore(
+        {
+            "telegram_chan-1_thread-9": ChannelTarget(
+                channel="telegram",
+                chat_id="u1",
+                metadata={"slack": {"thread_ts": "thread-9"}},
+            )
+        }
     )
+    tool = SpawnTool(manager=manager, channel_store=store)
+    ctx = ToolExecutionContext(session_key="telegram_chan-1_thread-9")
     out = asyncio.run(tool.execute(context=ctx, task="summarize logs", label="logs"))
     assert out == "spawned"
     assert manager.last_call is not None
     assert manager.last_call["origin_channel"] == "telegram"
     assert manager.last_call["origin_chat_id"] == "u1"
-    assert manager.last_call["session_key"] == "telegram:chan-1:thread-9"
+    assert manager.last_call["session_key"] == "telegram_chan-1_thread-9"
     assert manager.last_call["origin_metadata"] == {"slack": {"thread_ts": "thread-9"}}
 
 
 def test_add_cron_tool_routes_delivery_from_execution_context() -> None:
     svc = _FakeCronService()
-    tool = AddCronTool(svc)
+    store = _FakeChannelStore(
+        {
+            "wechat_peer-1": ChannelTarget(channel="wechat", chat_id="peer-1", metadata={}),
+            "wechat_bot-a_peer-1": ChannelTarget(
+                channel="wechat",
+                chat_id="peer-1",
+                metadata={"wechat": {"account_key": "bot-a"}},
+            ),
+        }
+    )
+    tool = AddCronTool(svc, channel_store=store)
     ctx = ToolExecutionContext(
-        channel="wechat",
-        chat_id="peer-1",
-        session_key="wechat:peer-1",
-        interactive=DeliveryTarget(
-            channel="wechat",
-            chat_id="peer-1",
-            session_key="wechat:bot-a:peer-1",
-            metadata={"wechat": {"account_key": "bot-a"}},
-        ),
+        session_key="wechat_peer-1",
+        interactive_session_key="wechat_bot-a_peer-1",
     )
     out = asyncio.run(tool.execute(context=ctx, message="drink water", interval=60))
     assert out.startswith("Created job")
@@ -120,7 +136,7 @@ def test_add_cron_tool_routes_delivery_from_execution_context() -> None:
     assert svc.last_to == "peer-1"
     assert svc.last_interactive_channel == "wechat"
     assert svc.last_interactive_chat_id == "peer-1"
-    assert svc.last_interactive_session_key == "wechat:bot-a:peer-1"
+    assert svc.last_interactive_session_key == "wechat_bot-a_peer-1"
     assert svc.last_interactive_metadata == {"wechat": {"account_key": "bot-a"}}
 
 
@@ -131,37 +147,31 @@ async def test_message_tool_context_isolation_across_concurrent_tasks() -> None:
     async def _send(msg: OutboundMessage) -> None:
         sent.append(msg)
 
-    tool = MessageTool(send_callback=_send)
-    ctx_a = ToolExecutionContext(
-        channel="telegram",
-        chat_id="user-a",
-        session_key="telegram:user-a",
-        message_id="m-a",
+    store = _FakeChannelStore(
+        {
+            "telegram_user-a": ChannelTarget(channel="telegram", chat_id="user-a"),
+            "slack_user-b": ChannelTarget(channel="slack", chat_id="user-b"),
+        }
     )
-    ctx_b = ToolExecutionContext(
-        channel="slack",
-        chat_id="user-b",
-        session_key="slack:user-b",
-        message_id="m-b",
-        metadata={"slack": {"thread_ts": "thread-123"}, "channel_type": "group"},
-    )
+    tool = MessageTool(send_callback=_send, channel_store=store)
+    ctx_a = ToolExecutionContext(session_key="telegram_user-a", message_id="m-a")
+    ctx_b = ToolExecutionContext(session_key="slack_user-b", message_id="m-b")
 
-    async def _turn(ctx: ToolExecutionContext, text: str) -> bool:
-        ctx.metadata["_message_sent_in_turn"] = False
+    async def _turn(ctx: ToolExecutionContext, text: str) -> str:
         await tool.execute(context=ctx, content=text)
-        return bool(ctx.metadata.get("_message_sent_in_turn"))
+        return "done"
 
     sent_flags = await asyncio.gather(
         _turn(ctx_a, "hello-a"),
         _turn(ctx_b, "hello-b"),
     )
 
-    assert sent_flags == [True, True]
+    assert sent_flags == ["done", "done"]
     assert sorted((m.session_key, m.content) for m in sent) == [
-        ("slack:user-b", "hello-b"),
-        ("telegram:user-a", "hello-a"),
+        ("slack_user-b", "hello-b"),
+        ("telegram_user-a", "hello-a"),
     ]
-    b_msg = next(m for m in sent if m.session_key == "slack:user-b")
+    b_msg = next(m for m in sent if m.session_key == "slack_user-b")
     assert b_msg.metadata.get("message_id") == "m-b"
 
 
@@ -172,22 +182,25 @@ async def test_message_tool_does_not_leak_metadata_when_target_differs_from_cont
     async def _send(msg: OutboundMessage) -> None:
         sent.append(msg)
 
-    tool = MessageTool(send_callback=_send)
+    store = _FakeChannelStore(
+        {
+            "slack_C111_T222": ChannelTarget(channel="slack", chat_id="C111"),
+            "telegram_user-9": ChannelTarget(channel="telegram", chat_id="user-9"),
+        }
+    )
+    tool = MessageTool(send_callback=_send, channel_store=store)
     ctx = ToolExecutionContext(
-        channel="slack",
-        chat_id="C111",
-        session_key="slack:C111:T222",
+        session_key="slack_C111_T222",
         message_id="m-orig",
-        metadata={"slack": {"thread_ts": "T222"}, "channel_type": "group"},
     )
     await tool.execute(
         context=ctx,
         content="ping elsewhere",
-        session_key="telegram:user-9",
+        session_key="telegram_user-9",
     )
     assert len(sent) == 1
     msg = sent[0]
-    assert msg.session_key == "telegram:user-9"
+    assert msg.session_key == "telegram_user-9"
     assert msg.metadata.get("message_id") == "m-orig"
 
 
@@ -198,22 +211,32 @@ async def test_message_tool_prefers_interactive_target_from_context() -> None:
     async def _send(msg: OutboundMessage) -> None:
         sent.append(msg)
 
-    tool = MessageTool(send_callback=_send)
+    store = _FakeChannelStore(
+        {
+            "heartbeat_slack_C111_2026-03-27": ChannelTarget(channel="cli", chat_id="direct"),
+            "slack_C111_T333": ChannelTarget(
+                channel="slack",
+                chat_id="C111",
+                metadata={"slack": {"thread_ts": "T333", "channel_type": "channel"}},
+            ),
+        }
+    )
+    tool = MessageTool(send_callback=_send, channel_store=store)
     ctx = ToolExecutionContext(
-        channel="cli",
-        chat_id="direct",
-        session_key="heartbeat:slack:C111:2026-03-27",
+        session_key="heartbeat_slack_C111_2026-03-27",
+        interactive_session_key="slack_C111_T333",
         message_id="m-hb",
-        metadata={"_cron_in_job": True},
-        interactive=DeliveryTarget(
-            channel="slack",
-            chat_id="C111",
-            session_key="slack:C111:T333",
-            metadata={"slack": {"thread_ts": "T333", "channel_type": "channel"}},
-        ),
     )
     await tool.execute(context=ctx, content="heartbeat ping")
     assert len(sent) == 1
     msg = sent[0]
-    assert msg.session_key == "slack:C111:T333"
+    assert msg.session_key == "slack_C111_T333"
     assert msg.metadata.get("message_id") == "m-hb"
+
+
+def test_spawn_tool_fails_when_channel_target_missing() -> None:
+    manager = _FakeSpawnManager()
+    tool = SpawnTool(manager=manager, channel_store=_FakeChannelStore({}))
+    ctx = ToolExecutionContext(session_key="missing_session")
+    out = asyncio.run(tool.execute(context=ctx, task="summarize logs"))
+    assert out == "Error: no channel target found for session missing_session"

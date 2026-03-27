@@ -5,6 +5,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from weavbot.agent.tools.base import Tool, ToolExecutionContext
+from weavbot.channels.store import ChannelStore
 from weavbot.cron.service import CronService
 from weavbot.cron.types import CronSchedule
 
@@ -12,8 +13,9 @@ from weavbot.cron.types import CronSchedule
 class AddCronTool(Tool):
     """Tool to schedule reminders and recurring tasks."""
 
-    def __init__(self, cron_service: CronService):
+    def __init__(self, cron_service: CronService, channel_store: ChannelStore | None = None):
         self._cron = cron_service
+        self._channel_store = channel_store
 
     @property
     def name(self) -> str:
@@ -60,12 +62,19 @@ class AddCronTool(Tool):
         at: str | None = None,
         **kwargs: Any,
     ) -> str:
-        if bool((context.metadata or {}).get("_cron_in_job")):
+        if context.session_key.startswith("cron_"):
             return "Error: cannot schedule new jobs from within a cron job execution"
         if not message:
             return "Error: message is required for add"
-        if not context.channel or not context.chat_id:
-            return "Error: no session context (channel/chat_id)"
+        if not self._channel_store:
+            return "Error: channel target store is not configured"
+        current_target = self._channel_store.resolve(context.session_key)
+        if not current_target:
+            return f"Error: no channel target found for session {context.session_key}"
+        interactive_session_key = context.interactive_session_key or context.session_key
+        interactive_target = self._channel_store.resolve(interactive_session_key)
+        if not interactive_target:
+            return f"Error: no channel target found for session {interactive_session_key}"
         if tz and not expr:
             return "Error: tz can only be used with expr"
         if tz:
@@ -87,26 +96,17 @@ class AddCronTool(Tool):
         else:
             return "Error: either interval, expr, or at is required"
 
-        interactive_target = context.interactive
         job = self._cron.add_job(
             name=message[:30],
             schedule=schedule,
             message=message,
             deliver=True,
-            channel=context.channel,
-            to=context.chat_id,
-            interactive_channel=(
-                interactive_target.channel if interactive_target else context.channel
-            ),
-            interactive_chat_id=(
-                interactive_target.chat_id if interactive_target else context.chat_id
-            ),
-            interactive_session_key=(
-                interactive_target.session_key if interactive_target else context.session_key
-            ),
-            interactive_metadata=(
-                interactive_target.metadata if interactive_target else context.metadata
-            ),
+            channel=current_target.channel,
+            to=current_target.chat_id,
+            interactive_channel=interactive_target.channel,
+            interactive_chat_id=interactive_target.chat_id,
+            interactive_session_key=interactive_session_key,
+            interactive_metadata=interactive_target.metadata,
             delete_after_run=delete_after,
         )
         return f"Created job '{job.name}' (id: {job.id})"

@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any
 
 from weavbot.agent.tools.base import Tool, ToolExecutionContext
+from weavbot.channels.store import ChannelStore
 
 if TYPE_CHECKING:
     from weavbot.agent.subagent import SubagentManager
@@ -11,8 +12,9 @@ if TYPE_CHECKING:
 class SpawnTool(Tool):
     """Tool to spawn a subagent for background task execution."""
 
-    def __init__(self, manager: "SubagentManager"):
+    def __init__(self, manager: "SubagentManager", channel_store: ChannelStore | None = None):
         self._manager = manager
+        self._channel_store = channel_store
 
     @property
     def name(self) -> str:
@@ -55,11 +57,16 @@ class SpawnTool(Tool):
         **kwargs: Any,
     ) -> str:
         """Spawn a subagent to execute the given task."""
+        if not self._channel_store:
+            return "Error: channel target store is not configured"
+        target = self._channel_store.resolve(context.session_key)
+        if not target:
+            return f"Error: no channel target found for session {context.session_key}"
         return await self._manager.spawn(
             task=task,
             label=label,
-            origin_channel=context.channel,
-            origin_chat_id=context.chat_id,
+            origin_channel=target.channel,
+            origin_chat_id=target.chat_id,
             session_key=context.session_key,
-            origin_metadata=context.metadata,
+            origin_metadata=target.metadata,
         )

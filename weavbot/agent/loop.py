@@ -8,7 +8,7 @@ import re
 from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, TypedDict
 
 from loguru import logger
 
@@ -18,7 +18,7 @@ from weavbot.agent.memory import MemoryStore
 from weavbot.agent.messages import ChatMessage
 from weavbot.agent.subagent import SubagentManager
 from weavbot.agent.tools.add_cron import AddCronTool
-from weavbot.agent.tools.base import DeliveryTarget, ToolExecutionContext
+from weavbot.agent.tools.base import ToolExecutionContext
 from weavbot.agent.tools.edit_file import EditFileTool
 from weavbot.agent.tools.fetch import FetchTool
 from weavbot.agent.tools.glob_file import GlobFileTool
@@ -35,6 +35,7 @@ from weavbot.agent.tools.spawn import SpawnTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.providers.base import LLMProvider
 from weavbot.session.manager import Session, SessionManager
 from weavbot.utils.helpers import validate_session_key
@@ -42,6 +43,15 @@ from weavbot.utils.helpers import validate_session_key
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
     from weavbot.cron.service import CronService
+
+
+class InteractiveTarget(TypedDict):
+    """Minimal interactive route snapshot persisted on sessions."""
+
+    channel: str
+    chat_id: str
+    session_key: str
+    metadata: dict[str, Any]
 
 
 class AgentLoop:
@@ -61,6 +71,7 @@ class AgentLoop:
     _DEFAULT_SAFETY_TOKENS = 1536
     _DEFAULT_SAFETY_RATIO = 0.02
     _CALIBRATION_ALPHA = 0.2
+    _INTERNAL_SESSION_PREFIXES = ("system", "cli", "cron", "heartbeat")
 
     def __init__(
         self,
@@ -80,6 +91,7 @@ class AgentLoop:
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
         channels_config: ChannelsConfig | None = None,
+        channel_store: ChannelStore | None = None,
     ):
         from weavbot.config.schema import ExecToolConfig
 
@@ -97,6 +109,7 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.channel_store = channel_store
 
         self.memory = MemoryStore(workspace)
         self.context = ContextBuilder(workspace, self.memory)
@@ -125,6 +138,50 @@ class AgentLoop:
         self._processing_lock = asyncio.Lock()
         self._register_default_tools()
 
+    @classmethod
+    def _is_internal_session_key(cls, session_key: str) -> bool:
+        """Return True when session key belongs to an internal logical channel."""
+        key = (session_key or "").strip()
+        if not key:
+            return False
+        prefix, _, _ = key.partition("_")
+        return prefix in cls._INTERNAL_SESSION_PREFIXES
+
+    def _upsert_internal_session_target(
+        self,
+        *,
+        session_key: str,
+        channel: str,
+        chat_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Persist routing target for internal session keys into ChannelStore."""
+        if not self.channel_store:
+            return
+        if not self._is_internal_session_key(session_key):
+            return
+        route_channel = (channel or "").strip()
+        route_chat_id = (chat_id or "").strip()
+        if not route_channel or not route_chat_id:
+            return
+        self.channel_store.upsert(
+            session_key,
+            ChannelTarget(
+                channel=route_channel,
+                chat_id=route_chat_id,
+                metadata=self._extract_interactive_route_metadata(metadata),
+            ),
+        )
+
+    def _resolve_channel_target(self, session_key: str | None) -> ChannelTarget | None:
+        """Resolve a session key from ChannelStore, when available."""
+        if not self.channel_store:
+            return None
+        key = str(session_key or "").strip()
+        if not key:
+            return None
+        return self.channel_store.resolve(key)
+
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
         for cls in (
@@ -151,10 +208,12 @@ class AgentLoop:
             )
         )
         self.tools.register(FetchTool(proxy=self.web_proxy))
-        self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
-        self.tools.register(SpawnTool(manager=self.subagents))
+        self.tools.register(
+            MessageTool(send_callback=self.bus.publish_outbound, channel_store=self.channel_store)
+        )
+        self.tools.register(SpawnTool(manager=self.subagents, channel_store=self.channel_store))
         if self.cron_service:
-            self.tools.register(AddCronTool(self.cron_service))
+            self.tools.register(AddCronTool(self.cron_service, channel_store=self.channel_store))
             self.tools.register(ListCronTool(self.cron_service))
             self.tools.register(RemoveCronTool(self.cron_service))
 
@@ -184,21 +243,15 @@ class AgentLoop:
     @staticmethod
     def _build_tool_context(
         *,
-        channel: str,
-        chat_id: str,
         session_key: str,
+        interactive_session_key: str | None = None,
         message_id: str | None = None,
-        metadata: dict[str, Any] | None = None,
-        interactive: DeliveryTarget | None = None,
     ) -> ToolExecutionContext:
         """Create per-call tool execution context."""
         return ToolExecutionContext(
-            channel=channel,
-            chat_id=chat_id,
             session_key=session_key,
+            interactive_session_key=interactive_session_key,
             message_id=message_id,
-            metadata=dict(metadata or {}),
-            interactive=interactive,
         )
 
     @staticmethod
@@ -241,26 +294,39 @@ class AgentLoop:
         chat_id: str,
         session_key: str,
         metadata: dict[str, Any] | None,
-    ) -> DeliveryTarget:
+    ) -> InteractiveTarget:
         """Build a normalized interactive routing target snapshot."""
-        target = DeliveryTarget.from_optional(
-            channel=channel,
-            chat_id=chat_id,
-            session_key=session_key,
-            metadata=cls._extract_interactive_route_metadata(metadata),
-        )
-        # channel/chat_id are guaranteed by caller, keep hard guard for type checkers.
-        if target is None:
+        ch = str(channel or "").strip()
+        cid = str(chat_id or "").strip()
+        skey = str(session_key or "").strip()
+        if not ch or not cid or not skey:
             raise ValueError("interactive target requires non-empty channel/chat_id")
-        return target
+        return {
+            "channel": ch,
+            "chat_id": cid,
+            "session_key": skey,
+            "metadata": cls._extract_interactive_route_metadata(metadata),
+        }
 
     @staticmethod
     def _resolve_saved_interactive_target(
         session: Session,
-    ) -> DeliveryTarget | None:
+    ) -> InteractiveTarget | None:
         """Read persisted interactive target from session metadata."""
         raw = session.metadata.get("interactive_target")
-        return DeliveryTarget.from_dict(raw if isinstance(raw, dict) else None)
+        payload = raw if isinstance(raw, dict) else {}
+        channel = str(payload.get("channel") or "").strip()
+        chat_id = str(payload.get("chat_id") or "").strip()
+        session_key = str(payload.get("session_key") or "").strip()
+        metadata = payload.get("metadata")
+        if not channel or not chat_id or not session_key:
+            return None
+        return {
+            "channel": channel,
+            "chat_id": chat_id,
+            "session_key": session_key,
+            "metadata": dict(metadata) if isinstance(metadata, dict) else {},
+        }
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -516,8 +582,8 @@ class AgentLoop:
         initial_messages: list[ChatMessage],
         tool_context: ToolExecutionContext,
         on_progress: Callable[..., Awaitable[None]] | None = None,
-    ) -> tuple[str | None, list[str], list[ChatMessage], dict[str, int]]:
-        """Run the agent iteration loop. Returns (final_content, tools_used, messages, turn_usage)."""
+    ) -> tuple[str | None, list[str], list[ChatMessage], dict[str, int], bool]:
+        """Run the agent iteration loop."""
         messages = initial_messages
         fit_params = session.get_context_fit_params(
             model=self.model,
@@ -529,6 +595,7 @@ class AgentLoop:
         final_content = None
         tools_used: list[str] = []
         turn_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        message_sent_in_turn = False
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -640,6 +707,20 @@ class AgentLoop:
                     result = await self.tools.execute(
                         tool_call.name, tool_call.arguments, context=tool_context
                     )
+                    if (
+                        tool_call.name == "message"
+                        and isinstance(result, str)
+                        and result.startswith("Message sent to session ")
+                    ):
+                        args = tool_call.arguments if isinstance(tool_call.arguments, dict) else {}
+                        explicit_target = str(args.get("session_key") or "").strip()
+                        resolved_target = (
+                            explicit_target
+                            or (tool_context.interactive_session_key or "").strip()
+                            or tool_context.session_key
+                        )
+                        if resolved_target == tool_context.session_key:
+                            message_sent_in_turn = True
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -680,7 +761,7 @@ class AgentLoop:
             turn_usage["completion_tokens"],
             turn_usage["total_tokens"],
         )
-        return final_content, tools_used, messages, turn_usage
+        return final_content, tools_used, messages, turn_usage, message_sent_in_turn
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
@@ -772,7 +853,7 @@ class AgentLoop:
         msg: InboundMessage,
         session_key: str | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        interactive: DeliveryTarget | None = None,
+        interactive_session_key: str | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
         if msg.channel == "system":
@@ -788,14 +869,23 @@ class AgentLoop:
                     channel, chat_id = "cli", msg.chat_id
             logger.info("Processing system message from {}", msg.sender_id)
             key = session_key or msg.session_key
-            session = self.sessions.get_or_create(key)
-            tool_context = self._build_tool_context(
+            route_target = self._resolve_channel_target(interactive_session_key) or ChannelTarget(
                 channel=channel,
                 chat_id=chat_id,
+                metadata=self._extract_interactive_route_metadata(msg.metadata),
+            )
+            if route_target and route_target.channel and route_target.chat_id:
+                self._upsert_internal_session_target(
+                    session_key=key,
+                    channel=str(route_target.channel),
+                    chat_id=str(route_target.chat_id),
+                    metadata=route_target.metadata,
+                )
+            session = self.sessions.get_or_create(key)
+            tool_context = self._build_tool_context(
                 session_key=key,
+                interactive_session_key=interactive_session_key,
                 message_id=msg.metadata.get("message_id"),
-                metadata=msg.metadata,
-                interactive=interactive,
             )
             history, messages = await self._build_initial_messages_with_compaction(
                 session,
@@ -803,7 +893,7 @@ class AgentLoop:
                 channel=channel,
                 chat_id=chat_id,
             )
-            final_content, _, all_msgs, turn_usage = await self._run_agent_loop(
+            final_content, _, all_msgs, turn_usage, _ = await self._run_agent_loop(
                 session, messages, tool_context
             )
             self._save_turn(session, all_msgs, 1 + len(history))
@@ -827,16 +917,29 @@ class AgentLoop:
                 session_key=key,
                 metadata=msg.metadata,
             )
-            session.metadata["interactive_target"] = current_interactive.to_dict()
+            session.metadata["interactive_target"] = current_interactive
             saved_interactive = current_interactive
-        resolved_interactive = interactive or saved_interactive
-        tool_context = self._build_tool_context(
+        resolved_interactive_session_key = interactive_session_key or (
+            str(saved_interactive["session_key"]) if saved_interactive else None
+        )
+        route_target = self._resolve_channel_target(
+            resolved_interactive_session_key
+        ) or ChannelTarget(
             channel=msg.channel,
             chat_id=msg.chat_id,
+            metadata=self._extract_interactive_route_metadata(msg.metadata),
+        )
+        if route_target:
+            self._upsert_internal_session_target(
+                session_key=key,
+                channel=str(route_target.channel),
+                chat_id=str(route_target.chat_id),
+                metadata=route_target.metadata,
+            )
+        tool_context = self._build_tool_context(
             session_key=key,
+            interactive_session_key=resolved_interactive_session_key,
             message_id=msg.metadata.get("message_id"),
-            metadata=msg.metadata,
-            interactive=resolved_interactive,
         )
 
         # Slash commands
@@ -865,8 +968,6 @@ class AgentLoop:
                 content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
 
-        tool_context.metadata["_message_sent_in_turn"] = False
-
         history, initial_messages = await self._build_initial_messages_with_compaction(
             session,
             msg.content,
@@ -887,7 +988,7 @@ class AgentLoop:
                 )
             )
 
-        final_content, _, all_msgs, turn_usage = await self._run_agent_loop(
+        final_content, _, all_msgs, turn_usage, message_sent_in_turn = await self._run_agent_loop(
             session,
             initial_messages,
             tool_context,
@@ -901,7 +1002,7 @@ class AgentLoop:
         self._record_session_token_usage(session, turn_usage)
         self.sessions.save(session)
 
-        if bool(tool_context.metadata.get("_message_sent_in_turn")):
+        if message_sent_in_turn:
             return None
 
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
@@ -945,11 +1046,23 @@ class AgentLoop:
         chat_id: str = "direct",
         metadata: dict[str, Any] | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
-        interactive: DeliveryTarget | None = None,
+        interactive_session_key: str | None = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
         normalized_session_key = validate_session_key(session_key)
+        route_target = self._resolve_channel_target(interactive_session_key) or ChannelTarget(
+            channel=channel,
+            chat_id=chat_id,
+            metadata=self._extract_interactive_route_metadata(metadata),
+        )
+        if route_target:
+            self._upsert_internal_session_target(
+                session_key=normalized_session_key,
+                channel=str(route_target.channel),
+                chat_id=str(route_target.chat_id),
+                metadata=route_target.metadata,
+            )
         msg = InboundMessage(
             channel=channel,
             sender_id="user",
@@ -962,6 +1075,6 @@ class AgentLoop:
             msg,
             session_key=normalized_session_key,
             on_progress=on_progress,
-            interactive=interactive,
+            interactive_session_key=interactive_session_key,
         )
         return response.content if response else ""

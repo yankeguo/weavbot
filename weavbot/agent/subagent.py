@@ -150,8 +150,6 @@ class SubagentManager:
             iteration = 0
             final_result: str | None = None
             tool_context = ToolExecutionContext(
-                channel=origin["channel"],
-                chat_id=origin["chat_id"],
                 session_key=str(
                     build_session_key(str(origin.get("session_key")))
                     if str(origin.get("session_key") or "").strip()
@@ -159,7 +157,6 @@ class SubagentManager:
                         str(origin.get("channel") or ""), str(origin.get("chat_id") or "")
                     )
                 ),
-                metadata=dict(origin.get("metadata") or {}),
             )
 
             while iteration < max_iterations:
