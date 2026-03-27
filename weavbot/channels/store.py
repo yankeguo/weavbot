@@ -14,8 +14,6 @@ import aiofiles.os
 import aiofiles.ospath
 from loguru import logger
 
-from weavbot.utils.helpers import build_session_key
-
 
 @dataclass
 class ChannelTarget:
@@ -94,10 +92,7 @@ class ChannelStore:
             files = [self.dir / name for name in names if name.endswith(".json")]
             parsed: dict[str, ChannelTarget] = {}
             for f in files:
-                try:
-                    key = build_session_key(f.stem)
-                except ValueError:
-                    continue
+                key = f.stem
                 try:
                     async with aiofiles.open(f, encoding="utf-8") as af:
                         content = await af.read()
@@ -113,13 +108,7 @@ class ChannelStore:
 
     async def upsert(self, session_key: str, target: ChannelTarget) -> None:
         await self._ensure_loaded()
-        try:
-            key = build_session_key(str(session_key or "").strip())
-        except ValueError as e:
-            logger.warning(
-                "ChannelStore upsert ignored invalid session_key '{}': {}", session_key, e
-            )
-            return
+        key = session_key
         key_lock = await self._get_key_lock(key)
         async with key_lock:
             target.updated_at = datetime.now().isoformat()
@@ -145,13 +134,7 @@ class ChannelStore:
 
     async def delete(self, session_key: str) -> None:
         await self._ensure_loaded()
-        try:
-            key = build_session_key(str(session_key or "").strip())
-        except ValueError as e:
-            logger.warning(
-                "ChannelStore delete ignored invalid session_key '{}': {}", session_key, e
-            )
-            return
+        key = session_key
         key_lock = await self._get_key_lock(key)
         async with key_lock:
             should_delete_file = False
@@ -167,12 +150,6 @@ class ChannelStore:
 
     async def resolve(self, session_key: str) -> ChannelTarget | None:
         await self._ensure_loaded()
-        try:
-            key = build_session_key(str(session_key or "").strip())
-        except ValueError as e:
-            logger.warning(
-                "ChannelStore resolve ignored invalid session_key '{}': {}", session_key, e
-            )
-            return None
+        key = session_key
         async with self._targets_lock:
             return self._targets.get(key)
