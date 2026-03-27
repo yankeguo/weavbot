@@ -243,9 +243,14 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
             channel="system",
             sender_id="subagent",
             chat_id=f"{origin['channel']}:{origin['chat_id']}",
+            session_key=str(
+                origin.get("session_key")
+                or InboundMessage.default_session_key(
+                    "system", f"{origin['channel']}:{origin['chat_id']}"
+                )
+            ),
             content=announce_content,
             metadata=dict(origin.get("metadata") or {}),
-            session_key_override=str(origin.get("session_key") or ""),
         )
 
         await self.bus.publish_inbound(msg)

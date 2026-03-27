@@ -10,18 +10,26 @@ class InboundMessage:
     """Message received from a chat channel."""
 
     channel: str  # telegram, discord, slack, etc.
-    sender_id: str  # User identifier
+    # Sender identity for auth/allowlist and observability.
+    # It is not used as the session partition key or outbound delivery target.
+    sender_id: str
     chat_id: str  # Chat/channel identifier
+    session_key: str  # Explicit session partition key (must be non-empty)
     content: str  # Message text
     timestamp: datetime = field(default_factory=datetime.now)
-    media: list[str] = field(default_factory=list)  # Media URLs
+    media: list[str] = field(default_factory=list)  # Local image file paths for multimodal input
     metadata: dict[str, Any] = field(default_factory=dict)  # Channel-specific data
-    session_key_override: str | None = None  # Optional override for thread-scoped sessions
 
-    @property
-    def session_key(self) -> str:
-        """Unique key for session identification."""
-        return self.session_key_override or f"{self.channel}:{self.chat_id}"
+    def __post_init__(self) -> None:
+        key = str(self.session_key or "").strip()
+        if not key:
+            raise ValueError("session_key must be non-empty")
+        self.session_key = key
+
+    @staticmethod
+    def default_session_key(channel: str, chat_id: str) -> str:
+        """Build the default session key from channel/chat."""
+        return f"{channel}:{chat_id}"
 
 
 @dataclass

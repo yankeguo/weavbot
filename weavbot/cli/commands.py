@@ -887,6 +887,9 @@ def agent(
                                 channel=cli_channel,
                                 sender_id="user",
                                 chat_id=cli_chat_id,
+                                session_key=InboundMessage.default_session_key(
+                                    cli_channel, cli_chat_id
+                                ),
                                 content=user_input,
                             )
                         )

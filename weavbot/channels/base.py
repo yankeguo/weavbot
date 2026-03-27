@@ -99,9 +99,9 @@ class BaseChannel(ABC):
             sender_id: The sender's identifier.
             chat_id: The chat/channel identifier.
             content: Message text content.
-            media: Optional list of media URLs.
+            media: Optional list of local media file paths.
             metadata: Optional channel-specific metadata.
-            session_key: Optional session key override (e.g. thread-scoped sessions).
+            session_key: Optional explicit session key (e.g. thread/account scoped key).
         """
         if not self.is_allowed(sender_id):
             logger.warning(
@@ -123,17 +123,21 @@ class BaseChannel(ABC):
 
         if non_image_paths:
             file_lines = "\n".join(f"- {p}" for p in non_image_paths)
-            file_note = f"Attached files (path only, not multimodal):\n{file_lines}"
+            file_note = f"Attached files (local path only, not multimodal):\n{file_lines}"
             content = f"{content}\n{file_note}" if content else file_note
 
         msg = InboundMessage(
             channel=self.name,
             sender_id=str(sender_id),
             chat_id=str(chat_id),
+            session_key=(
+                str(session_key).strip()
+                if isinstance(session_key, str) and session_key.strip()
+                else InboundMessage.default_session_key(self.name, str(chat_id))
+            ),
             content=content,
             media=image_media,
             metadata=metadata or {},
-            session_key_override=session_key,
         )
 
         await self.bus.publish_inbound(msg)

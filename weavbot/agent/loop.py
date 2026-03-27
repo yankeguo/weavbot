@@ -957,6 +957,7 @@ class AgentLoop:
             channel=channel,
             sender_id="user",
             chat_id=chat_id,
+            session_key=session_key,
             content=content,
             metadata=dict(metadata or {}),
         )
