@@ -105,11 +105,13 @@ def test_add_cron_adds_interval_job():
 def test_add_cron_blocks_nested_schedule():
     svc = _FakeCronService()
     tool = AddCronTool(svc)
-    token = tool.set_cron_context(True)
-    try:
-        out = asyncio.run(tool.execute(context=_CTX, message="Nested", interval=60))
-    finally:
-        tool.reset_cron_context(token)
+    nested_ctx = ToolExecutionContext(
+        channel="telegram",
+        chat_id="u1",
+        session_key="telegram:u1",
+        metadata={"_cron_in_job": True},
+    )
+    out = asyncio.run(tool.execute(context=nested_ctx, message="Nested", interval=60))
     assert out == "Error: cannot schedule new jobs from within a cron job execution"
 
 

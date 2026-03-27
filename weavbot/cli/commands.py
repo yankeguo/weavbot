@@ -513,8 +513,6 @@ def gateway(
     # Set cron callback (needs agent)
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
-        from weavbot.agent.tools.add_cron import AddCronTool
-        from weavbot.agent.tools.message import MessageTool
         from weavbot.bus.events import OutboundMessage
 
         channel = job.payload.channel or "cli"
@@ -526,17 +524,13 @@ def gateway(
             chat_id=chat_id,
         )
 
-        # Prevent the agent from scheduling new cron jobs during execution
-        cron_tool = agent.tools.get("add_cron")
-        cron_token = None
-        if isinstance(cron_tool, AddCronTool):
-            cron_token = cron_tool.set_cron_context(True)
         try:
             response = await agent.process_direct(
                 reminder_note,
                 session_key=f"cron:{job.id}",
                 channel=channel,
                 chat_id=chat_id,
+                metadata={"_cron_in_job": True},
                 on_progress=_suppress_background_progress,
             )
         except Exception as e:
@@ -547,13 +541,6 @@ def gateway(
                     OutboundMessage(channel=channel, chat_id=job.payload.to, content=err_content)
                 )
             return err_content
-        finally:
-            if isinstance(cron_tool, AddCronTool) and cron_token is not None:
-                cron_tool.reset_cron_context(cron_token)
-
-        message_tool = agent.tools.get("message")
-        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
-            return response or ""
 
         if response and _looks_like_agent_error(response):
             err_content = f"[Cron Error] Task '{job.name}' failed: {response}"
@@ -615,15 +602,6 @@ def gateway(
             logger.exception("Heartbeat execute failed: channel={}, chat_id={}", channel, chat_id)
             return f"[Heartbeat Error] Task execution failed: {e}"
 
-        message_tool = agent.tools.get("message")
-        if bool(getattr(message_tool, "_sent_in_turn", False)):
-            logger.info(
-                "Heartbeat execute suppressed notify because message tool already sent in turn: "
-                "channel={}, chat_id={}",
-                channel,
-                chat_id,
-            )
-            return ""
         if final_content and _looks_like_agent_error(final_content):
             return f"[Heartbeat Error] {final_content}"
         logger.info(

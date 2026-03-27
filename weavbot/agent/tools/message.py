@@ -1,6 +1,5 @@
 """Message tool for sending messages to users."""
 
-from contextvars import ContextVar
 from typing import Any, Awaitable, Callable
 
 from weavbot.agent.tools.base import Tool, ToolExecutionContext
@@ -15,20 +14,10 @@ class MessageTool(Tool):
         send_callback: Callable[[OutboundMessage], Awaitable[None]] | None = None,
     ):
         self._send_callback = send_callback
-        self._sent_in_turn_ctx: ContextVar[bool] = ContextVar("message_sent_in_turn", default=False)
-
-    @property
-    def _sent_in_turn(self) -> bool:
-        """Compatibility accessor used by existing notification gating code."""
-        return self._sent_in_turn_ctx.get()
 
     def set_send_callback(self, callback: Callable[[OutboundMessage], Awaitable[None]]) -> None:
         """Set the callback for sending messages."""
         self._send_callback = callback
-
-    def start_turn(self) -> None:
-        """Reset per-turn send tracking."""
-        self._sent_in_turn_ctx.set(False)
 
     @property
     def name(self) -> str:
@@ -96,7 +85,7 @@ class MessageTool(Tool):
         try:
             await self._send_callback(msg)
             if channel == context.channel and chat_id == context.chat_id:
-                self._sent_in_turn_ctx.set(True)
+                context.metadata["_message_sent_in_turn"] = True
             media_info = f" with {len(media)} attachments" if media else ""
             return f"Message sent to {channel}:{chat_id}{media_info}"
         except Exception as e:

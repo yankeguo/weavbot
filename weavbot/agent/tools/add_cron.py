@@ -1,6 +1,5 @@
 """Tool for adding cron jobs."""
 
-from contextvars import ContextVar
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -15,15 +14,6 @@ class AddCronTool(Tool):
 
     def __init__(self, cron_service: CronService):
         self._cron = cron_service
-        self._in_cron_context: ContextVar[bool] = ContextVar("cron_in_context", default=False)
-
-    def set_cron_context(self, active: bool):
-        """Mark whether the tool is executing inside a cron job callback."""
-        return self._in_cron_context.set(active)
-
-    def reset_cron_context(self, token) -> None:
-        """Restore previous cron context."""
-        self._in_cron_context.reset(token)
 
     @property
     def name(self) -> str:
@@ -70,7 +60,7 @@ class AddCronTool(Tool):
         at: str | None = None,
         **kwargs: Any,
     ) -> str:
-        if self._in_cron_context.get():
+        if bool((context.metadata or {}).get("_cron_in_job")):
             return "Error: cannot schedule new jobs from within a cron job execution"
         if not message:
             return "Error: message is required for add"

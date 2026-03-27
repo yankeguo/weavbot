@@ -147,7 +147,9 @@ class SubagentManager:
             tool_context = ToolExecutionContext(
                 channel=origin["channel"],
                 chat_id=origin["chat_id"],
-                session_key=str(origin.get("session_key") or f"{origin['channel']}:{origin['chat_id']}"),
+                session_key=str(
+                    origin.get("session_key") or f"{origin['channel']}:{origin['chat_id']}"
+                ),
                 metadata=dict(origin.get("metadata") or {}),
             )
 

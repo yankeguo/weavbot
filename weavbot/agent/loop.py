@@ -790,9 +790,7 @@ class AgentLoop:
                 content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
 
-        if message_tool := self.tools.get("message"):
-            if isinstance(message_tool, MessageTool):
-                message_tool.start_turn()
+        tool_context.metadata["_message_sent_in_turn"] = False
 
         history, initial_messages = await self._build_initial_messages_with_compaction(
             session,
@@ -829,7 +827,7 @@ class AgentLoop:
         self._record_session_token_usage(session, turn_usage)
         self.sessions.save(session)
 
-        if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
+        if bool(tool_context.metadata.get("_message_sent_in_turn")):
             return None
 
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content

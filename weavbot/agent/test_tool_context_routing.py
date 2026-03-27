@@ -112,9 +112,9 @@ async def test_message_tool_context_isolation_across_concurrent_tasks() -> None:
     )
 
     async def _turn(ctx: ToolExecutionContext, text: str) -> bool:
-        tool.start_turn()
+        ctx.metadata["_message_sent_in_turn"] = False
         await tool.execute(context=ctx, content=text)
-        return tool._sent_in_turn
+        return bool(ctx.metadata.get("_message_sent_in_turn"))
 
     sent_flags = await asyncio.gather(
         _turn(ctx_a, "hello-a"),
