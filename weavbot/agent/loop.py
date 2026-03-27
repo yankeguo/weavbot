@@ -208,12 +208,10 @@ class AgentLoop:
             )
         )
         self.tools.register(FetchTool(proxy=self.web_proxy))
-        self.tools.register(
-            MessageTool(send_callback=self.bus.publish_outbound, channel_store=self.channel_store)
-        )
-        self.tools.register(SpawnTool(manager=self.subagents, channel_store=self.channel_store))
+        self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
+        self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
-            self.tools.register(AddCronTool(self.cron_service, channel_store=self.channel_store))
+            self.tools.register(AddCronTool(self.cron_service))
             self.tools.register(ListCronTool(self.cron_service))
             self.tools.register(RemoveCronTool(self.cron_service))
 
@@ -244,13 +242,13 @@ class AgentLoop:
     def _build_tool_context(
         *,
         session_key: str,
-        interactive_session_key: str | None = None,
+        original_session_key: str | None = None,
         message_id: str | None = None,
     ) -> ToolExecutionContext:
         """Create per-call tool execution context."""
         return ToolExecutionContext(
             session_key=session_key,
-            interactive_session_key=interactive_session_key,
+            original_session_key=original_session_key,
             message_id=message_id,
         )
 
@@ -716,7 +714,7 @@ class AgentLoop:
                         explicit_target = str(args.get("session_key") or "").strip()
                         resolved_target = (
                             explicit_target
-                            or (tool_context.interactive_session_key or "").strip()
+                            or (tool_context.original_session_key or "").strip()
                             or tool_context.session_key
                         )
                         if resolved_target == tool_context.session_key:
@@ -884,7 +882,7 @@ class AgentLoop:
             session = self.sessions.get_or_create(key)
             tool_context = self._build_tool_context(
                 session_key=key,
-                interactive_session_key=interactive_session_key,
+                original_session_key=interactive_session_key,
                 message_id=msg.metadata.get("message_id"),
             )
             history, messages = await self._build_initial_messages_with_compaction(
@@ -938,7 +936,7 @@ class AgentLoop:
             )
         tool_context = self._build_tool_context(
             session_key=key,
-            interactive_session_key=resolved_interactive_session_key,
+            original_session_key=resolved_interactive_session_key,
             message_id=msg.metadata.get("message_id"),
         )
 

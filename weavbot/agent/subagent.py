@@ -4,7 +4,6 @@ import asyncio
 import json
 import uuid
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
 
@@ -24,7 +23,6 @@ from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.config.schema import ExecToolConfig
 from weavbot.providers.base import LLMProvider
-from weavbot.utils.helpers import build_session_key
 
 
 class SubagentManager:
@@ -62,36 +60,27 @@ class SubagentManager:
         self,
         task: str,
         label: str | None = None,
-        origin_channel: str = "cli",
-        origin_chat_id: str = "direct",
-        session_key: str | None = None,
-        origin_metadata: dict[str, Any] | None = None,
+        original_session_key: str = "cli_direct",
     ) -> str:
         """Spawn a subagent to execute a task in the background."""
         task_id = str(uuid.uuid4())[:8]
         display_label = label or task[:30] + ("..." if len(task) > 30 else "")
-        origin = {
-            "channel": origin_channel,
-            "chat_id": origin_chat_id,
-            "session_key": (
-                build_session_key(session_key)
-                if isinstance(session_key, str) and session_key.strip()
-                else build_session_key(origin_channel, origin_chat_id)
-            ),
-            "metadata": dict(origin_metadata or {}),
-        }
+        subagent_session_key = f"{original_session_key}_sub_{task_id}"
 
-        bg_task = asyncio.create_task(self._run_subagent(task_id, task, display_label, origin))
+        bg_task = asyncio.create_task(
+            self._run_subagent(
+                task_id, task, display_label, original_session_key, subagent_session_key
+            )
+        )
         self._running_tasks[task_id] = bg_task
-        if session_key:
-            self._session_tasks.setdefault(session_key, set()).add(task_id)
+        self._session_tasks.setdefault(original_session_key, set()).add(task_id)
 
         def _cleanup(_: asyncio.Task) -> None:
             self._running_tasks.pop(task_id, None)
-            if session_key and (ids := self._session_tasks.get(session_key)):
+            if ids := self._session_tasks.get(original_session_key):
                 ids.discard(task_id)
                 if not ids:
-                    del self._session_tasks[session_key]
+                    del self._session_tasks[original_session_key]
 
         bg_task.add_done_callback(_cleanup)
 
@@ -107,7 +96,8 @@ class SubagentManager:
         task_id: str,
         task: str,
         label: str,
-        origin: dict[str, Any],
+        original_session_key: str,
+        subagent_session_key: str,
     ) -> None:
         """Execute the subagent task and announce the result."""
         logger.info("Subagent [{}] starting task: {}", task_id, label)
@@ -150,13 +140,8 @@ class SubagentManager:
             iteration = 0
             final_result: str | None = None
             tool_context = ToolExecutionContext(
-                session_key=str(
-                    build_session_key(str(origin.get("session_key")))
-                    if str(origin.get("session_key") or "").strip()
-                    else build_session_key(
-                        str(origin.get("channel") or ""), str(origin.get("chat_id") or "")
-                    )
-                ),
+                session_key=subagent_session_key,
+                original_session_key=original_session_key,
             )
 
             while iteration < max_iterations:
@@ -216,12 +201,16 @@ class SubagentManager:
                 final_result = "Task completed but no final response was generated."
 
             logger.info("Subagent [{}] completed successfully", task_id)
-            await self._announce_result(task_id, label, task, final_result, origin, "ok")
+            await self._announce_result(
+                task_id, label, task, final_result, original_session_key, "ok"
+            )
 
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             logger.error("Subagent [{}] failed: {}", task_id, e)
-            await self._announce_result(task_id, label, task, error_msg, origin, "error")
+            await self._announce_result(
+                task_id, label, task, error_msg, original_session_key, "error"
+            )
 
     async def _announce_result(
         self,
@@ -229,7 +218,7 @@ class SubagentManager:
         label: str,
         task: str,
         result: str,
-        origin: dict[str, Any],
+        original_session_key: str,
         status: str,
     ) -> None:
         """Announce the subagent result to the main agent via the message bus."""
@@ -244,34 +233,16 @@ Result:
 
 Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not mention technical details like "subagent" or task IDs."""
 
-        # Inject as system message to trigger main agent
-        announce_metadata = dict(origin.get("metadata") or {})
-        announce_metadata["_origin_channel"] = str(origin.get("channel") or "cli")
-        announce_metadata["_origin_chat_id"] = str(origin.get("chat_id") or "direct")
         msg = InboundMessage(
             channel="system",
             sender_id="subagent",
-            chat_id=build_session_key(
-                str(origin.get("channel") or ""), str(origin.get("chat_id") or "")
-            ),
-            session_key=str(
-                build_session_key(str(origin.get("session_key")))
-                if str(origin.get("session_key") or "").strip()
-                else InboundMessage.default_session_key(
-                    "system",
-                    build_session_key(
-                        str(origin.get("channel") or ""), str(origin.get("chat_id") or "")
-                    ),
-                )
-            ),
+            chat_id=original_session_key,
+            session_key=original_session_key,
             content=announce_content,
-            metadata=announce_metadata,
         )
 
         await self.bus.publish_inbound(msg)
-        logger.debug(
-            "Subagent [{}] announced result to {}:{}", task_id, origin["channel"], origin["chat_id"]
-        )
+        logger.debug("Subagent [{}] announced result to {}", task_id, original_session_key)
 
     def _build_subagent_prompt(self) -> str:
         """Build a focused system prompt for the subagent."""

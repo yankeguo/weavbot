@@ -5,7 +5,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from weavbot.agent.tools.base import Tool, ToolExecutionContext
-from weavbot.channels.store import ChannelStore
 from weavbot.cron.service import CronService
 from weavbot.cron.types import CronSchedule
 
@@ -13,9 +12,8 @@ from weavbot.cron.types import CronSchedule
 class AddCronTool(Tool):
     """Tool to schedule reminders and recurring tasks."""
 
-    def __init__(self, cron_service: CronService, channel_store: ChannelStore | None = None):
+    def __init__(self, cron_service: CronService):
         self._cron = cron_service
-        self._channel_store = channel_store
 
     @property
     def name(self) -> str:
@@ -66,15 +64,7 @@ class AddCronTool(Tool):
             return "Error: cannot schedule new jobs from within a cron job execution"
         if not message:
             return "Error: message is required for add"
-        if not self._channel_store:
-            return "Error: channel target store is not configured"
-        current_target = self._channel_store.resolve(context.session_key)
-        if not current_target:
-            return f"Error: no channel target found for session {context.session_key}"
-        interactive_session_key = context.interactive_session_key or context.session_key
-        interactive_target = self._channel_store.resolve(interactive_session_key)
-        if not interactive_target:
-            return f"Error: no channel target found for session {interactive_session_key}"
+        original_session_key_for_cron = context.original_session_key or context.session_key
         if tz and not expr:
             return "Error: tz can only be used with expr"
         if tz:
@@ -101,12 +91,8 @@ class AddCronTool(Tool):
             schedule=schedule,
             message=message,
             deliver=True,
-            channel=current_target.channel,
-            to=current_target.chat_id,
-            interactive_channel=interactive_target.channel,
-            interactive_chat_id=interactive_target.chat_id,
-            interactive_session_key=interactive_session_key,
-            interactive_metadata=interactive_target.metadata,
+            original_session_key=original_session_key_for_cron,
+            interactive_session_key=original_session_key_for_cron,
             delete_after_run=delete_after,
         )
         return f"Created job '{job.name}' (id: {job.id})"

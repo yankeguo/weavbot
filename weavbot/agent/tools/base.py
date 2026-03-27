@@ -12,7 +12,7 @@ class ToolExecutionContext:
     """Per-tool-call runtime routing context."""
 
     session_key: str
-    interactive_session_key: str | None = None
+    original_session_key: str | None = None
     message_id: str | None = None
 
 

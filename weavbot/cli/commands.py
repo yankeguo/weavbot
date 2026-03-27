@@ -594,24 +594,24 @@ def gateway(
         """Execute a cron job through the agent."""
         from weavbot.bus.events import OutboundMessage
 
-        channel = job.payload.channel or "cli"
-        chat_id = job.payload.to or "direct"
+        primary = (
+            channel_store.resolve(job.payload.original_session_key)
+            if job.payload.original_session_key
+            else None
+        )
+        channel = primary.channel if primary else "cli"
+        chat_id = primary.chat_id if primary else "direct"
+
+        ikey = job.payload.interactive_session_key
+        interactive_resolved = channel_store.resolve(ikey) if ikey else None
         interactive_target = (
             RouteTarget(
-                channel=str(job.payload.interactive_channel or "").strip(),
-                chat_id=str(job.payload.interactive_chat_id or "").strip(),
-                session_key=str(job.payload.interactive_session_key or "").strip(),
-                metadata=(
-                    dict(job.payload.interactive_metadata or {})
-                    if isinstance(job.payload.interactive_metadata, dict)
-                    else {}
-                ),
+                channel=interactive_resolved.channel,
+                chat_id=interactive_resolved.chat_id,
+                session_key=ikey,
+                metadata=interactive_resolved.metadata,
             )
-            if (
-                str(job.payload.interactive_channel or "").strip()
-                and str(job.payload.interactive_chat_id or "").strip()
-                and str(job.payload.interactive_session_key or "").strip()
-            )
+            if interactive_resolved
             else None
         )
         if interactive_target is None:
@@ -643,19 +643,21 @@ def gateway(
         except Exception as e:
             logger.exception("Cron job execution failed: id={}, name={}", job.id, job.name)
             err_content = f"[Cron Error] Task '{job.name}' failed: {e}"
-            if job.payload.to and channel != "cli":
-                target_session_key = InboundMessage.default_session_key(channel, job.payload.to)
+            if job.payload.original_session_key and channel != "cli":
                 await bus.publish_outbound(
-                    OutboundMessage(session_key=target_session_key, content=err_content)
+                    OutboundMessage(
+                        session_key=job.payload.original_session_key, content=err_content
+                    )
                 )
             return err_content
 
         if response and _looks_like_agent_error(response):
             err_content = f"[Cron Error] Task '{job.name}' failed: {response}"
-            if job.payload.to and channel != "cli":
-                target_session_key = InboundMessage.default_session_key(channel, job.payload.to)
+            if job.payload.original_session_key and channel != "cli":
                 await bus.publish_outbound(
-                    OutboundMessage(session_key=target_session_key, content=err_content)
+                    OutboundMessage(
+                        session_key=job.payload.original_session_key, content=err_content
+                    )
                 )
             return err_content
 

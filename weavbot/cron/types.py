@@ -27,12 +27,8 @@ class CronPayload:
     message: str = ""
     # Deliver response to channel
     deliver: bool = False
-    channel: str | None = None  # e.g. "telegram"
-    to: str | None = None  # e.g. phone number
-    interactive_channel: str | None = None
-    interactive_chat_id: str | None = None
+    original_session_key: str | None = None
     interactive_session_key: str | None = None
-    interactive_metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_store_dict(cls, raw: dict[str, Any]) -> "CronPayload":
@@ -42,12 +38,8 @@ class CronPayload:
             kind=payload.get("kind", "agent_turn"),
             message=payload.get("message", ""),
             deliver=payload.get("deliver", False),
-            channel=payload.get("channel"),
-            to=payload.get("to"),
-            interactive_channel=payload.get("interactiveChannel"),
-            interactive_chat_id=payload.get("interactiveChatId"),
+            original_session_key=payload.get("originalSessionKey"),
             interactive_session_key=payload.get("interactiveSessionKey"),
-            interactive_metadata=dict(payload.get("interactiveMetadata") or {}),
         )
 
     def to_store_dict(self) -> dict[str, Any]:
@@ -56,12 +48,8 @@ class CronPayload:
             "kind": self.kind,
             "message": self.message,
             "deliver": self.deliver,
-            "channel": self.channel,
-            "to": self.to,
-            "interactiveChannel": self.interactive_channel,
-            "interactiveChatId": self.interactive_chat_id,
+            "originalSessionKey": self.original_session_key,
             "interactiveSessionKey": self.interactive_session_key,
-            "interactiveMetadata": dict(self.interactive_metadata or {}),
         }
 
 

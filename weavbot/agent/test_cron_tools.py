@@ -4,7 +4,6 @@ from weavbot.agent.tools.add_cron import AddCronTool
 from weavbot.agent.tools.base import ToolExecutionContext
 from weavbot.agent.tools.list_cron import ListCronTool
 from weavbot.agent.tools.remove_cron import RemoveCronTool
-from weavbot.channels.store import ChannelTarget
 from weavbot.cron.types import CronJob, CronPayload, CronSchedule
 
 
@@ -21,12 +20,8 @@ class _FakeCronService:
         schedule: CronSchedule,
         message: str,
         deliver: bool,
-        channel: str,
-        to: str,
-        interactive_channel: str | None = None,
-        interactive_chat_id: str | None = None,
+        original_session_key: str | None = None,
         interactive_session_key: str | None = None,
-        interactive_metadata: dict | None = None,
         delete_after_run: bool,
     ) -> CronJob:
         self.last_added = {
@@ -34,12 +29,8 @@ class _FakeCronService:
             "schedule": schedule,
             "message": message,
             "deliver": deliver,
-            "channel": channel,
-            "to": to,
-            "interactive_channel": interactive_channel,
-            "interactive_chat_id": interactive_chat_id,
+            "original_session_key": original_session_key,
             "interactive_session_key": interactive_session_key,
-            "interactive_metadata": interactive_metadata or {},
             "delete_after_run": delete_after_run,
         }
         job = CronJob(
@@ -49,12 +40,8 @@ class _FakeCronService:
             payload=CronPayload(
                 message=message,
                 deliver=deliver,
-                channel=channel,
-                to=to,
-                interactive_channel=interactive_channel,
-                interactive_chat_id=interactive_chat_id,
+                original_session_key=original_session_key,
                 interactive_session_key=interactive_session_key,
-                interactive_metadata=interactive_metadata or {},
             ),
             delete_after_run=delete_after_run,
         )
@@ -71,41 +58,21 @@ class _FakeCronService:
         return exists
 
 
-class _FakeChannelStore:
-    def __init__(self, mapping: dict[str, ChannelTarget] | None = None):
-        self.mapping = dict(mapping or {})
-
-    def resolve(self, session_key: str):
-        return self.mapping.get(session_key)
-
-
 _CTX = ToolExecutionContext(session_key="telegram_u1")
 
 
 def test_add_cron_requires_message_and_context():
     svc = _FakeCronService()
-    store = _FakeChannelStore({"telegram_u1": ChannelTarget(channel="telegram", chat_id="u1")})
-    tool = AddCronTool(svc, channel_store=store)
+    tool = AddCronTool(svc)
     assert (
         asyncio.run(tool.execute(context=_CTX, message="", interval=60))
         == "Error: message is required for add"
-    )
-    assert (
-        asyncio.run(
-            tool.execute(
-                context=ToolExecutionContext(session_key="missing"),
-                message="hi",
-                interval=60,
-            )
-        )
-        == "Error: no channel target found for session missing"
     )
 
 
 def test_add_cron_rejects_tz_without_expr_and_unknown_tz():
     svc = _FakeCronService()
-    store = _FakeChannelStore({"telegram_u1": ChannelTarget(channel="telegram", chat_id="u1")})
-    tool = AddCronTool(svc, channel_store=store)
+    tool = AddCronTool(svc)
 
     assert (
         asyncio.run(tool.execute(context=_CTX, message="hi", interval=60, tz="America/Vancouver"))
@@ -119,16 +86,12 @@ def test_add_cron_rejects_tz_without_expr_and_unknown_tz():
 
 def test_add_cron_adds_interval_job():
     svc = _FakeCronService()
-    store = _FakeChannelStore({"telegram_u1": ChannelTarget(channel="telegram", chat_id="u1")})
-    tool = AddCronTool(svc, channel_store=store)
+    tool = AddCronTool(svc)
 
     out = asyncio.run(tool.execute(context=_CTX, message="Take a break", interval=120))
     assert out.startswith("Created job 'Take a break'")
     assert svc.last_added is not None
-    assert svc.last_added["channel"] == "telegram"
-    assert svc.last_added["to"] == "u1"
-    assert svc.last_added["interactive_channel"] == "telegram"
-    assert svc.last_added["interactive_chat_id"] == "u1"
+    assert svc.last_added["original_session_key"] == "telegram_u1"
     assert svc.last_added["interactive_session_key"] == "telegram_u1"
     assert svc.last_added["schedule"].kind == "every"
     assert svc.last_added["schedule"].every_ms == 120_000
@@ -136,19 +99,15 @@ def test_add_cron_adds_interval_job():
 
 def test_add_cron_blocks_nested_schedule():
     svc = _FakeCronService()
-    store = _FakeChannelStore({"cron_job_1": ChannelTarget(channel="telegram", chat_id="u1")})
-    tool = AddCronTool(svc, channel_store=store)
-    nested_ctx = ToolExecutionContext(
-        session_key="cron_job_1",
-    )
+    tool = AddCronTool(svc)
+    nested_ctx = ToolExecutionContext(session_key="cron_job_1")
     out = asyncio.run(tool.execute(context=nested_ctx, message="Nested", interval=60))
     assert out == "Error: cannot schedule new jobs from within a cron job execution"
 
 
 def test_list_cron_outputs_jobs():
     svc = _FakeCronService()
-    store = _FakeChannelStore({"telegram_u1": ChannelTarget(channel="telegram", chat_id="u1")})
-    add_tool = AddCronTool(svc, channel_store=store)
+    add_tool = AddCronTool(svc)
     asyncio.run(add_tool.execute(context=_CTX, message="job one", interval=60))
 
     list_tool = ListCronTool(svc)
@@ -166,8 +125,7 @@ def test_remove_cron_requires_job_id_and_handles_missing():
 
 def test_remove_cron_removes_existing_job():
     svc = _FakeCronService()
-    store = _FakeChannelStore({"telegram_u1": ChannelTarget(channel="telegram", chat_id="u1")})
-    add_tool = AddCronTool(svc, channel_store=store)
+    add_tool = AddCronTool(svc)
     asyncio.run(add_tool.execute(context=_CTX, message="job one", interval=60))
     job_id = svc.jobs[0].id
 
