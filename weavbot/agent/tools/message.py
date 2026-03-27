@@ -76,6 +76,8 @@ class MessageTool(Tool):
         channel = channel or context.channel
         chat_id = chat_id or context.chat_id
         message_id = message_id or context.message_id
+        metadata = dict(context.metadata or {})
+        metadata["message_id"] = message_id
 
         if not channel or not chat_id:
             return "Error: No target channel/chat specified"
@@ -88,9 +90,7 @@ class MessageTool(Tool):
             chat_id=chat_id,
             content=content,
             media=media or [],
-            metadata={
-                "message_id": message_id,
-            },
+            metadata=metadata,
         )
 
         try:

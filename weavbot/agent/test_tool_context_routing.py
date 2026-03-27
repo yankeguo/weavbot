@@ -21,6 +21,7 @@ class _FakeSpawnManager:
         origin_channel: str = "cli",
         origin_chat_id: str = "direct",
         session_key: str | None = None,
+        origin_metadata: dict | None = None,
     ) -> str:
         self.last_call = {
             "task": task,
@@ -28,6 +29,7 @@ class _FakeSpawnManager:
             "origin_channel": origin_channel,
             "origin_chat_id": origin_chat_id,
             "session_key": session_key,
+            "origin_metadata": origin_metadata or {},
         }
         return "spawned"
 
@@ -62,13 +64,19 @@ class _FakeCronService:
 def test_spawn_tool_uses_execution_context_for_origin() -> None:
     manager = _FakeSpawnManager()
     tool = SpawnTool(manager=manager)
-    ctx = ToolExecutionContext(channel="telegram", chat_id="u1", session_key="telegram:u1")
+    ctx = ToolExecutionContext(
+        channel="telegram",
+        chat_id="u1",
+        session_key="telegram:chan-1:thread-9",
+        metadata={"slack": {"thread_ts": "thread-9"}},
+    )
     out = asyncio.run(tool.execute(context=ctx, task="summarize logs", label="logs"))
     assert out == "spawned"
     assert manager.last_call is not None
     assert manager.last_call["origin_channel"] == "telegram"
     assert manager.last_call["origin_chat_id"] == "u1"
-    assert manager.last_call["session_key"] == "telegram:u1"
+    assert manager.last_call["session_key"] == "telegram:chan-1:thread-9"
+    assert manager.last_call["origin_metadata"] == {"slack": {"thread_ts": "thread-9"}}
 
 
 def test_add_cron_tool_routes_delivery_from_execution_context() -> None:
@@ -100,6 +108,7 @@ async def test_message_tool_context_isolation_across_concurrent_tasks() -> None:
         chat_id="user-b",
         session_key="slack:user-b",
         message_id="m-b",
+        metadata={"slack": {"thread_ts": "thread-123"}, "channel_type": "group"},
     )
 
     async def _turn(ctx: ToolExecutionContext, text: str) -> bool:
@@ -117,3 +126,7 @@ async def test_message_tool_context_isolation_across_concurrent_tasks() -> None:
         ("slack", "user-b", "hello-b"),
         ("telegram", "user-a", "hello-a"),
     ]
+    b_msg = next(m for m in sent if m.channel == "slack")
+    assert b_msg.metadata.get("message_id") == "m-b"
+    assert b_msg.metadata.get("slack") == {"thread_ts": "thread-123"}
+    assert b_msg.metadata.get("channel_type") == "group"

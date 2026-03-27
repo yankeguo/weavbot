@@ -61,4 +61,5 @@ class SpawnTool(Tool):
             origin_channel=context.channel,
             origin_chat_id=context.chat_id,
             session_key=context.session_key,
+            origin_metadata=context.metadata,
         )

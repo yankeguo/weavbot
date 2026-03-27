@@ -608,6 +608,7 @@ def gateway(
                 session_key=session_key,
                 channel=channel,
                 chat_id=chat_id,
+                metadata=target_meta,
                 on_progress=_suppress_background_progress,
             )
         except Exception as e:
