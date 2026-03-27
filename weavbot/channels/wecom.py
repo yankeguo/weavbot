@@ -22,6 +22,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import WecomConfig
 
 try:
@@ -62,8 +63,14 @@ class WecomChannel(BaseChannel):
     _VOICE_EXTS = {".amr"}
     _VIDEO_EXTS = {".mp4"}
 
-    def __init__(self, config: WecomConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self,
+        config: WecomConfig,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: WecomConfig = config
 
         self._ws: Any = None
@@ -151,19 +158,24 @@ class WecomChannel(BaseChannel):
         await self._close_ws()
         await self._cancel_receiver()
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """Send outbound message through Wecom websocket."""
         if not self._ws:
             logger.warning("Wecom websocket is not connected.")
             return
 
-        metadata = msg.metadata or {}
-        wecom_meta = metadata.get("wecom", {}) if isinstance(metadata.get("wecom"), dict) else {}
-        req_id = self._extract_req_id(metadata, wecom_meta)
-        chat_type = self._infer_chat_type(msg.chat_id, metadata, wecom_meta)
+        control_meta = msg.metadata or {}
+        routing_meta = target.metadata or {}
+        wecom_meta = (
+            routing_meta.get("wecom", {}) if isinstance(routing_meta.get("wecom"), dict) else {}
+        )
+        req_id = self._extract_req_id(routing_meta, wecom_meta)
+        chat_type = self._infer_chat_type(target.chat_id, routing_meta, wecom_meta)
 
-        if not self._within_rate_limit(msg.chat_id):
-            logger.warning("Wecom outbound dropped due to rate-limit for chat_id={}", msg.chat_id)
+        if not self._within_rate_limit(target.chat_id):
+            logger.warning(
+                "Wecom outbound dropped due to rate-limit for chat_id={}", target.chat_id
+            )
             return
 
         if msg.media:
@@ -171,9 +183,9 @@ class WecomChannel(BaseChannel):
                 await self._send_media_message(
                     media_ref=media_ref,
                     req_id=req_id,
-                    chat_id=msg.chat_id,
+                    chat_id=target.chat_id,
                     chat_type=chat_type,
-                    metadata=metadata,
+                    metadata=routing_meta,
                     wecom_meta=wecom_meta,
                 )
 
@@ -181,15 +193,15 @@ class WecomChannel(BaseChannel):
         if not content:
             return
 
-        if metadata.get("_progress"):
+        if control_meta.get("_progress"):
             await self._send_stream_progress(
-                content, req_id=req_id, chat_id=msg.chat_id, chat_type=chat_type
+                content, req_id=req_id, chat_id=target.chat_id, chat_type=chat_type
             )
             return
 
         if req_id and req_id in self._stream_ids_by_req_id:
             await self._send_stream_finish(
-                content, req_id=req_id, chat_id=msg.chat_id, chat_type=chat_type
+                content, req_id=req_id, chat_id=target.chat_id, chat_type=chat_type
             )
             self._stream_ids_by_req_id.pop(req_id, None)
             return
@@ -201,7 +213,7 @@ class WecomChannel(BaseChannel):
                 cmd=cmd_override,
                 req_id=req_id,
                 body=body_override,
-                chat_id=msg.chat_id,
+                chat_id=target.chat_id,
                 chat_type=chat_type,
             )
             return
@@ -221,7 +233,7 @@ class WecomChannel(BaseChannel):
             return
 
         proactive_body = {
-            "chatid": msg.chat_id,
+            "chatid": target.chat_id,
             "msgtype": "markdown",
             "markdown": {"content": content},
         }

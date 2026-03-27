@@ -124,8 +124,7 @@ def test_background_notify_contract_mentions_message_and_target_context() -> Non
         target_metadata={"wechat": {"account_key": "acc-a"}},
     )
     assert "Only notify when necessary by calling the `message` tool." in contract
-    assert "channel: wechat" in contract
-    assert "chat_id: u_123" in contract
+    assert "session_key: wechat:u_123" in contract
     assert '"account_key": "acc-a"' in contract
 
 
@@ -139,8 +138,7 @@ def test_build_heartbeat_execute_input_includes_contract_and_tasks() -> None:
     assert "[Heartbeat Task]" in text
     assert "check pending reviews" in text
     assert "[Heartbeat Notification Contract]" in text
-    assert "channel: telegram" in text
-    assert "chat_id: 1001" in text
+    assert "session_key: telegram:1001" in text
     assert '"foo": "bar"' in text
 
 
@@ -154,8 +152,7 @@ def test_build_cron_execute_input_includes_contract_and_instruction() -> None:
     assert "Task 'daily-check' has been triggered." in text
     assert "Scheduled instruction: collect report and notify if needed" in text
     assert "[Cron Notification Contract]" in text
-    assert "channel: slack" in text
-    assert "chat_id: C123" in text
+    assert "session_key: slack:C123" in text
 
 
 def test_looks_like_agent_error_detects_known_failure_texts() -> None:

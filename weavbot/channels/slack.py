@@ -14,6 +14,7 @@ from slackify_markdown import slackify_markdown
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import SlackConfig
 
 
@@ -22,8 +23,14 @@ class SlackChannel(BaseChannel):
 
     name = "slack"
 
-    def __init__(self, config: SlackConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self,
+        config: SlackConfig,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: SlackConfig = config
         self._web_client: AsyncWebClient | None = None
         self._socket_client: SocketModeClient | None = None
@@ -72,13 +79,14 @@ class SlackChannel(BaseChannel):
                 logger.warning("Slack socket close failed: {}", e)
             self._socket_client = None
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """Send a message through Slack."""
         if not self._web_client:
             logger.warning("Slack client not running")
             return
         try:
-            slack_meta = msg.metadata.get("slack", {}) if msg.metadata else {}
+            routing_meta = target.metadata or {}
+            slack_meta = routing_meta.get("slack", {}) if routing_meta else {}
             thread_ts = slack_meta.get("thread_ts")
             channel_type = slack_meta.get("channel_type")
             # Only reply in thread for channel/group messages; DMs don't use threads
@@ -87,7 +95,7 @@ class SlackChannel(BaseChannel):
 
             if msg.content:
                 await self._web_client.chat_postMessage(
-                    channel=msg.chat_id,
+                    channel=target.chat_id,
                     text=self._to_mrkdwn(msg.content),
                     thread_ts=thread_ts_param,
                 )
@@ -96,7 +104,7 @@ class SlackChannel(BaseChannel):
                 try:
                     resolved = str(self.resolve_media_path(media_path))
                     await self._web_client.files_upload_v2(
-                        channel=msg.chat_id,
+                        channel=target.chat_id,
                         file=resolved,
                         thread_ts=thread_ts_param,
                     )

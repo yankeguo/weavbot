@@ -9,6 +9,7 @@ from loguru import logger
 
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore
 from weavbot.config.schema import Config
 
 
@@ -22,9 +23,10 @@ class ChannelManager:
     - Route outbound messages
     """
 
-    def __init__(self, config: Config, bus: MessageBus):
+    def __init__(self, config: Config, bus: MessageBus, channel_store: ChannelStore):
         self.config = config
         self.bus = bus
+        self.channel_store = channel_store
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
 
@@ -43,6 +45,7 @@ class ChannelManager:
                     self.config.channels.telegram,
                     self.bus,
                     workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Telegram channel enabled")
             except ImportError as e:
@@ -54,7 +57,10 @@ class ChannelManager:
                 from weavbot.channels.discord import DiscordChannel
 
                 self.channels["discord"] = DiscordChannel(
-                    self.config.channels.discord, self.bus, workspace=workspace
+                    self.config.channels.discord,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Discord channel enabled")
             except ImportError as e:
@@ -66,7 +72,10 @@ class ChannelManager:
                 from weavbot.channels.feishu import FeishuChannel
 
                 self.channels["feishu"] = FeishuChannel(
-                    self.config.channels.feishu, self.bus, workspace=workspace
+                    self.config.channels.feishu,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Feishu channel enabled")
             except ImportError as e:
@@ -78,7 +87,10 @@ class ChannelManager:
                 from weavbot.channels.mochat import MochatChannel
 
                 self.channels["mochat"] = MochatChannel(
-                    self.config.channels.mochat, self.bus, workspace=workspace
+                    self.config.channels.mochat,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Mochat channel enabled")
             except ImportError as e:
@@ -90,7 +102,10 @@ class ChannelManager:
                 from weavbot.channels.dingtalk import DingTalkChannel
 
                 self.channels["dingtalk"] = DingTalkChannel(
-                    self.config.channels.dingtalk, self.bus, workspace=workspace
+                    self.config.channels.dingtalk,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("DingTalk channel enabled")
             except ImportError as e:
@@ -102,7 +117,10 @@ class ChannelManager:
                 from weavbot.channels.email import EmailChannel
 
                 self.channels["email"] = EmailChannel(
-                    self.config.channels.email, self.bus, workspace=workspace
+                    self.config.channels.email,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Email channel enabled")
             except ImportError as e:
@@ -114,7 +132,10 @@ class ChannelManager:
                 from weavbot.channels.slack import SlackChannel
 
                 self.channels["slack"] = SlackChannel(
-                    self.config.channels.slack, self.bus, workspace=workspace
+                    self.config.channels.slack,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Slack channel enabled")
             except ImportError as e:
@@ -126,7 +147,10 @@ class ChannelManager:
                 from weavbot.channels.qq import QQChannel
 
                 self.channels["qq"] = QQChannel(
-                    self.config.channels.qq, self.bus, workspace=workspace
+                    self.config.channels.qq,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("QQ channel enabled")
             except ImportError as e:
@@ -138,7 +162,10 @@ class ChannelManager:
                 from weavbot.channels.wecom import WecomChannel
 
                 self.channels["wecom"] = WecomChannel(
-                    self.config.channels.wecom, self.bus, workspace=workspace
+                    self.config.channels.wecom,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Wecom channel enabled")
             except ImportError as e:
@@ -150,7 +177,10 @@ class ChannelManager:
                 from weavbot.channels.wechat import WechatChannel
 
                 self.channels["wechat"] = WechatChannel(
-                    self.config.channels.wechat, self.bus, workspace=workspace
+                    self.config.channels.wechat,
+                    self.bus,
+                    workspace=workspace,
+                    channel_store=self.channel_store,
                 )
                 logger.info("Wechat channel enabled")
             except ImportError as e:
@@ -218,14 +248,18 @@ class ChannelManager:
                     ):
                         continue
 
-                channel = self.channels.get(msg.channel)
+                target = self.channel_store.resolve(msg.session_key)
+                if not target:
+                    logger.warning("No channel target for session_key: {}", msg.session_key)
+                    continue
+                channel = self.channels.get(target.channel)
                 if channel:
                     try:
-                        await channel.send(msg)
+                        await channel.send(msg, target)
                     except Exception as e:
-                        logger.error("Error sending to {}: {}", msg.channel, e)
+                        logger.error("Error sending to {}: {}", target.channel, e)
                 else:
-                    logger.warning("Unknown channel: {}", msg.channel)
+                    logger.warning("Unknown channel: {}", target.channel)
 
             except asyncio.TimeoutError:
                 continue

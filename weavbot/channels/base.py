@@ -9,6 +9,7 @@ from loguru import logger
 
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
+from weavbot.channels.store import ChannelStore, ChannelTarget
 
 
 class BaseChannel(ABC):
@@ -21,7 +22,13 @@ class BaseChannel(ABC):
 
     name: str = "base"
 
-    def __init__(self, config: Any, bus: MessageBus, workspace: Path):
+    def __init__(
+        self,
+        config: Any,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
         """
         Initialize the channel.
 
@@ -33,6 +40,7 @@ class BaseChannel(ABC):
         self.config = config
         self.bus = bus
         self.workspace = workspace
+        self.channel_store = channel_store
         self.media_dir = workspace / "media"
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self._running = False
@@ -62,7 +70,7 @@ class BaseChannel(ABC):
         pass
 
     @abstractmethod
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """
         Send a message through this channel.
 
@@ -139,6 +147,15 @@ class BaseChannel(ABC):
             media=image_media,
             metadata=metadata or {},
         )
+        if self.channel_store:
+            self.channel_store.upsert(
+                msg.session_key,
+                ChannelTarget(
+                    channel=self.name,
+                    chat_id=str(chat_id),
+                    metadata=dict(metadata or {}),
+                ),
+            )
 
         await self.bus.publish_inbound(msg)
 

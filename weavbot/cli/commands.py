@@ -21,6 +21,7 @@ from rich.text import Text
 
 from weavbot import __logo__, __version__
 from weavbot.agent.tools.base import DeliveryTarget
+from weavbot.bus.events import InboundMessage
 from weavbot.config.schema import Config
 from weavbot.i18n import t
 from weavbot.utils.helpers import sync_workspace_templates
@@ -191,9 +192,8 @@ def _build_background_notify_contract(
         "- For routine/no-op outcomes, finish silently without calling `message`.\n"
         "- If an important result requires user action, call `message` once with concise content.\n"
         "- For `message` target routing, prefer current context defaults; if needed, use:\n"
-        f"  - channel: {channel}\n"
-        f"  - chat_id: {chat_id}\n"
-        f"  - metadata: {metadata_text}\n"
+        f"  - session_key: {InboundMessage.default_session_key(channel, chat_id)}\n"
+        f"  - target metadata hint: {metadata_text}\n"
     )
 
 
@@ -493,11 +493,13 @@ def gateway(
     from weavbot.agent.loop import AgentLoop
     from weavbot.bus.queue import MessageBus
     from weavbot.channels.manager import ChannelManager
+    from weavbot.channels.store import ChannelStore
     from weavbot.config.loader import load_config
     from weavbot.cron.service import CronService
     from weavbot.cron.types import CronJob
     from weavbot.heartbeat.service import HeartbeatService
     from weavbot.session.manager import SessionManager
+    from weavbot.utils.helpers import ensure_data_path
     from weavbot.utils.path_migration import prepare_runtime_paths
 
     if verbose:
@@ -509,6 +511,7 @@ def gateway(
 
     config = load_config()
     runtime_paths = prepare_runtime_paths(config.workspace_path)
+    channel_store = ChannelStore(ensure_data_path() / "channels.json")
     bus = MessageBus()
     provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
@@ -577,16 +580,18 @@ def gateway(
             logger.exception("Cron job execution failed: id={}, name={}", job.id, job.name)
             err_content = f"[Cron Error] Task '{job.name}' failed: {e}"
             if job.payload.to and channel != "cli":
+                target_session_key = InboundMessage.default_session_key(channel, job.payload.to)
                 await bus.publish_outbound(
-                    OutboundMessage(channel=channel, chat_id=job.payload.to, content=err_content)
+                    OutboundMessage(session_key=target_session_key, content=err_content)
                 )
             return err_content
 
         if response and _looks_like_agent_error(response):
             err_content = f"[Cron Error] Task '{job.name}' failed: {response}"
             if job.payload.to and channel != "cli":
+                target_session_key = InboundMessage.default_session_key(channel, job.payload.to)
                 await bus.publish_outbound(
-                    OutboundMessage(channel=channel, chat_id=job.payload.to, content=err_content)
+                    OutboundMessage(session_key=target_session_key, content=err_content)
                 )
             return err_content
 
@@ -602,7 +607,7 @@ def gateway(
     cron.on_job = on_cron_job
 
     # Create channel manager
-    channels = ChannelManager(config, bus)
+    channels = ChannelManager(config, bus, channel_store=channel_store)
     last_heartbeat_target: DeliveryTarget | None = None
 
     def _pick_heartbeat_target() -> DeliveryTarget:
@@ -673,10 +678,8 @@ def gateway(
         )
         await bus.publish_outbound(
             OutboundMessage(
-                channel=target.channel,
-                chat_id=target.chat_id,
+                session_key=target.session_key,
                 content=response,
-                metadata=target.metadata,
             )
         )
 

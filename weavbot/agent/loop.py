@@ -720,8 +720,7 @@ class AgentLoop:
         content = f"⏹ Stopped {total} task(s)." if total else "No active task to stop."
         await self.bus.publish_outbound(
             OutboundMessage(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
+                session_key=msg.session_key,
                 content=content,
             )
         )
@@ -736,8 +735,7 @@ class AgentLoop:
                 elif msg.channel == "cli":
                     await self.bus.publish_outbound(
                         OutboundMessage(
-                            channel=msg.channel,
-                            chat_id=msg.chat_id,
+                            session_key=msg.session_key,
                             content="",
                             metadata=msg.metadata or {},
                         )
@@ -749,8 +747,7 @@ class AgentLoop:
                 logger.exception("Error processing message for session {}", msg.session_key)
                 await self.bus.publish_outbound(
                     OutboundMessage(
-                        channel=msg.channel,
-                        chat_id=msg.chat_id,
+                        session_key=msg.session_key,
                         content="Sorry, I encountered an error.",
                     )
                 )
@@ -806,8 +803,7 @@ class AgentLoop:
             self._record_session_token_usage(session, turn_usage)
             self.sessions.save(session)
             return OutboundMessage(
-                channel=channel,
-                chat_id=chat_id,
+                session_key=key,
                 content=final_content or "Background task completed.",
             )
 
@@ -843,27 +839,22 @@ class AgentLoop:
                 # /new keeps memory-only archival semantics; no context compaction.
                 if not await self._consolidate_memory(session, archive_all=True):
                     return OutboundMessage(
-                        channel=msg.channel,
-                        chat_id=msg.chat_id,
+                        session_key=msg.session_key,
                         content="Memory archival failed, session not cleared. Please try again.",
                     )
             except Exception:
                 logger.exception("/new archival failed for {}", session.key)
                 return OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
+                    session_key=msg.session_key,
                     content="Memory archival failed, session not cleared. Please try again.",
                 )
             session.clear()
             self.sessions.save(session)
             self.sessions.invalidate(session.key)
-            return OutboundMessage(
-                channel=msg.channel, chat_id=msg.chat_id, content="New session started."
-            )
+            return OutboundMessage(session_key=msg.session_key, content="New session started.")
         if cmd == "/help":
             return OutboundMessage(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
+                session_key=msg.session_key,
                 content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
 
@@ -883,8 +874,7 @@ class AgentLoop:
             meta["_tool_hint"] = tool_hint
             await self.bus.publish_outbound(
                 OutboundMessage(
-                    channel=msg.channel,
-                    chat_id=msg.chat_id,
+                    session_key=msg.session_key,
                     content=content,
                     metadata=meta,
                 )
@@ -910,8 +900,7 @@ class AgentLoop:
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
         logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
         return OutboundMessage(
-            channel=msg.channel,
-            chat_id=msg.chat_id,
+            session_key=msg.session_key,
             content=final_content,
             metadata=msg.metadata or {},
         )

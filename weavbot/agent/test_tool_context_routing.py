@@ -157,14 +157,12 @@ async def test_message_tool_context_isolation_across_concurrent_tasks() -> None:
     )
 
     assert sent_flags == [True, True]
-    assert sorted((m.channel, m.chat_id, m.content) for m in sent) == [
-        ("slack", "user-b", "hello-b"),
-        ("telegram", "user-a", "hello-a"),
+    assert sorted((m.session_key, m.content) for m in sent) == [
+        ("slack:user-b", "hello-b"),
+        ("telegram:user-a", "hello-a"),
     ]
-    b_msg = next(m for m in sent if m.channel == "slack")
+    b_msg = next(m for m in sent if m.session_key == "slack:user-b")
     assert b_msg.metadata.get("message_id") == "m-b"
-    assert b_msg.metadata.get("slack") == {"thread_ts": "thread-123"}
-    assert b_msg.metadata.get("channel_type") == "group"
 
 
 @pytest.mark.asyncio
@@ -185,15 +183,11 @@ async def test_message_tool_does_not_leak_metadata_when_target_differs_from_cont
     await tool.execute(
         context=ctx,
         content="ping elsewhere",
-        channel="telegram",
-        chat_id="user-9",
+        session_key="telegram:user-9",
     )
     assert len(sent) == 1
     msg = sent[0]
-    assert msg.channel == "telegram"
-    assert msg.chat_id == "user-9"
-    assert msg.metadata.get("slack") is None
-    assert msg.metadata.get("channel_type") is None
+    assert msg.session_key == "telegram:user-9"
     assert msg.metadata.get("message_id") == "m-orig"
 
 
@@ -221,7 +215,5 @@ async def test_message_tool_prefers_interactive_target_from_context() -> None:
     await tool.execute(context=ctx, content="heartbeat ping")
     assert len(sent) == 1
     msg = sent[0]
-    assert msg.channel == "slack"
-    assert msg.chat_id == "C111"
-    assert msg.metadata.get("slack") == {"thread_ts": "T333", "channel_type": "channel"}
+    assert msg.session_key == "slack:C111:T333"
     assert msg.metadata.get("message_id") == "m-hb"

@@ -16,6 +16,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import MochatConfig
 
 try:
@@ -234,8 +235,14 @@ class MochatChannel(BaseChannel):
 
     name = "mochat"
 
-    def __init__(self, config: MochatConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self,
+        config: MochatConfig,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: MochatConfig = config
         self._http: httpx.AsyncClient | None = None
         self._socket: Any = None
@@ -312,7 +319,7 @@ class MochatChannel(BaseChannel):
             self._http = None
         self._ws_connected = self._ws_ready = False
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """Send outbound message to session or panel."""
         if not self.config.claw_token:
             logger.warning("Mochat claw_token missing, skip send")
@@ -325,27 +332,31 @@ class MochatChannel(BaseChannel):
         if not content:
             return
 
-        target = resolve_mochat_target(msg.chat_id)
-        if not target.id:
+        resolved_target = resolve_mochat_target(target.chat_id)
+        if not resolved_target.id:
             logger.warning("Mochat outbound target is empty")
             return
 
-        is_panel = (target.is_panel or target.id in self._panel_set) and not target.id.startswith(
-            "session_"
-        )
+        is_panel = (
+            resolved_target.is_panel or resolved_target.id in self._panel_set
+        ) and not resolved_target.id.startswith("session_")
         try:
             if is_panel:
                 await self._api_send(
                     "/api/claw/groups/panels/send",
                     "panelId",
-                    target.id,
+                    resolved_target.id,
                     content,
                     msg.reply_to,
-                    self._read_group_id(msg.metadata),
+                    self._read_group_id(target.metadata),
                 )
             else:
                 await self._api_send(
-                    "/api/claw/sessions/send", "sessionId", target.id, content, msg.reply_to
+                    "/api/claw/sessions/send",
+                    "sessionId",
+                    resolved_target.id,
+                    content,
+                    msg.reply_to,
                 )
         except Exception as e:
             logger.error("Failed to send Mochat message: {}", e)

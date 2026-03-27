@@ -12,6 +12,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.channels.wechat.accounts import resolve_accounts, resolve_state_dir
 from weavbot.channels.wechat.api import WechatApiClient
 from weavbot.channels.wechat.media import (
@@ -42,8 +43,14 @@ class WechatChannel(BaseChannel):
 
     name = "wechat"
 
-    def __init__(self, config: WechatConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self,
+        config: WechatConfig,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: WechatConfig = config
         self._state_dir = resolve_state_dir(workspace, config.state_dir)
         self._accounts: dict[str, ResolvedWechatAccount] = {}
@@ -108,14 +115,14 @@ class WechatChannel(BaseChannel):
                 logger.exception("Wechat poll task shutdown error")
         self._poll_tasks.clear()
 
-    async def send(self, msg: OutboundMessage) -> None:
-        metadata, wechat_meta = self._extract_send_metadata(msg)
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+        metadata, wechat_meta = self._extract_send_metadata(target.metadata or {})
         requested_account_key = (
             str(wechat_meta.get("account_key", "")).strip()
             or str(metadata.get("account_key", "")).strip()
             or "default"
         )
-        account_key = self._resolve_outbound_account_key(requested_account_key, msg.chat_id)
+        account_key = self._resolve_outbound_account_key(requested_account_key, target.chat_id)
         account = self._accounts.get(account_key)
         api = self._apis.get(account_key)
         if not account or not api:
@@ -123,14 +130,14 @@ class WechatChannel(BaseChannel):
                 "Wechat outbound dropped, unknown account_key={} requested={} chat_id={}",
                 account_key,
                 requested_account_key,
-                msg.chat_id,
+                target.chat_id,
             )
             return
         if self._guard.is_paused(account_key):
             logger.warning("Wechat outbound skipped, account paused: {}", account_key)
             return
 
-        chat_id = msg.chat_id
+        chat_id = target.chat_id
         # Reply token is scoped by account+peer and can be supplied explicitly by callers.
         context_token = (
             str(wechat_meta.get("context_token", "")).strip()
@@ -179,8 +186,10 @@ class WechatChannel(BaseChannel):
             )
 
     @staticmethod
-    def _extract_send_metadata(msg: OutboundMessage) -> tuple[dict[str, Any], dict[str, Any]]:
-        metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
+    def _extract_send_metadata(
+        metadata_raw: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
         wechat_meta = metadata.get("wechat", {}) if isinstance(metadata.get("wechat"), dict) else {}
         return metadata, wechat_meta
 

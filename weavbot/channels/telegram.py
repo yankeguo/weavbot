@@ -14,6 +14,7 @@ from telegram.request import HTTPXRequest
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import TelegramConfig
 
 
@@ -124,8 +125,9 @@ class TelegramChannel(BaseChannel):
         config: TelegramConfig,
         bus: MessageBus,
         workspace: Path,
+        channel_store: ChannelStore | None = None,
     ):
-        super().__init__(config, bus, workspace)
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: TelegramConfig = config
         self._app: Application | None = None
         self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
@@ -231,18 +233,18 @@ class TelegramChannel(BaseChannel):
             return "audio"
         return "document"
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """Send a message through Telegram."""
         if not self._app:
             logger.warning("Telegram bot not running")
             return
 
-        self._stop_typing(msg.chat_id)
+        self._stop_typing(target.chat_id)
 
         try:
-            chat_id = int(msg.chat_id)
+            chat_id = int(target.chat_id)
         except ValueError:
-            logger.error("Invalid chat_id: {}", msg.chat_id)
+            logger.error("Invalid chat_id: {}", target.chat_id)
             return
 
         reply_params = None

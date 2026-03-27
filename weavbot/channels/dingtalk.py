@@ -15,6 +15,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import DingTalkConfig
 
 try:
@@ -104,8 +105,14 @@ class DingTalkChannel(BaseChannel):
     _AUDIO_EXTS = {".amr", ".mp3", ".wav", ".ogg", ".m4a", ".aac"}
     _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
-    def __init__(self, config: DingTalkConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self,
+        config: DingTalkConfig,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: DingTalkConfig = config
         self._client: Any = None
         self._http: httpx.AsyncClient | None = None
@@ -431,17 +438,17 @@ class DingTalkChannel(BaseChannel):
             {"mediaId": media_id, "fileName": filename, "fileType": file_type},
         )
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """Send a message through DingTalk."""
         token = await self._get_access_token()
         if not token:
             return
 
         if msg.content and msg.content.strip():
-            await self._send_markdown_text(token, msg.chat_id, msg.content.strip())
+            await self._send_markdown_text(token, target.chat_id, msg.content.strip())
 
         for media_ref in msg.media or []:
-            ok = await self._send_media_ref(token, msg.chat_id, media_ref)
+            ok = await self._send_media_ref(token, target.chat_id, media_ref)
             if ok:
                 continue
             logger.error("DingTalk media send failed for {}", media_ref)
@@ -449,7 +456,7 @@ class DingTalkChannel(BaseChannel):
             filename = self._guess_filename(media_ref, self._guess_upload_type(media_ref))
             await self._send_markdown_text(
                 token,
-                msg.chat_id,
+                target.chat_id,
                 f"[Attachment send failed: {filename}]",
             )
 

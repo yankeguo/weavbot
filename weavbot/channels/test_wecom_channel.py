@@ -5,6 +5,7 @@ import pytest
 
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
+from weavbot.channels.store import ChannelTarget
 from weavbot.channels.wecom import EVENT_ENTER_CHAT, WecomChannel
 from weavbot.config.schema import WecomConfig
 
@@ -105,13 +106,15 @@ def test_send_enter_chat_uses_welcome_command(tmp_path):
     async def run_case():
         await channel.send(
             OutboundMessage(
+                session_key="wecom:user-1",
+                content="hello",
+                metadata={},
+            ),
+            ChannelTarget(
                 channel="wecom",
                 chat_id="user-1",
-                content="hello",
-                metadata={
-                    "wecom": {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT},
-                },
-            )
+                metadata={"wecom": {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT}},
+            ),
         )
 
     asyncio.run(run_case())

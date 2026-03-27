@@ -26,8 +26,8 @@ class MessageTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Send a message to a specific chat channel. Use this only when targeting a different "
-            "channel/chat than the current conversation, or when explicitly asked to send a message. "
+            "Send a message to a specific session key. Use this only when targeting a different "
+            "session than the current conversation, or when explicitly asked to send a message. "
             "For normal replies in the current conversation, respond with text directly."
         )
 
@@ -37,11 +37,10 @@ class MessageTool(Tool):
             "type": "object",
             "properties": {
                 "content": {"type": "string", "description": "Message content to send"},
-                "channel": {
+                "session_key": {
                     "type": "string",
-                    "description": "Target channel (e.g. telegram, discord)",
+                    "description": "Target session key to deliver the message",
                 },
-                "chat_id": {"type": "string", "description": "Target chat or user ID"},
                 "media": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -56,42 +55,33 @@ class MessageTool(Tool):
         *,
         context: ToolExecutionContext,
         content: str,
-        channel: str | None = None,
-        chat_id: str | None = None,
+        session_key: str | None = None,
         message_id: str | None = None,
         media: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
         interactive_target = context.interactive
-        channel = (
-            channel
-            or (interactive_target.channel if interactive_target else None)
-            or context.channel
-        )
-        chat_id = (
-            chat_id
-            or (interactive_target.chat_id if interactive_target else None)
-            or context.chat_id
+        target_session_key = (
+            (session_key or "").strip()
+            or (interactive_target.session_key if interactive_target else "")
+            or context.session_key
         )
         message_id = message_id or context.message_id
-        if interactive_target and interactive_target.matches(channel=channel, chat_id=chat_id):
-            metadata = dict(interactive_target.metadata or {})
-        elif channel == context.channel and chat_id == context.chat_id:
-            metadata = dict(context.metadata or {})
-        else:
-            # Do not inherit channel-specific routing (e.g. thread_ts) when targeting another chat.
-            metadata = {}
-        metadata["message_id"] = message_id
+        metadata = {}
+        provided_metadata = kwargs.get("metadata")
+        if isinstance(provided_metadata, dict):
+            metadata.update(provided_metadata)
+        if message_id is not None:
+            metadata["message_id"] = message_id
 
-        if not channel or not chat_id:
-            return "Error: No target channel/chat specified"
+        if not target_session_key:
+            return "Error: No target session_key specified"
 
         if not self._send_callback:
             return "Error: Message sending not configured"
 
         msg = OutboundMessage(
-            channel=channel,
-            chat_id=chat_id,
+            session_key=target_session_key,
             content=content,
             media=media or [],
             metadata=metadata,
@@ -99,9 +89,9 @@ class MessageTool(Tool):
 
         try:
             await self._send_callback(msg)
-            if channel == context.channel and chat_id == context.chat_id:
+            if target_session_key == context.session_key:
                 context.metadata["_message_sent_in_turn"] = True
             media_info = f" with {len(media)} attachments" if media else ""
-            return f"Message sent to {channel}:{chat_id}{media_info}"
+            return f"Message sent to session {target_session_key}{media_info}"
         except Exception as e:
             return f"Error sending message: {str(e)}"

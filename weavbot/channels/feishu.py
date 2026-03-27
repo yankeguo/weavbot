@@ -15,6 +15,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import FeishuConfig
 
 try:
@@ -277,8 +278,14 @@ class FeishuChannel(BaseChannel):
 
     name = "feishu"
 
-    def __init__(self, config: FeishuConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self,
+        config: FeishuConfig,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: FeishuConfig = config
         self._client: Any = None
         self._ws_client: Any = None
@@ -689,14 +696,14 @@ class FeishuChannel(BaseChannel):
             logger.error("Error sending Feishu {} message: {}", msg_type, e)
             return False
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """Send a message through Feishu, including media (images/files) if present."""
         if not self._client:
             logger.warning("Feishu client not initialized")
             return
 
         try:
-            receive_id_type = "chat_id" if msg.chat_id.startswith("oc_") else "open_id"
+            receive_id_type = "chat_id" if target.chat_id.startswith("oc_") else "open_id"
             loop = asyncio.get_running_loop()
 
             for raw_path in msg.media:
@@ -712,7 +719,7 @@ class FeishuChannel(BaseChannel):
                             None,
                             self._send_message_sync,
                             receive_id_type,
-                            msg.chat_id,
+                            target.chat_id,
                             "image",
                             json.dumps({"image_key": key}, ensure_ascii=False),
                         )
@@ -724,7 +731,7 @@ class FeishuChannel(BaseChannel):
                             None,
                             self._send_message_sync,
                             receive_id_type,
-                            msg.chat_id,
+                            target.chat_id,
                             media_type,
                             json.dumps({"file_key": key}, ensure_ascii=False),
                         )
@@ -738,7 +745,7 @@ class FeishuChannel(BaseChannel):
                     None,
                     self._send_message_sync,
                     receive_id_type,
-                    msg.chat_id,
+                    target.chat_id,
                     "interactive",
                     json.dumps(card, ensure_ascii=False),
                 )

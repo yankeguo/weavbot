@@ -10,6 +10,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
+from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import QQConfig
 
 try:
@@ -52,8 +53,14 @@ class QQChannel(BaseChannel):
 
     name = "qq"
 
-    def __init__(self, config: QQConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self,
+        config: QQConfig,
+        bus: MessageBus,
+        workspace: Path,
+        channel_store: ChannelStore | None = None,
+    ):
+        super().__init__(config, bus, workspace, channel_store=channel_store)
         self.config: QQConfig = config
         self._client: "botpy.Client | None" = None
         self._processed_ids: deque = deque(maxlen=1000)
@@ -96,7 +103,7 @@ class QQChannel(BaseChannel):
                 pass
         logger.info("QQ bot stopped")
 
-    async def send(self, msg: OutboundMessage) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
         """Send a message through QQ."""
         if not self._client:
             logger.warning("QQ client not initialized")
@@ -104,7 +111,7 @@ class QQChannel(BaseChannel):
         try:
             msg_id = msg.metadata.get("message_id")
             await self._client.api.post_c2c_message(
-                openid=msg.chat_id,
+                openid=target.chat_id,
                 msg_type=0,
                 content=msg.content,
                 msg_id=msg_id,
