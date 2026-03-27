@@ -9,6 +9,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from loguru import logger
@@ -25,6 +26,9 @@ from weavbot.bus.events import InboundMessage
 from weavbot.config.schema import Config
 from weavbot.i18n import t
 from weavbot.utils.helpers import build_session_key, sync_workspace_templates, validate_session_key
+
+if TYPE_CHECKING:
+    from weavbot.channels.store import ChannelStore
 
 app = typer.Typer(
     name="weavbot",
@@ -592,7 +596,6 @@ def gateway(
             else None
         )
         channel = primary.channel if primary else "cli"
-        chat_id = primary.chat_id if primary else "direct"
 
         ikey = job.payload.interactive_session_key
         interactive_resolved = await channel_store.resolve(ikey) if ikey else None

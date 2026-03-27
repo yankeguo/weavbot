@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+
 from weavbot.channels.store import ChannelStore, ChannelTarget
 
 
