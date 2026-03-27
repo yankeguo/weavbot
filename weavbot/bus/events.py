@@ -20,12 +20,6 @@ class InboundMessage:
     media: list[str] = field(default_factory=list)  # Local image file paths for multimodal input
     metadata: dict[str, Any] = field(default_factory=dict)  # Channel-specific data
 
-    def __post_init__(self) -> None:
-        key = str(self.session_key or "").strip()
-        if not key:
-            raise ValueError("session_key must be non-empty")
-        self.session_key = key
-
     @staticmethod
     def default_session_key(channel: str, chat_id: str) -> str:
         """Build the default session key from channel/chat."""
