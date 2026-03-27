@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from weavbot.utils.helpers import normalize_session_key
+from weavbot.utils.helpers import build_session_key
 
 
 @dataclass
@@ -25,7 +25,7 @@ class InboundMessage:
     @staticmethod
     def default_session_key(channel: str, chat_id: str) -> str:
         """Build the default session key from channel/chat."""
-        return normalize_session_key(f"{channel}:{chat_id}")
+        return build_session_key(channel, chat_id)
 
 
 @dataclass

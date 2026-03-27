@@ -47,17 +47,18 @@ def timestamp() -> str:
     return datetime.now().isoformat()
 
 
-_UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*]')
+_UNSAFE_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*]')
 
 
 def safe_filename(name: str) -> str:
     """Replace unsafe path characters with underscores."""
-    return _UNSAFE_CHARS.sub("_", name).strip()
+    return _UNSAFE_FILENAME_CHARS.sub("_", name).strip()
 
 
-def normalize_session_key(raw: str) -> str:
-    """Normalize session key to current filename-safe standard."""
-    key = safe_filename(str(raw or "").replace(":", "_")).strip()
+def build_session_key(*parts: str) -> str:
+    """Build a filename-safe session key by joining cleaned parts."""
+    cleaned = [safe_filename(str(part or "").strip()) for part in parts]
+    key = "_".join([part for part in cleaned if part]).strip()
     if not key:
         raise ValueError("session_key must not be empty")
     return key

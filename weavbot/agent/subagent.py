@@ -24,7 +24,7 @@ from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.config.schema import ExecToolConfig
 from weavbot.providers.base import LLMProvider
-from weavbot.utils.helpers import normalize_session_key
+from weavbot.utils.helpers import build_session_key
 
 
 class SubagentManager:
@@ -73,8 +73,10 @@ class SubagentManager:
         origin = {
             "channel": origin_channel,
             "chat_id": origin_chat_id,
-            "session_key": normalize_session_key(
-                session_key or f"{origin_channel}:{origin_chat_id}"
+            "session_key": (
+                build_session_key(session_key)
+                if isinstance(session_key, str) and session_key.strip()
+                else build_session_key(origin_channel, origin_chat_id)
             ),
             "metadata": dict(origin_metadata or {}),
         }
@@ -151,8 +153,10 @@ class SubagentManager:
                 channel=origin["channel"],
                 chat_id=origin["chat_id"],
                 session_key=str(
-                    normalize_session_key(
-                        str(origin.get("session_key") or f"{origin['channel']}:{origin['chat_id']}")
+                    build_session_key(str(origin.get("session_key")))
+                    if str(origin.get("session_key") or "").strip()
+                    else build_session_key(
+                        str(origin.get("channel") or ""), str(origin.get("chat_id") or "")
                     )
                 ),
                 metadata=dict(origin.get("metadata") or {}),
@@ -252,13 +256,10 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
             sender_id="subagent",
             chat_id=f"{origin['channel']}:{origin['chat_id']}",
             session_key=str(
-                normalize_session_key(
-                    str(
-                        origin.get("session_key")
-                        or InboundMessage.default_session_key(
-                            "system", f"{origin['channel']}:{origin['chat_id']}"
-                        )
-                    )
+                build_session_key(str(origin.get("session_key")))
+                if str(origin.get("session_key") or "").strip()
+                else InboundMessage.default_session_key(
+                    "system", f"{origin['channel']}:{origin['chat_id']}"
                 )
             ),
             content=announce_content,

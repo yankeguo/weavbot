@@ -24,7 +24,7 @@ from weavbot.agent.tools.base import DeliveryTarget
 from weavbot.bus.events import InboundMessage
 from weavbot.config.schema import Config
 from weavbot.i18n import t
-from weavbot.utils.helpers import normalize_session_key, sync_workspace_templates
+from weavbot.utils.helpers import build_session_key, sync_workspace_templates
 
 app = typer.Typer(
     name="weavbot",
@@ -568,7 +568,7 @@ def gateway(
         try:
             response = await agent.process_direct(
                 reminder_note,
-                session_key=normalize_session_key(f"cron:{job.id}"),
+                session_key=build_session_key("cron", job.id),
                 channel=channel,
                 chat_id=chat_id,
                 metadata={"_cron_in_job": True},
@@ -618,7 +618,7 @@ def gateway(
 
     def _heartbeat_session_key(channel: str, chat_id: str) -> str:
         """Rotate heartbeat context daily to avoid unbounded background-session growth."""
-        return normalize_session_key(f"heartbeat:{channel}:{chat_id}:{date.today().isoformat()}")
+        return build_session_key("heartbeat", channel, chat_id, date.today().isoformat())
 
     # Create heartbeat service
     async def on_heartbeat_execute(tasks: str) -> str:

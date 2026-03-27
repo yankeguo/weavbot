@@ -10,7 +10,7 @@ from typing import Any
 
 from loguru import logger
 
-from weavbot.utils.helpers import normalize_session_key
+from weavbot.utils.helpers import build_session_key
 
 
 @dataclass
@@ -67,7 +67,7 @@ class ChannelStore:
             parsed: dict[str, ChannelTarget] = {}
             for key, value in table.items():
                 try:
-                    session_key = normalize_session_key(str(key or "").strip())
+                    session_key = build_session_key(str(key or "").strip())
                 except ValueError:
                     continue
                 target = ChannelTarget.from_dict(value if isinstance(value, dict) else None)
@@ -91,7 +91,7 @@ class ChannelStore:
 
     def upsert(self, session_key: str, target: ChannelTarget) -> None:
         try:
-            key = normalize_session_key(str(session_key or "").strip())
+            key = build_session_key(str(session_key or "").strip())
         except ValueError:
             return
         target.updated_at = datetime.now().isoformat()
@@ -100,7 +100,7 @@ class ChannelStore:
 
     def delete(self, session_key: str) -> None:
         try:
-            key = normalize_session_key(str(session_key or "").strip())
+            key = build_session_key(str(session_key or "").strip())
         except ValueError:
             return
         if key in self._targets:
@@ -109,7 +109,7 @@ class ChannelStore:
 
     def resolve(self, session_key: str) -> ChannelTarget | None:
         try:
-            key = normalize_session_key(str(session_key or "").strip())
+            key = build_session_key(str(session_key or "").strip())
         except ValueError:
             return None
         return self._targets.get(key)

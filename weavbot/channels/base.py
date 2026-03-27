@@ -10,7 +10,7 @@ from loguru import logger
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.store import ChannelStore, ChannelTarget
-from weavbot.utils.helpers import normalize_session_key
+from weavbot.utils.helpers import build_session_key
 
 
 class BaseChannel(ABC):
@@ -140,7 +140,7 @@ class BaseChannel(ABC):
             sender_id=str(sender_id),
             chat_id=str(chat_id),
             session_key=(
-                normalize_session_key(str(session_key).strip())
+                build_session_key(str(session_key).strip())
                 if isinstance(session_key, str) and session_key.strip()
                 else InboundMessage.default_session_key(self.name, str(chat_id))
             ),

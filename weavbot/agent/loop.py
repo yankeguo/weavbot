@@ -37,7 +37,7 @@ from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.providers.base import LLMProvider
 from weavbot.session.manager import Session, SessionManager
-from weavbot.utils.helpers import normalize_session_key
+from weavbot.utils.helpers import build_session_key
 
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
@@ -945,7 +945,7 @@ class AgentLoop:
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
-        normalized_session_key = normalize_session_key(session_key)
+        normalized_session_key = build_session_key(session_key)
         msg = InboundMessage(
             channel=channel,
             sender_id="user",

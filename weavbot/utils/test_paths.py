@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from weavbot.config.loader import get_config_path
 from weavbot.config.schema import Config
-from weavbot.utils.helpers import ensure_data_path, ensure_workspace_path
+from weavbot.utils.helpers import build_session_key, ensure_data_path, ensure_workspace_path
 
 DEFAULT_DATA_ROOT = Path("~/.weavbot")
 
@@ -38,3 +40,16 @@ def test_get_config_path_uses_wb_home(monkeypatch, tmp_path: Path):
     wb_home = tmp_path / "my-home"
     monkeypatch.setenv("WB_DATA_PATH", str(wb_home))
     assert get_config_path() == wb_home / "config.json"
+
+
+def test_build_session_key_joins_parts_with_underscore() -> None:
+    assert build_session_key("slack", "C123", "T456") == "slack_C123_T456"
+
+
+def test_build_session_key_sanitizes_each_part() -> None:
+    assert build_session_key("wecom", "group:abc", "req/1") == "wecom_group_abc_req_1"
+
+
+def test_build_session_key_raises_on_empty_parts() -> None:
+    with pytest.raises(ValueError, match="session_key must not be empty"):
+        build_session_key("", "   ")

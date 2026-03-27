@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from weavbot.utils.helpers import normalize_session_key
+from weavbot.utils.helpers import build_session_key
 
 
 @dataclass
@@ -30,7 +30,11 @@ class DeliveryTarget:
         cid = (chat_id or "").strip()
         if not ch or not cid:
             return None
-        skey = normalize_session_key((session_key or "").strip() or f"{ch}:{cid}")
+        skey = (
+            build_session_key((session_key or "").strip())
+            if (session_key or "").strip()
+            else build_session_key(ch, cid)
+        )
         return cls(channel=ch, chat_id=cid, session_key=skey, metadata=dict(metadata or {}))
 
     @classmethod

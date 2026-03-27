@@ -16,7 +16,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import SlackConfig
-from weavbot.utils.helpers import normalize_session_key
+from weavbot.utils.helpers import build_session_key
 
 
 class SlackChannel(BaseChannel):
@@ -188,7 +188,7 @@ class SlackChannel(BaseChannel):
 
         # Thread-scoped session key for channel/group messages
         session_key = (
-            normalize_session_key(f"slack:{chat_id}:{thread_ts}")
+            build_session_key("slack", chat_id, thread_ts)
             if thread_ts and channel_type != "im"
             else None
         )
