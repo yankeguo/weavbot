@@ -24,7 +24,7 @@ from weavbot.agent.tools.base import DeliveryTarget
 from weavbot.bus.events import InboundMessage
 from weavbot.config.schema import Config
 from weavbot.i18n import t
-from weavbot.utils.helpers import sync_workspace_templates
+from weavbot.utils.helpers import normalize_session_key, sync_workspace_templates
 
 app = typer.Typer(
     name="weavbot",
@@ -279,11 +279,13 @@ def _extract_interactive_target(
 ) -> DeliveryTarget | None:
     """Extract interactive delivery target from session item metadata or key fallback."""
     key = str(item.get("key") or "")
-    if key.startswith(("heartbeat:", "cron:", "system:")):
+    if key.startswith(("heartbeat:", "heartbeat_", "cron:", "cron_", "system:", "system_")):
         return None
 
     meta = item.get("metadata")
     session_meta = meta if isinstance(meta, dict) else {}
+    if bool(session_meta.get("_cron_in_job")) or bool(session_meta.get("_heartbeat_in_job")):
+        return None
     target = DeliveryTarget.from_dict(
         session_meta.get("interactive_target")
         if isinstance(session_meta.get("interactive_target"), dict)
@@ -291,14 +293,6 @@ def _extract_interactive_target(
     )
     if target and target.channel not in {"cli", "system"} and target.channel in enabled_channels:
         return target
-
-    parsed = _parse_heartbeat_target(key)
-    if not parsed:
-        return None
-    if parsed.channel in {"cli", "system"}:
-        return None
-    if parsed.channel in enabled_channels and parsed.chat_id:
-        return parsed
     return None
 
 
@@ -310,7 +304,12 @@ def _pick_heartbeat_target_from_sessions(
         target = _extract_interactive_target(item, enabled_channels)
         if target:
             return target
-    return DeliveryTarget(channel="cli", chat_id="direct", session_key="cli:direct", metadata={})
+    return DeliveryTarget(
+        channel="cli",
+        chat_id="direct",
+        session_key=InboundMessage.default_session_key("cli", "direct"),
+        metadata={},
+    )
 
 
 async def _read_interactive_input_async() -> str:
@@ -569,7 +568,7 @@ def gateway(
         try:
             response = await agent.process_direct(
                 reminder_note,
-                session_key=f"cron:{job.id}",
+                session_key=normalize_session_key(f"cron:{job.id}"),
                 channel=channel,
                 chat_id=chat_id,
                 metadata={"_cron_in_job": True},
@@ -619,7 +618,7 @@ def gateway(
 
     def _heartbeat_session_key(channel: str, chat_id: str) -> str:
         """Rotate heartbeat context daily to avoid unbounded background-session growth."""
-        return f"heartbeat:{channel}:{chat_id}:{date.today().isoformat()}"
+        return normalize_session_key(f"heartbeat:{channel}:{chat_id}:{date.today().isoformat()}")
 
     # Create heartbeat service
     async def on_heartbeat_execute(tasks: str) -> str:

@@ -9,6 +9,7 @@ from weavbot.agent.loop import AgentLoop
 from weavbot.agent.messages import ChatMessage, ToolCallRequest
 from weavbot.bus.queue import MessageBus
 from weavbot.providers.base import LLMProvider, LLMResponse
+from weavbot.utils.helpers import normalize_session_key
 
 
 class _FakeProvider(LLMProvider):
@@ -155,13 +156,12 @@ async def test_new_command_keeps_memory_only_archival(tmp_path) -> None:
         max_tokens=80,
         max_context=140,
     )
-    session = loop.sessions.get_or_create("cli:direct")
+    key = normalize_session_key("cli:direct")
+    session = loop.sessions.get_or_create(key)
     session.append_chat_message(ChatMessage(role="user", content="old message 1"))
     session.append_chat_message(ChatMessage(role="assistant", content="old message 2"))
 
-    content = await loop.process_direct(
-        "/new", session_key="cli:direct", channel="cli", chat_id="direct"
-    )
+    content = await loop.process_direct("/new", session_key=key, channel="cli", chat_id="direct")
 
     assert content == "New session started."
     assert session.messages == []

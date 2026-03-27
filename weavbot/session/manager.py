@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 from loguru import logger
 
-from weavbot.utils.helpers import ensure_data_path, ensure_dir, safe_filename
+from weavbot.utils.helpers import ensure_data_path, ensure_dir
 
 if TYPE_CHECKING:
     from weavbot.agent.messages import ChatMessage
@@ -118,8 +118,7 @@ class SessionManager:
 
     def _get_session_path(self, key: str) -> Path:
         """Get the file path for a session."""
-        safe_key = safe_filename(key.replace(":", "_"))
-        return self.sessions_dir / f"{safe_key}.jsonl"
+        return self.sessions_dir / f"{key}.jsonl"
 
     def get_or_create(self, key: str) -> Session:
         """
@@ -235,7 +234,7 @@ class SessionManager:
                     if first_line:
                         data = json.loads(first_line)
                         if data.get("_type") == "metadata":
-                            key = data.get("key") or path.stem.replace("_", ":", 1)
+                            key = data.get("key") or path.stem
                             sessions.append(
                                 {
                                     "key": key,

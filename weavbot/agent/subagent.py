@@ -24,6 +24,7 @@ from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.config.schema import ExecToolConfig
 from weavbot.providers.base import LLMProvider
+from weavbot.utils.helpers import normalize_session_key
 
 
 class SubagentManager:
@@ -72,7 +73,9 @@ class SubagentManager:
         origin = {
             "channel": origin_channel,
             "chat_id": origin_chat_id,
-            "session_key": session_key or f"{origin_channel}:{origin_chat_id}",
+            "session_key": normalize_session_key(
+                session_key or f"{origin_channel}:{origin_chat_id}"
+            ),
             "metadata": dict(origin_metadata or {}),
         }
 
@@ -148,7 +151,9 @@ class SubagentManager:
                 channel=origin["channel"],
                 chat_id=origin["chat_id"],
                 session_key=str(
-                    origin.get("session_key") or f"{origin['channel']}:{origin['chat_id']}"
+                    normalize_session_key(
+                        str(origin.get("session_key") or f"{origin['channel']}:{origin['chat_id']}")
+                    )
                 ),
                 metadata=dict(origin.get("metadata") or {}),
             )
@@ -239,18 +244,25 @@ Result:
 Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not mention technical details like "subagent" or task IDs."""
 
         # Inject as system message to trigger main agent
+        announce_metadata = dict(origin.get("metadata") or {})
+        announce_metadata["_origin_channel"] = str(origin.get("channel") or "cli")
+        announce_metadata["_origin_chat_id"] = str(origin.get("chat_id") or "direct")
         msg = InboundMessage(
             channel="system",
             sender_id="subagent",
             chat_id=f"{origin['channel']}:{origin['chat_id']}",
             session_key=str(
-                origin.get("session_key")
-                or InboundMessage.default_session_key(
-                    "system", f"{origin['channel']}:{origin['chat_id']}"
+                normalize_session_key(
+                    str(
+                        origin.get("session_key")
+                        or InboundMessage.default_session_key(
+                            "system", f"{origin['channel']}:{origin['chat_id']}"
+                        )
+                    )
                 )
             ),
             content=announce_content,
-            metadata=dict(origin.get("metadata") or {}),
+            metadata=announce_metadata,
         )
 
         await self.bus.publish_inbound(msg)

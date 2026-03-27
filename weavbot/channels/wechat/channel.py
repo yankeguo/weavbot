@@ -36,6 +36,7 @@ from weavbot.channels.wechat.types import (
 )
 from weavbot.channels.wechat.typing_manager import TypingManager
 from weavbot.config.schema import WechatConfig
+from weavbot.utils.helpers import normalize_session_key
 
 
 class WechatChannel(BaseChannel):
@@ -267,7 +268,7 @@ class WechatChannel(BaseChannel):
             media=media,
             metadata=metadata,
             # Include account key in session namespace for multi-account isolation.
-            session_key=f"wechat:{account.key}:{sender_id}",
+            session_key=normalize_session_key(f"wechat:{account.key}:{sender_id}"),
         )
 
     async def _extract_inbound_content(

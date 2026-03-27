@@ -61,12 +61,22 @@ def test_parse_heartbeat_target_wechat_scoped_key() -> None:
 def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata() -> None:
     sessions = [
         {"key": "feishu:oc_legacy"},
-        {"key": "wechat:acc-a:u_new"},
+        {
+            "key": "wechat_acc-a_u_new",
+            "metadata": {
+                "interactive_target": {
+                    "channel": "wechat",
+                    "chat_id": "u_new",
+                    "session_key": "wechat_acc-a_u_new",
+                    "metadata": {"wechat": {"account_key": "acc-a"}},
+                }
+            },
+        },
     ]
     target = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
     assert target.channel == "wechat"
     assert target.chat_id == "u_new"
-    assert target.session_key == "wechat:acc-a:u_new"
+    assert target.session_key == "wechat_acc-a_u_new"
     assert target.metadata == {"wechat": {"account_key": "acc-a"}}
 
 
@@ -78,7 +88,7 @@ def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> No
     target = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
     assert target.channel == "cli"
     assert target.chat_id == "direct"
-    assert target.session_key == "cli:direct"
+    assert target.session_key == "cli_direct"
     assert target.metadata == {}
 
 
@@ -86,12 +96,22 @@ def test_pick_heartbeat_target_ignores_background_sessions() -> None:
     sessions = [
         {"key": "heartbeat:telegram:1001:2026-03-26"},
         {"key": "cron:job-1"},
-        {"key": "telegram:2002"},
+        {
+            "key": "telegram_2002",
+            "metadata": {
+                "interactive_target": {
+                    "channel": "telegram",
+                    "chat_id": "2002",
+                    "session_key": "telegram_2002",
+                    "metadata": {},
+                }
+            },
+        },
     ]
     target = _pick_heartbeat_target_from_sessions(sessions, {"telegram"})
     assert target.channel == "telegram"
     assert target.chat_id == "2002"
-    assert target.session_key == "telegram:2002"
+    assert target.session_key == "telegram_2002"
     assert target.metadata == {}
 
 
@@ -103,7 +123,7 @@ def test_pick_heartbeat_target_prefers_session_interactive_snapshot() -> None:
                 "interactive_target": {
                     "channel": "slack",
                     "chat_id": "C111",
-                    "session_key": "slack:C111:T222",
+                    "session_key": "slack_C111_T222",
                     "metadata": {"slack": {"thread_ts": "T222", "channel_type": "channel"}},
                 }
             },
@@ -112,7 +132,7 @@ def test_pick_heartbeat_target_prefers_session_interactive_snapshot() -> None:
     target = _pick_heartbeat_target_from_sessions(sessions, {"slack", "telegram"})
     assert target.channel == "slack"
     assert target.chat_id == "C111"
-    assert target.session_key == "slack:C111:T222"
+    assert target.session_key == "slack_C111_T222"
     assert target.metadata == {"slack": {"thread_ts": "T222", "channel_type": "channel"}}
 
 
@@ -124,7 +144,7 @@ def test_background_notify_contract_mentions_message_and_target_context() -> Non
         target_metadata={"wechat": {"account_key": "acc-a"}},
     )
     assert "Only notify when necessary by calling the `message` tool." in contract
-    assert "session_key: wechat:u_123" in contract
+    assert "session_key: wechat_u_123" in contract
     assert '"account_key": "acc-a"' in contract
 
 
@@ -138,7 +158,7 @@ def test_build_heartbeat_execute_input_includes_contract_and_tasks() -> None:
     assert "[Heartbeat Task]" in text
     assert "check pending reviews" in text
     assert "[Heartbeat Notification Contract]" in text
-    assert "session_key: telegram:1001" in text
+    assert "session_key: telegram_1001" in text
     assert '"foo": "bar"' in text
 
 
@@ -152,7 +172,7 @@ def test_build_cron_execute_input_includes_contract_and_instruction() -> None:
     assert "Task 'daily-check' has been triggered." in text
     assert "Scheduled instruction: collect report and notify if needed" in text
     assert "[Cron Notification Contract]" in text
-    assert "session_key: slack:C123" in text
+    assert "session_key: slack_C123" in text
 
 
 def test_looks_like_agent_error_detects_known_failure_texts() -> None:

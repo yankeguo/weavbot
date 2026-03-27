@@ -55,6 +55,14 @@ def safe_filename(name: str) -> str:
     return _UNSAFE_CHARS.sub("_", name).strip()
 
 
+def normalize_session_key(raw: str) -> str:
+    """Normalize session key to current filename-safe standard."""
+    key = safe_filename(str(raw or "").replace(":", "_")).strip()
+    if not key:
+        raise ValueError("session_key must not be empty")
+    return key
+
+
 def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:
     """Sync bundled templates to workspace. Only creates missing files."""
     from importlib.resources import files as pkg_files

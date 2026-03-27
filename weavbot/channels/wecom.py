@@ -24,6 +24,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import WecomConfig
+from weavbot.utils.helpers import normalize_session_key
 
 try:
     import websockets
@@ -352,7 +353,7 @@ class WecomChannel(BaseChannel):
         if not content and not media:
             content = f"[wecom:{msg_type}]"
 
-        session_key = (
+        session_key = normalize_session_key(
             f"wecom:{group_chat_id}"
             if chat_type == "group" and group_chat_id
             else f"wecom:{sender_id}"
@@ -403,7 +404,7 @@ class WecomChannel(BaseChannel):
             self._disconnect_event.set()
             return
 
-        session_key = (
+        session_key = normalize_session_key(
             f"wecom:{group_chat_id}"
             if chat_type == "group" and group_chat_id
             else f"wecom:{sender_id}"

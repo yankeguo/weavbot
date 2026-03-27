@@ -10,6 +10,8 @@ from typing import Any
 
 from loguru import logger
 
+from weavbot.utils.helpers import normalize_session_key
+
 
 @dataclass
 class ChannelTarget:
@@ -64,8 +66,9 @@ class ChannelStore:
                 return
             parsed: dict[str, ChannelTarget] = {}
             for key, value in table.items():
-                session_key = str(key or "").strip()
-                if not session_key:
+                try:
+                    session_key = normalize_session_key(str(key or "").strip())
+                except ValueError:
                     continue
                 target = ChannelTarget.from_dict(value if isinstance(value, dict) else None)
                 if target:
@@ -87,32 +90,26 @@ class ChannelStore:
         )
 
     def upsert(self, session_key: str, target: ChannelTarget) -> None:
-        key = str(session_key or "").strip()
-        if not key:
+        try:
+            key = normalize_session_key(str(session_key or "").strip())
+        except ValueError:
             return
         target.updated_at = datetime.now().isoformat()
         self._targets[key] = target
         self.save()
 
     def delete(self, session_key: str) -> None:
-        key = str(session_key or "").strip()
-        if not key:
+        try:
+            key = normalize_session_key(str(session_key or "").strip())
+        except ValueError:
             return
         if key in self._targets:
             del self._targets[key]
             self.save()
 
     def resolve(self, session_key: str) -> ChannelTarget | None:
-        key = str(session_key or "").strip()
-        if not key:
+        try:
+            key = normalize_session_key(str(session_key or "").strip())
+        except ValueError:
             return None
-        direct = self._targets.get(key)
-        if direct:
-            return direct
-        if ":" in key:
-            channel, chat_id = key.split(":", 1)
-            channel = channel.strip()
-            chat_id = chat_id.strip()
-            if channel and chat_id:
-                return ChannelTarget(channel=channel, chat_id=chat_id, metadata={})
-        return None
+        return self._targets.get(key)

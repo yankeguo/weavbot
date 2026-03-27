@@ -37,6 +37,7 @@ from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.providers.base import LLMProvider
 from weavbot.session.manager import Session, SessionManager
+from weavbot.utils.helpers import normalize_session_key
 
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
@@ -774,11 +775,13 @@ class AgentLoop:
         interactive: DeliveryTarget | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
-        # System messages: parse origin from chat_id ("channel:chat_id")
         if msg.channel == "system":
-            channel, chat_id = (
-                msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)
-            )
+            channel = str(msg.metadata.get("_origin_channel") or "").strip()
+            chat_id = str(msg.metadata.get("_origin_chat_id") or "").strip()
+            if not channel or not chat_id:
+                channel, chat_id = (
+                    msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)
+                )
             logger.info("Processing system message from {}", msg.sender_id)
             key = session_key or msg.session_key
             session = self.sessions.get_or_create(key)
@@ -942,17 +945,18 @@ class AgentLoop:
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
+        normalized_session_key = normalize_session_key(session_key)
         msg = InboundMessage(
             channel=channel,
             sender_id="user",
             chat_id=chat_id,
-            session_key=session_key,
+            session_key=normalized_session_key,
             content=content,
             metadata=dict(metadata or {}),
         )
         response = await self._process_message(
             msg,
-            session_key=session_key,
+            session_key=normalized_session_key,
             on_progress=on_progress,
             interactive=interactive,
         )
