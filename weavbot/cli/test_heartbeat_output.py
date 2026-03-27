@@ -9,8 +9,27 @@ from weavbot.cli.commands import (
     _collect_heartbeat_progress,
     _looks_like_agent_error,
     _pick_heartbeat_target_from_sessions,
+    _should_print_cli_progress,
     _suppress_background_progress,
 )
+
+
+def test_should_print_cli_progress_matches_channel_manager_gating() -> None:
+    class Ch:
+        send_tool_hints = False
+        send_progress = True
+
+    assert not _should_print_cli_progress(Ch(), is_tool_hint=True)
+    assert _should_print_cli_progress(Ch(), is_tool_hint=False)
+
+    class Ch2:
+        send_tool_hints = True
+        send_progress = False
+
+    assert _should_print_cli_progress(Ch2(), is_tool_hint=True)
+    assert not _should_print_cli_progress(Ch2(), is_tool_hint=False)
+
+    assert _should_print_cli_progress(None, is_tool_hint=True)
 
 
 def test_heartbeat_response_without_toolcalls_uses_final_only() -> None:

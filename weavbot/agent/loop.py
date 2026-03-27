@@ -811,11 +811,12 @@ class AgentLoop:
                 if response is not None:
                     await self.bus.publish_outbound(response)
                 elif msg.channel == "cli":
+                    meta = msg.metadata or {}
                     await self.bus.publish_outbound(
                         OutboundMessage(
                             session_key=msg.session_key,
                             content="",
-                            metadata=msg.metadata or {},
+                            metadata=meta,
                         )
                     )
             except asyncio.CancelledError:
@@ -852,11 +853,12 @@ class AgentLoop:
         interactive_session_key: str | None = None,
     ) -> OutboundMessage | None:
         """Process a single inbound message and return the response."""
+        turn_meta = msg.metadata or {}
         if msg.channel == "system":
             key = session_key or msg.session_key
             target_session_key = (
                 interactive_session_key
-                or str(msg.metadata.get("_original_session_key") or "").strip()
+                or str(turn_meta.get("_original_session_key") or "").strip()
                 or key
             )
             resolved_route_target = await self._resolve_channel_target(target_session_key)
@@ -884,7 +886,7 @@ class AgentLoop:
             tool_context = self._build_tool_context(
                 session_key=key,
                 original_session_key=target_session_key if target_session_key != key else None,
-                message_id=msg.metadata.get("message_id"),
+                message_id=turn_meta.get("message_id"),
             )
             history, messages = await self._build_initial_messages_with_compaction(
                 session,
@@ -944,7 +946,7 @@ class AgentLoop:
         tool_context = self._build_tool_context(
             session_key=key,
             original_session_key=target_session_key if target_session_key != key else None,
-            message_id=msg.metadata.get("message_id"),
+            message_id=turn_meta.get("message_id"),
         )
 
         # Slash commands
@@ -982,7 +984,7 @@ class AgentLoop:
         )
 
         async def _bus_progress(content: str, *, tool_hint: bool = False) -> None:
-            meta = dict(msg.metadata or {})
+            meta = dict(turn_meta)
             meta["_progress"] = True
             meta["_tool_hint"] = tool_hint
             await self.bus.publish_outbound(
@@ -1015,7 +1017,7 @@ class AgentLoop:
         return OutboundMessage(
             session_key=msg.session_key,
             content=final_content,
-            metadata=msg.metadata or {},
+            metadata=turn_meta,
         )
 
     @staticmethod
@@ -1048,10 +1050,16 @@ class AgentLoop:
         content: str,
         session_key: str = "cli_direct",
         metadata: dict[str, Any] | None = None,
+        channel_metadata: dict[str, Any] | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
         interactive_session_key: str | None = None,
     ) -> str:
-        """Process a message directly (for CLI or cron usage)."""
+        """Process a message directly (for CLI or cron usage).
+
+        ``metadata`` carries per-turn flags (e.g. ``_cron_in_job``). Routing hints for
+        interactive pointer snapshots use ``channel_metadata``, matching bus-originated
+        :class:`~weavbot.bus.events.InboundMessage` construction in channel adapters.
+        """
         await self._connect_mcp()
         normalized_session_key = validate_session_key(session_key)
         target_session_key = interactive_session_key or normalized_session_key
@@ -1078,6 +1086,7 @@ class AgentLoop:
             session_key=normalized_session_key,
             content=content,
             metadata=dict(metadata or {}),
+            channel_metadata=dict(channel_metadata or {}),
         )
         response = await self._process_message(
             msg,

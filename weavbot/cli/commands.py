@@ -259,6 +259,17 @@ async def _suppress_background_progress(_content: str, *, tool_hint: bool = Fals
     return None
 
 
+def _should_print_cli_progress(ch: object | None, *, is_tool_hint: bool) -> bool:
+    """Match ChannelManager._dispatch_outbound gating for CLI progress echo."""
+    if ch is None:
+        return True
+    if is_tool_hint and not getattr(ch, "send_tool_hints", True):
+        return False
+    if not is_tool_hint and not getattr(ch, "send_progress", True):
+        return False
+    return True
+
+
 async def _extract_interactive_target(
     item: dict[str, object], enabled_channels: set[str], channel_store: "ChannelStore"
 ) -> RouteTarget | None:
@@ -618,15 +629,16 @@ def gateway(
                 job.name,
             )
             return f"[Cron Error] Task '{job.name}' failed: missing target session key."
+        cron_route_metadata = (
+            dict(interactive_target.metadata or {})
+            if interactive_target
+            else dict(getattr(primary, "metadata", {}) or {})
+        )
         reminder_note = _build_cron_execute_input(
             job_name=job.name,
             instruction=job.payload.message,
             target_session_key=cron_target_session_key,
-            target_metadata=(
-                dict(interactive_target.metadata or {})
-                if interactive_target
-                else dict(getattr(primary, "metadata", {}) or {})
-            ),
+            target_metadata=cron_route_metadata,
         )
 
         try:
@@ -634,6 +646,7 @@ def gateway(
                 reminder_note,
                 session_key=build_session_key("cron", job.id),
                 metadata={"_cron_in_job": True},
+                channel_metadata=cron_route_metadata,
                 on_progress=_suppress_background_progress,
                 interactive_session_key=(
                     interactive_target.session_key if interactive_target else None
@@ -702,7 +715,8 @@ def gateway(
             final_content = await agent.process_direct(
                 execute_input,
                 session_key=session_key,
-                metadata=target.metadata,
+                metadata={},
+                channel_metadata=dict(target.metadata or {}),
                 on_progress=_suppress_background_progress,
                 interactive_session_key=target.session_key,
             )
@@ -871,10 +885,7 @@ def agent(
         return console.status(f"[dim]{_t('thinking')}[/dim]", spinner="dots")
 
     async def _cli_progress(content: str, *, tool_hint: bool = False) -> None:
-        ch = agent_loop.channels_config
-        if ch and tool_hint and not ch.send_tool_hints:
-            return
-        if ch and not tool_hint and not ch.send_progress:
+        if not _should_print_cli_progress(agent_loop.channels_config, is_tool_hint=tool_hint):
             return
         console.print(f"  [dim]↳ {content}[/dim]")
 
@@ -893,8 +904,6 @@ def agent(
         asyncio.run(run_once())
     else:
         # Interactive mode — route through bus like other channels
-        from weavbot.bus.events import InboundMessage
-
         _init_prompt_session()
         console.print(f"{__logo__} {_t('interactive_mode')}\n")
 
@@ -918,12 +927,9 @@ def agent(
                         msg = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
                         if msg.metadata.get("_progress"):
                             is_tool_hint = msg.metadata.get("_tool_hint", False)
-                            ch = agent_loop.channels_config
-                            if ch and is_tool_hint and not ch.send_tool_hints:
-                                pass
-                            elif ch and not is_tool_hint and not ch.send_progress:
-                                pass
-                            else:
+                            if _should_print_cli_progress(
+                                agent_loop.channels_config, is_tool_hint=is_tool_hint
+                            ):
                                 console.print(f"  [dim]↳ {msg.content}[/dim]")
                         elif not turn_done.is_set():
                             if msg.content:
