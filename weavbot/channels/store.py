@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles
+import aiofiles.os
+import aiofiles.ospath
 from loguru import logger
 
 from weavbot.utils.helpers import build_session_key
@@ -75,14 +77,21 @@ class ChannelStore:
 
     async def load(self) -> None:
         async with self._load_lock:
-            exists = await asyncio.to_thread(self.dir.exists)
+            exists = await aiofiles.ospath.exists(self.dir)
             if not exists:
                 async with self._targets_lock:
                     self._targets = {}
                 self._loaded = True
                 return
 
-            files = await asyncio.to_thread(lambda: list(self.dir.glob("*.json")))
+            try:
+                names = await aiofiles.os.listdir(self.dir)
+            except FileNotFoundError:
+                async with self._targets_lock:
+                    self._targets = {}
+                self._loaded = True
+                return
+            files = [self.dir / name for name in names if name.endswith(".json")]
             parsed: dict[str, ChannelTarget] = {}
             for f in files:
                 try:
@@ -114,18 +123,20 @@ class ChannelStore:
         key_lock = await self._get_key_lock(key)
         async with key_lock:
             target.updated_at = datetime.now().isoformat()
-            await asyncio.to_thread(self.dir.mkdir, parents=True, exist_ok=True)
+            await aiofiles.os.makedirs(self.dir, exist_ok=True)
             dest = self.dir / f"{key}.json"
             tmp = self.dir / f".{key}.json.tmp"
             payload = json.dumps(target.to_dict(), indent=2, ensure_ascii=False)
             try:
                 async with aiofiles.open(tmp, "w", encoding="utf-8") as af:
                     await af.write(payload)
-                await asyncio.to_thread(tmp.replace, dest)
+                await aiofiles.os.replace(tmp, dest)
             except Exception as e:
                 logger.error("ChannelStore upsert failed for key '{}': {}", key, e)
                 try:
-                    await asyncio.to_thread(tmp.unlink, True)
+                    await aiofiles.os.remove(tmp)
+                except FileNotFoundError:
+                    pass
                 except Exception:
                     pass
                 return
@@ -149,7 +160,10 @@ class ChannelStore:
                     del self._targets[key]
                     should_delete_file = True
             if should_delete_file:
-                await asyncio.to_thread((self.dir / f"{key}.json").unlink, True)
+                try:
+                    await aiofiles.os.remove(self.dir / f"{key}.json")
+                except FileNotFoundError:
+                    pass
 
     async def resolve(self, session_key: str) -> ChannelTarget | None:
         await self._ensure_loaded()
