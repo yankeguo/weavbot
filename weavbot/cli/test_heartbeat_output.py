@@ -1,6 +1,6 @@
 import pytest
 
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.cli.commands import (
     _assemble_heartbeat_response,
     _build_background_notify_contract,
@@ -73,7 +73,7 @@ async def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata
     store = ChannelStore(tmp_path / "channels")
     await store.upsert(
         "wechat_acc-a_u_new",
-        ChannelTarget(
+        ChannelEndpoint(
             channel="wechat",
             chat_id="u_new",
             metadata={"wechat": {"account_key": "acc-a"}},
@@ -117,7 +117,7 @@ async def test_pick_heartbeat_target_ignores_background_sessions(tmp_path) -> No
     store = ChannelStore(tmp_path / "channels")
     await store.upsert(
         "telegram_2002",
-        ChannelTarget(channel="telegram", chat_id="2002", metadata={}),
+        ChannelEndpoint(channel="telegram", chat_id="2002", metadata={}),
     )
     sessions = [
         {"key": "heartbeat:telegram:1001:2026-03-26"},
@@ -144,7 +144,7 @@ async def test_pick_heartbeat_target_prefers_session_interactive_snapshot(tmp_pa
     store = ChannelStore(tmp_path / "channels")
     await store.upsert(
         "slack_C111_T222",
-        ChannelTarget(
+        ChannelEndpoint(
             channel="slack",
             chat_id="C111",
             metadata={"slack": {"thread_ts": "T222", "channel_type": "channel"}},

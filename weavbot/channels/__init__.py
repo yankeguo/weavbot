@@ -2,6 +2,6 @@
 
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.manager import ChannelManager
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 
-__all__ = ["BaseChannel", "ChannelManager", "ChannelStore", "ChannelTarget"]
+__all__ = ["BaseChannel", "ChannelManager", "ChannelStore", "ChannelEndpoint"]

@@ -10,7 +10,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.config.schema import QQConfig
 from weavbot.utils.helpers import build_session_key
 
@@ -104,7 +104,7 @@ class QQChannel(BaseChannel):
                 pass
         logger.info("QQ bot stopped")
 
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         """Send a message through QQ."""
         if not self._client:
             logger.warning("QQ client not initialized")

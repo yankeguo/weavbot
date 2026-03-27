@@ -9,7 +9,7 @@ from weavbot.agent.loop import AgentLoop
 from weavbot.agent.messages import ChatMessage, ToolCallRequest
 from weavbot.bus.events import InboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.providers.base import LLMProvider, LLMResponse
 from weavbot.utils.helpers import build_session_key
 
@@ -92,7 +92,7 @@ async def test_process_direct_prefers_interactive_route_for_cron_internal_sessio
     assert loop.channel_store is not None
     await loop.channel_store.upsert(
         interactive_session_key,
-        ChannelTarget(
+        ChannelEndpoint(
             channel="slack",
             chat_id="C111",
             metadata={
@@ -131,7 +131,7 @@ async def test_system_message_upserts_internal_session_with_original_session_key
     assert loop.channel_store is not None
     await loop.channel_store.upsert(
         original_key,
-        ChannelTarget(
+        ChannelEndpoint(
             channel="slack",
             chat_id="C999",
             metadata={"slack": {"thread_ts": "T111", "channel_type": "channel"}},
@@ -175,7 +175,7 @@ async def test_process_direct_message_tool_to_interactive_target_skips_extra_fin
     assert loop.channel_store is not None
     await loop.channel_store.upsert(
         interactive_key,
-        ChannelTarget(
+        ChannelEndpoint(
             channel="slack",
             chat_id="C111",
             metadata={"slack": {"thread_ts": "T333", "channel_type": "channel"}},
@@ -210,7 +210,7 @@ async def test_system_message_prefers_channel_store_target_over_chat_id_split(tm
     session_key = build_session_key("system", build_session_key("slack", "C999", "T111"))
     await store.upsert(
         session_key,
-        ChannelTarget(
+        ChannelEndpoint(
             channel="slack",
             chat_id="C999",
             metadata={"slack": {"thread_ts": "T111", "channel_type": "channel"}},
@@ -246,7 +246,7 @@ async def test_system_message_uses_original_session_key_routing(tmp_path) -> Non
     sub_key = build_session_key("system", "sub", "task-1")
     await store.upsert(
         original_key,
-        ChannelTarget(
+        ChannelEndpoint(
             channel="slack",
             chat_id="C777",
             metadata={"slack": {"thread_ts": "T888", "channel_type": "channel"}},

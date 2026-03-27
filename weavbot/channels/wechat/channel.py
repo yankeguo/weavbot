@@ -12,7 +12,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.channels.wechat.accounts import resolve_accounts, resolve_state_dir
 from weavbot.channels.wechat.api import WechatApiClient
 from weavbot.channels.wechat.media import (
@@ -116,7 +116,7 @@ class WechatChannel(BaseChannel):
                 logger.exception("Wechat poll task shutdown error")
         self._poll_tasks.clear()
 
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         metadata, wechat_meta = self._extract_send_metadata(target.metadata or {})
         requested_account_key = (
             str(wechat_meta.get("account_key", "")).strip()

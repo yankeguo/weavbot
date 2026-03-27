@@ -22,7 +22,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.config.schema import WecomConfig
 from weavbot.utils.helpers import build_session_key
 
@@ -159,7 +159,7 @@ class WecomChannel(BaseChannel):
         await self._close_ws()
         await self._cancel_receiver()
 
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         """Send outbound message through Wecom websocket."""
         if not self._ws:
             logger.warning("Wecom websocket is not connected.")

@@ -35,7 +35,7 @@ from weavbot.agent.tools.spawn import SpawnTool
 from weavbot.agent.tools.write_file import WriteFileTool
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.providers.base import LLMProvider
 from weavbot.session.manager import Session, SessionManager
 from weavbot.utils.helpers import build_session_key, validate_session_key
@@ -164,14 +164,14 @@ class AgentLoop:
             return
         await self.channel_store.upsert(
             session_key,
-            ChannelTarget(
+            ChannelEndpoint(
                 channel=route_channel,
                 chat_id=route_chat_id,
                 metadata=self._extract_interactive_route_metadata(metadata),
             ),
         )
 
-    async def _resolve_channel_target(self, session_key: str | None) -> ChannelTarget | None:
+    async def _resolve_channel_endpoint(self, session_key: str | None) -> ChannelEndpoint | None:
         """Resolve a session key from ChannelStore, when available."""
         if not self.channel_store:
             return None
@@ -861,7 +861,7 @@ class AgentLoop:
                 or str(turn_meta.get("_original_session_key") or "").strip()
                 or key
             )
-            resolved_route_target = await self._resolve_channel_target(target_session_key)
+            resolved_route_target = await self._resolve_channel_endpoint(target_session_key)
             if not resolved_route_target:
                 logger.warning(
                     "System message missing routable target: session_key={}, target_session_key={}, sender={}",
@@ -922,9 +922,9 @@ class AgentLoop:
             str(saved_interactive["session_key"]) if saved_interactive else None
         )
         target_session_key = resolved_interactive_session_key or key
-        route_target = await self._resolve_channel_target(target_session_key)
+        route_target = await self._resolve_channel_endpoint(target_session_key)
         if not route_target and target_session_key == build_session_key("cli", "direct"):
-            route_target = ChannelTarget(channel="cli", chat_id="direct", metadata={})
+            route_target = ChannelEndpoint(channel="cli", chat_id="direct", metadata={})
         if not route_target:
             logger.warning(
                 "Message missing routable target: session_key={}, target_session_key={}, channel={}, sender={}",
@@ -1063,9 +1063,9 @@ class AgentLoop:
         await self._connect_mcp()
         normalized_session_key = validate_session_key(session_key)
         target_session_key = interactive_session_key or normalized_session_key
-        route_target = await self._resolve_channel_target(target_session_key)
+        route_target = await self._resolve_channel_endpoint(target_session_key)
         if not route_target and target_session_key == build_session_key("cli", "direct"):
-            route_target = ChannelTarget(channel="cli", chat_id="direct", metadata={})
+            route_target = ChannelEndpoint(channel="cli", chat_id="direct", metadata={})
         if not route_target:
             logger.warning(
                 "Direct message missing routable target: session_key={}, target_session_key={}",

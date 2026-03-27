@@ -15,7 +15,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.config.schema import DingTalkConfig
 from weavbot.utils.helpers import build_session_key
 
@@ -439,7 +439,7 @@ class DingTalkChannel(BaseChannel):
             {"mediaId": media_id, "fileName": filename, "fileType": file_type},
         )
 
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         """Send a message through DingTalk."""
         token = await self._get_access_token()
         if not token:

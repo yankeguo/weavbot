@@ -3,7 +3,7 @@
 Inbound messages are produced by channel adapters (or internal publishers such as
 subagents) and queued for the agent. Outbound messages are produced by the agent
 (or tools) and queued for delivery; the consumer resolves ``session_key`` via
-:class:`~weavbot.channels.store.ChannelStore` to obtain a :class:`~weavbot.channels.store.ChannelTarget`.
+:class:`~weavbot.channels.store.ChannelStore` to obtain a :class:`~weavbot.channels.store.ChannelEndpoint`.
 """
 
 from dataclasses import dataclass, field
@@ -27,7 +27,7 @@ class InboundMessage:
     Metadata is split into:
     - ``metadata``: per-turn message metadata that is echoed back on outbound messages.
       Example: ``message_id`` for reply/quote, ``_progress`` / ``_tool_hint`` for streaming.
-    - ``channel_metadata``: routing metadata persisted to :class:`~weavbot.channels.store.ChannelTarget`
+    - ``channel_metadata``: routing metadata persisted to :class:`~weavbot.channels.store.ChannelEndpoint`
       for resolving outbound delivery details (thread ids, account keys, req ids, ...).
     """
 
@@ -49,12 +49,12 @@ class InboundMessage:
     )  # message-level metadata (echoed on outbound), e.g. message_id, _progress
     channel_metadata: dict[str, Any] = field(
         default_factory=dict
-    )  # routing metadata persisted to ChannelTarget, e.g. slack.thread_ts, wechat.context_token
+    )  # routing metadata persisted to ChannelEndpoint, e.g. slack.thread_ts, wechat.context_token
 
 
 @dataclass
 class OutboundMessage:
-    """Message queued for sending to a chat; resolved through ``session_key`` → ChannelTarget."""
+    """Message queued for sending to a chat; resolved through ``session_key`` → ChannelEndpoint."""
 
     session_key: str  # Lookup key for outbound routing (same namespace as inbound).
     content: str  # Body to send; may be empty when only metadata matters (e.g. typing signals).

@@ -20,7 +20,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.config.schema import EmailConfig
 from weavbot.utils.helpers import build_session_key
 
@@ -112,7 +112,7 @@ class EmailChannel(BaseChannel):
         """Stop polling loop."""
         self._running = False
 
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         """Send email via SMTP."""
         if not self.config.consent_granted:
             logger.warning("Skip email send: consent_granted is false")

@@ -9,7 +9,7 @@ from loguru import logger
 
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 
 
 class BaseChannel(ABC):
@@ -70,7 +70,7 @@ class BaseChannel(ABC):
         pass
 
     @abstractmethod
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         """
         Send a message through this channel.
 
@@ -112,7 +112,7 @@ class BaseChannel(ABC):
             content: Message text content.
             media: Optional list of local media file paths.
             message_metadata: Optional per-turn message metadata (echoed on outbound).
-            channel_metadata: Optional routing metadata persisted to ChannelTarget.
+            channel_metadata: Optional routing metadata persisted to ChannelEndpoint.
         """
         resolved_key = str(session_key or "").strip()
         if not resolved_key:
@@ -155,7 +155,7 @@ class BaseChannel(ABC):
         if self.channel_store:
             await self.channel_store.upsert(
                 msg.session_key,
-                ChannelTarget(
+                ChannelEndpoint(
                     channel=self.name,
                     chat_id=str(chat_id),
                     metadata=dict(channel_metadata or {}),

@@ -14,7 +14,7 @@ from slackify_markdown import slackify_markdown
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.config.schema import SlackConfig
 from weavbot.utils.helpers import build_session_key
 
@@ -80,7 +80,7 @@ class SlackChannel(BaseChannel):
                 logger.warning("Slack socket close failed: {}", e)
             self._socket_client = None
 
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         """Send a message through Slack."""
         if not self._web_client:
             logger.warning("Slack client not running")

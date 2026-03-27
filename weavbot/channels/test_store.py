@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 
 
 @pytest.mark.asyncio
@@ -19,7 +19,7 @@ async def test_channel_store_upsert_keeps_memory_consistent_when_write_fails(
 
     await store.upsert(
         key,
-        ChannelTarget(
+        ChannelEndpoint(
             channel="slack",
             chat_id="C111",
             metadata={"slack": {"thread_ts": "T333"}},
@@ -38,7 +38,7 @@ async def test_channel_store_concurrent_upsert_and_resolve_same_key(tmp_path) ->
     async def _write(chat_id: str) -> None:
         await store.upsert(
             key,
-            ChannelTarget(
+            ChannelEndpoint(
                 channel="slack",
                 chat_id=chat_id,
                 metadata={"slack": {"thread_ts": "T333"}},

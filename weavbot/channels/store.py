@@ -1,4 +1,4 @@
-"""Persistent channel target store keyed by session_key."""
+"""Persistent channel endpoint store keyed by session_key."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from loguru import logger
 
 
 @dataclass
-class ChannelTarget:
-    """Resolved outbound delivery target for a session."""
+class ChannelEndpoint:
+    """Resolved outbound delivery endpoint for a session."""
 
     channel: str
     chat_id: str
@@ -33,7 +33,7 @@ class ChannelTarget:
         }
 
     @classmethod
-    def from_dict(cls, raw: dict[str, Any] | None) -> "ChannelTarget | None":
+    def from_dict(cls, raw: dict[str, Any] | None) -> "ChannelEndpoint | None":
         payload = raw if isinstance(raw, dict) else {}
         channel = str(payload.get("channel") or "").strip()
         chat_id = str(payload.get("chat_id") or "").strip()
@@ -49,12 +49,12 @@ class ChannelTarget:
 
 
 class ChannelStore:
-    """Session-key to channel target mapping with per-session JSON file persistence."""
+    """Session-key to channel endpoint mapping with per-session JSON file persistence."""
 
     def __init__(self, dir: Path):
         self.dir = dir
-        self._targets: dict[str, ChannelTarget] = {}
-        self._targets_lock = asyncio.Lock()
+        self._endpoints: dict[str, ChannelEndpoint] = {}
+        self._endpoints_lock = asyncio.Lock()
         self._key_locks_lock = asyncio.Lock()
         self._key_locks: dict[str, asyncio.Lock] = {}
         self._load_lock = asyncio.Lock()
@@ -77,45 +77,45 @@ class ChannelStore:
         async with self._load_lock:
             exists = await aiofiles.ospath.exists(self.dir)
             if not exists:
-                async with self._targets_lock:
-                    self._targets = {}
+                async with self._endpoints_lock:
+                    self._endpoints = {}
                 self._loaded = True
                 return
 
             try:
                 names = await aiofiles.os.listdir(self.dir)
             except FileNotFoundError:
-                async with self._targets_lock:
-                    self._targets = {}
+                async with self._endpoints_lock:
+                    self._endpoints = {}
                 self._loaded = True
                 return
             files = [self.dir / name for name in names if name.endswith(".json")]
-            parsed: dict[str, ChannelTarget] = {}
+            parsed: dict[str, ChannelEndpoint] = {}
             for f in files:
                 key = f.stem
                 try:
                     async with aiofiles.open(f, encoding="utf-8") as af:
                         content = await af.read()
                     raw = json.loads(content)
-                    target = ChannelTarget.from_dict(raw if isinstance(raw, dict) else None)
-                    if target:
-                        parsed[key] = target
+                    endpoint = ChannelEndpoint.from_dict(raw if isinstance(raw, dict) else None)
+                    if endpoint:
+                        parsed[key] = endpoint
                 except Exception as e:
                     logger.warning("ChannelStore load failed for {}: {}", f, e)
-            async with self._targets_lock:
-                self._targets = parsed
+            async with self._endpoints_lock:
+                self._endpoints = parsed
             self._loaded = True
 
-    async def upsert(self, session_key: str, target: ChannelTarget) -> None:
+    async def upsert(self, session_key: str, endpoint: ChannelEndpoint) -> None:
         await self._ensure_loaded()
         key = session_key
         key_lock = await self._get_key_lock(key)
         async with key_lock:
-            target.updated_at = datetime.now().isoformat()
+            endpoint.updated_at = datetime.now().isoformat()
             await aiofiles.os.makedirs(self.dir, exist_ok=True)
             dest = self.dir / f"{key}.json"
             tmp = self.dir / f".{key}.json.tmp"
-            payload = json.dumps(target.to_dict(), indent=2, ensure_ascii=False)
+            payload = json.dumps(endpoint.to_dict(), indent=2, ensure_ascii=False)
             try:
                 async with aiofiles.open(tmp, "w", encoding="utf-8") as af:
                     await af.write(payload)
@@ -129,8 +129,8 @@ class ChannelStore:
                 except Exception:
                     pass
                 return
-            async with self._targets_lock:
-                self._targets[key] = target
+            async with self._endpoints_lock:
+                self._endpoints[key] = endpoint
 
     async def delete(self, session_key: str) -> None:
         await self._ensure_loaded()
@@ -138,9 +138,9 @@ class ChannelStore:
         key_lock = await self._get_key_lock(key)
         async with key_lock:
             should_delete_file = False
-            async with self._targets_lock:
-                if key in self._targets:
-                    del self._targets[key]
+            async with self._endpoints_lock:
+                if key in self._endpoints:
+                    del self._endpoints[key]
                     should_delete_file = True
             if should_delete_file:
                 try:
@@ -148,8 +148,8 @@ class ChannelStore:
                 except FileNotFoundError:
                     pass
 
-    async def resolve(self, session_key: str) -> ChannelTarget | None:
+    async def resolve(self, session_key: str) -> ChannelEndpoint | None:
         await self._ensure_loaded()
         key = session_key
-        async with self._targets_lock:
-            return self._targets.get(key)
+        async with self._endpoints_lock:
+            return self._endpoints.get(key)

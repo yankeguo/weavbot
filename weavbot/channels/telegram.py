@@ -14,7 +14,7 @@ from telegram.request import HTTPXRequest
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.store import ChannelStore, ChannelTarget
+from weavbot.channels.store import ChannelStore, ChannelEndpoint
 from weavbot.config.schema import TelegramConfig
 from weavbot.utils.helpers import build_session_key
 
@@ -234,7 +234,7 @@ class TelegramChannel(BaseChannel):
             return "audio"
         return "document"
 
-    async def send(self, msg: OutboundMessage, target: ChannelTarget) -> None:
+    async def send(self, msg: OutboundMessage, target: ChannelEndpoint) -> None:
         """Send a message through Telegram."""
         if not self._app:
             logger.warning("Telegram bot not running")
