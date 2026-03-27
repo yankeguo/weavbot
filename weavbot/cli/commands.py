@@ -24,7 +24,7 @@ from weavbot.agent.tools.base import DeliveryTarget
 from weavbot.bus.events import InboundMessage
 from weavbot.config.schema import Config
 from weavbot.i18n import t
-from weavbot.utils.helpers import build_session_key, sync_workspace_templates
+from weavbot.utils.helpers import build_session_key, sync_workspace_templates, validate_session_key
 
 app = typer.Typer(
     name="weavbot",
@@ -254,9 +254,9 @@ def _parse_heartbeat_target(key: str) -> DeliveryTarget | None:
     if not text:
         return None
 
-    # Wechat uses scoped session key: wechat:{account_key}:{peer_id}
-    if text.startswith("wechat:"):
-        parts = text.split(":", 2)
+    # Wechat uses scoped session key: wechat_{account_key}_{peer_id}
+    if text.startswith("wechat_"):
+        parts = text.split("_", 2)
         if len(parts) == 3 and parts[1] and parts[2]:
             return DeliveryTarget(
                 channel="wechat",
@@ -266,12 +266,35 @@ def _parse_heartbeat_target(key: str) -> DeliveryTarget | None:
             )
         return None
 
-    if ":" not in text:
+    # Legacy compatibility: wechat:{account_key}:{peer_id}
+    if text.startswith("wechat:"):
+        legacy_parts = text.split(":", 2)
+        if len(legacy_parts) == 3 and legacy_parts[1] and legacy_parts[2]:
+            return DeliveryTarget(
+                channel="wechat",
+                chat_id=legacy_parts[2],
+                session_key=build_session_key(*legacy_parts),
+                metadata={"wechat": {"account_key": legacy_parts[1]}},
+            )
         return None
-    channel, chat_id = text.split(":", 1)
+
+    if "_" not in text:
+        return None
+    channel, chat_id = text.split("_", 1)
     if not channel or not chat_id:
         return None
     return DeliveryTarget(channel=channel, chat_id=chat_id, session_key=text, metadata={})
+
+
+def _parse_cli_session_route(session_key: str) -> tuple[str, str]:
+    """Parse normalized session key to (channel, chat_id) for CLI ingress."""
+    normalized = validate_session_key(session_key)
+    if "_" not in normalized:
+        raise ValueError("session_key must include channel and chat_id, e.g. cli_direct")
+    channel, chat_id = normalized.split("_", 1)
+    if not channel or not chat_id:
+        raise ValueError("session_key must include channel and chat_id, e.g. cli_direct")
+    return channel, chat_id
 
 
 def _extract_interactive_target(
@@ -739,7 +762,7 @@ def gateway(
 @app.command()
 def agent(
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
-    session_id: str = typer.Option("cli:direct", "--session", "-s", help="Session ID"),
+    session_id: str = typer.Option("cli_direct", "--session", "-s", help="Session ID"),
     markdown: bool = typer.Option(
         True, "--markdown/--no-markdown", help="Render assistant output as Markdown"
     ),
@@ -786,6 +809,13 @@ def agent(
         channels_config=config.channels,
     )
 
+    try:
+        normalized_session_id = validate_session_key(session_id)
+        cli_channel, cli_chat_id = _parse_cli_session_route(normalized_session_id)
+    except ValueError as e:
+        console.print(f"[red]Invalid --session: {e}[/red]")
+        raise typer.Exit(1)
+
     # Show spinner when logs are off (no output to miss); skip when logs are on
     def _thinking_ctx():
         if logs:
@@ -808,7 +838,11 @@ def agent(
         async def run_once():
             with _thinking_ctx():
                 response = await agent_loop.process_direct(
-                    message, session_id, on_progress=_cli_progress
+                    message,
+                    normalized_session_id,
+                    channel=cli_channel,
+                    chat_id=cli_chat_id,
+                    on_progress=_cli_progress,
                 )
             _print_agent_response(response, render_markdown=markdown)
             await agent_loop.close_mcp()
@@ -820,11 +854,6 @@ def agent(
 
         _init_prompt_session()
         console.print(f"{__logo__} {_t('interactive_mode')}\n")
-
-        if ":" in session_id:
-            cli_channel, cli_chat_id = session_id.split(":", 1)
-        else:
-            cli_channel, cli_chat_id = "cli", session_id
 
         def _exit_on_sigint(signum, frame):
             _restore_terminal()

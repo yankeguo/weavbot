@@ -37,7 +37,7 @@ from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.providers.base import LLMProvider
 from weavbot.session.manager import Session, SessionManager
-from weavbot.utils.helpers import build_session_key
+from weavbot.utils.helpers import validate_session_key
 
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
@@ -779,9 +779,13 @@ class AgentLoop:
             channel = str(msg.metadata.get("_origin_channel") or "").strip()
             chat_id = str(msg.metadata.get("_origin_chat_id") or "").strip()
             if not channel or not chat_id:
-                channel, chat_id = (
-                    msg.chat_id.split(":", 1) if ":" in msg.chat_id else ("cli", msg.chat_id)
-                )
+                if "_" in msg.chat_id:
+                    channel, chat_id = msg.chat_id.split("_", 1)
+                elif ":" in msg.chat_id:
+                    # Legacy compatibility for pre-build_session_key system chat_id format.
+                    channel, chat_id = msg.chat_id.split(":", 1)
+                else:
+                    channel, chat_id = "cli", msg.chat_id
             logger.info("Processing system message from {}", msg.sender_id)
             key = session_key or msg.session_key
             session = self.sessions.get_or_create(key)
@@ -936,7 +940,7 @@ class AgentLoop:
     async def process_direct(
         self,
         content: str,
-        session_key: str = "cli:direct",
+        session_key: str = "cli_direct",
         channel: str = "cli",
         chat_id: str = "direct",
         metadata: dict[str, Any] | None = None,
@@ -945,7 +949,7 @@ class AgentLoop:
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
-        normalized_session_key = build_session_key(session_key)
+        normalized_session_key = validate_session_key(session_key)
         msg = InboundMessage(
             channel=channel,
             sender_id="user",

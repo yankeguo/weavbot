@@ -64,6 +64,21 @@ def build_session_key(*parts: str) -> str:
     return key
 
 
+def validate_session_key(session_key: str) -> str:
+    """Validate that session_key already conforms to build_session_key output."""
+    raw = str(session_key or "")
+    if not raw.strip():
+        raise ValueError("session_key must not be empty")
+    stripped = raw.strip()
+    normalized = build_session_key(stripped)
+    if stripped != normalized:
+        raise ValueError(
+            "session_key must conform to build_session_key format "
+            "(use normalized underscore-separated key without reserved path characters)"
+        )
+    return normalized
+
+
 def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:
     """Sync bundled templates to workspace. Only creates missing files."""
     from importlib.resources import files as pkg_files

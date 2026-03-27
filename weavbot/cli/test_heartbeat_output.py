@@ -50,11 +50,20 @@ def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
 
 
 def test_parse_heartbeat_target_wechat_scoped_key() -> None:
+    parsed = _parse_heartbeat_target("wechat_bot-main_u_123")
+    assert parsed is not None
+    assert parsed.channel == "wechat"
+    assert parsed.chat_id == "u_123"
+    assert parsed.session_key == "wechat_bot-main_u_123"
+    assert parsed.metadata == {"wechat": {"account_key": "bot-main"}}
+
+
+def test_parse_heartbeat_target_wechat_scoped_legacy_colon_key() -> None:
     parsed = _parse_heartbeat_target("wechat:bot-main:u_123")
     assert parsed is not None
     assert parsed.channel == "wechat"
     assert parsed.chat_id == "u_123"
-    assert parsed.session_key == "wechat:bot-main:u_123"
+    assert parsed.session_key == "wechat_bot-main_u_123"
     assert parsed.metadata == {"wechat": {"account_key": "bot-main"}}
 
 

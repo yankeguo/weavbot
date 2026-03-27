@@ -4,7 +4,12 @@ import pytest
 
 from weavbot.config.loader import get_config_path
 from weavbot.config.schema import Config
-from weavbot.utils.helpers import build_session_key, ensure_data_path, ensure_workspace_path
+from weavbot.utils.helpers import (
+    build_session_key,
+    ensure_data_path,
+    ensure_workspace_path,
+    validate_session_key,
+)
 
 DEFAULT_DATA_ROOT = Path("~/.weavbot")
 
@@ -53,3 +58,12 @@ def test_build_session_key_sanitizes_each_part() -> None:
 def test_build_session_key_raises_on_empty_parts() -> None:
     with pytest.raises(ValueError, match="session_key must not be empty"):
         build_session_key("", "   ")
+
+
+def test_validate_session_key_accepts_normalized_key() -> None:
+    assert validate_session_key("cli_direct") == "cli_direct"
+
+
+def test_validate_session_key_rejects_legacy_colon_key() -> None:
+    with pytest.raises(ValueError, match="build_session_key format"):
+        validate_session_key("cli:direct")

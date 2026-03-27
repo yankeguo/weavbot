@@ -254,12 +254,17 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
         msg = InboundMessage(
             channel="system",
             sender_id="subagent",
-            chat_id=f"{origin['channel']}:{origin['chat_id']}",
+            chat_id=build_session_key(
+                str(origin.get("channel") or ""), str(origin.get("chat_id") or "")
+            ),
             session_key=str(
                 build_session_key(str(origin.get("session_key")))
                 if str(origin.get("session_key") or "").strip()
                 else InboundMessage.default_session_key(
-                    "system", f"{origin['channel']}:{origin['chat_id']}"
+                    "system",
+                    build_session_key(
+                        str(origin.get("channel") or ""), str(origin.get("chat_id") or "")
+                    ),
                 )
             ),
             content=announce_content,
