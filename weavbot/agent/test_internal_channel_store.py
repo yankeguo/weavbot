@@ -35,7 +35,7 @@ async def test_process_direct_upserts_cli_internal_session_to_channel_store(tmp_
         bus=MessageBus(),
         provider=_FakeProvider(),
         workspace=tmp_path,
-        channel_store=ChannelStore(tmp_path / "channels.json"),
+        channel_store=ChannelStore(tmp_path / "channels"),
     )
     session_key = build_session_key("cli", "direct")
 
@@ -57,7 +57,7 @@ async def test_process_direct_prefers_interactive_route_for_cron_internal_sessio
         bus=MessageBus(),
         provider=_FakeProvider(),
         workspace=tmp_path,
-        channel_store=ChannelStore(tmp_path / "channels.json"),
+        channel_store=ChannelStore(tmp_path / "channels"),
     )
     session_key = build_session_key("cron", "job-1")
     interactive_session_key = build_session_key("slack", "C111", "T333")
@@ -96,7 +96,7 @@ async def test_system_message_upserts_internal_session_with_origin_route(tmp_pat
         bus=MessageBus(),
         provider=_FakeProvider(),
         workspace=tmp_path,
-        channel_store=ChannelStore(tmp_path / "channels.json"),
+        channel_store=ChannelStore(tmp_path / "channels"),
     )
     session_key = build_session_key("system", build_session_key("slack", "C999"))
     msg = InboundMessage(

@@ -47,47 +47,31 @@ class ChannelTarget:
 
 
 class ChannelStore:
-    """Session-key to channel target mapping with JSON persistence."""
+    """Session-key to channel target mapping with per-session JSON file persistence."""
 
-    def __init__(self, path: Path):
-        self.path = path
+    def __init__(self, dir: Path):
+        self.dir = dir
         self._targets: dict[str, ChannelTarget] = {}
         self.load()
 
     def load(self) -> None:
-        if not self.path.exists():
+        if not self.dir.exists():
             self._targets = {}
             return
-        try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-            table = raw.get("targets", {}) if isinstance(raw, dict) else {}
-            if not isinstance(table, dict):
-                self._targets = {}
-                return
-            parsed: dict[str, ChannelTarget] = {}
-            for key, value in table.items():
-                try:
-                    session_key = build_session_key(str(key or "").strip())
-                except ValueError:
-                    continue
-                target = ChannelTarget.from_dict(value if isinstance(value, dict) else None)
+        parsed: dict[str, ChannelTarget] = {}
+        for f in self.dir.glob("*.json"):
+            try:
+                key = build_session_key(f.stem)
+            except ValueError:
+                continue
+            try:
+                raw = json.loads(f.read_text(encoding="utf-8"))
+                target = ChannelTarget.from_dict(raw if isinstance(raw, dict) else None)
                 if target:
-                    parsed[session_key] = target
-            self._targets = parsed
-        except Exception as e:
-            logger.warning("ChannelStore load failed from {}: {}", self.path, e)
-            self._targets = {}
-
-    def save(self) -> None:
-        payload = {
-            "version": 1,
-            "targets": {key: target.to_dict() for key, target in self._targets.items()},
-        }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+                    parsed[key] = target
+            except Exception as e:
+                logger.warning("ChannelStore load failed for {}: {}", f, e)
+        self._targets = parsed
 
     def upsert(self, session_key: str, target: ChannelTarget) -> None:
         try:
@@ -96,7 +80,11 @@ class ChannelStore:
             return
         target.updated_at = datetime.now().isoformat()
         self._targets[key] = target
-        self.save()
+        self.dir.mkdir(parents=True, exist_ok=True)
+        (self.dir / f"{key}.json").write_text(
+            json.dumps(target.to_dict(), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     def delete(self, session_key: str) -> None:
         try:
@@ -105,7 +93,7 @@ class ChannelStore:
             return
         if key in self._targets:
             del self._targets[key]
-            self.save()
+            (self.dir / f"{key}.json").unlink(missing_ok=True)
 
     def resolve(self, session_key: str) -> ChannelTarget | None:
         try:

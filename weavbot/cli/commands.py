@@ -560,7 +560,7 @@ def gateway(
 
     config = load_config()
     runtime_paths = prepare_runtime_paths(config.workspace_path)
-    channel_store = ChannelStore(ensure_data_path() / "channels.json")
+    channel_store = ChannelStore(ensure_data_path() / "channels")
     bus = MessageBus()
     provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
@@ -828,7 +828,7 @@ def agent(
 
     bus = MessageBus()
     provider = _make_provider(config)
-    channel_store = ChannelStore(ensure_data_path() / "channels.json")
+    channel_store = ChannelStore(ensure_data_path() / "channels")
 
     # Create cron service for tool usage (no callback needed for CLI unless running)
     cron = CronService(runtime_paths.cron_store_path)
