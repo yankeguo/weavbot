@@ -17,6 +17,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import FeishuConfig
+from weavbot.utils.helpers import build_session_key
 
 try:
     import lark_oapi as lark
@@ -849,6 +850,7 @@ class FeishuChannel(BaseChannel):
             # Forward to message bus
             reply_to = chat_id if chat_type == "group" else sender_id
             await self._handle_message(
+                build_session_key(self.name, str(reply_to)),
                 sender_id=sender_id,
                 chat_id=reply_to,
                 content=content,

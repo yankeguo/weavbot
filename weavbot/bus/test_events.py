@@ -1,9 +1,9 @@
 from weavbot.bus.events import InboundMessage
+from weavbot.utils.helpers import build_session_key
 
 
-def test_inbound_message_default_session_key() -> None:
-    key = InboundMessage.default_session_key("slack", "C123")
-    assert key == "slack_C123"
+def test_build_session_key_channel_chat_convention() -> None:
+    assert build_session_key("slack", "C123") == "slack_C123"
 
 
 def test_inbound_message_keeps_explicit_session_key() -> None:

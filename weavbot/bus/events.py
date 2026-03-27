@@ -10,16 +10,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from weavbot.utils.helpers import build_session_key
-
 
 @dataclass
 class InboundMessage:
     """Message received from a chat channel or injected on the inbound queue.
 
-    ``session_key`` is the stable partition for conversation state; it usually
-    matches :meth:`default_session_key` for that channel/chat, but callers may
-    set a custom key when they need a distinct session (e.g. multi-account).
+    ``session_key`` is the stable partition for conversation state; channel
+    adapters typically build it with :func:`~weavbot.utils.helpers.build_session_key`,
+    but callers may set a custom key when they need a distinct session (e.g. multi-account).
 
     Internal channels include ``system`` (e.g. subagent handoff with
     ``metadata["_original_session_key"]`` for routing) and ``cli`` for terminal
@@ -43,11 +41,6 @@ class InboundMessage:
     metadata: dict[str, Any] = field(
         default_factory=dict
     )  # e.g. message_id, channel-specific blobs, _progress
-
-    @staticmethod
-    def default_session_key(channel: str, chat_id: str) -> str:
-        """Build the default session key from channel and chat_id (see ``build_session_key``)."""
-        return build_session_key(channel, chat_id)
 
 
 @dataclass

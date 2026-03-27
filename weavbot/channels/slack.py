@@ -188,13 +188,14 @@ class SlackChannel(BaseChannel):
 
         # Thread-scoped session key for channel/group messages
         session_key = (
-            build_session_key("slack", chat_id, thread_ts)
+            build_session_key(self.name, chat_id, thread_ts)
             if thread_ts and channel_type != "im"
-            else None
+            else build_session_key(self.name, chat_id)
         )
 
         try:
             await self._handle_message(
+                session_key,
                 sender_id=sender_id,
                 chat_id=chat_id,
                 content=text,
@@ -205,7 +206,6 @@ class SlackChannel(BaseChannel):
                         "channel_type": channel_type,
                     },
                 },
-                session_key=session_key,
             )
         except Exception:
             logger.exception("Error handling Slack message from {}", sender_id)

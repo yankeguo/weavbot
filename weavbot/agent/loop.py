@@ -38,7 +38,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.providers.base import LLMProvider
 from weavbot.session.manager import Session, SessionManager
-from weavbot.utils.helpers import validate_session_key
+from weavbot.utils.helpers import build_session_key, validate_session_key
 
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
@@ -921,9 +921,7 @@ class AgentLoop:
         )
         target_session_key = resolved_interactive_session_key or key
         route_target = await self._resolve_channel_target(target_session_key)
-        if not route_target and target_session_key == InboundMessage.default_session_key(
-            "cli", "direct"
-        ):
+        if not route_target and target_session_key == build_session_key("cli", "direct"):
             route_target = ChannelTarget(channel="cli", chat_id="direct", metadata={})
         if not route_target:
             logger.warning(
@@ -1058,9 +1056,7 @@ class AgentLoop:
         normalized_session_key = validate_session_key(session_key)
         target_session_key = interactive_session_key or normalized_session_key
         route_target = await self._resolve_channel_target(target_session_key)
-        if not route_target and target_session_key == InboundMessage.default_session_key(
-            "cli", "direct"
-        ):
+        if not route_target and target_session_key == build_session_key("cli", "direct"):
             route_target = ChannelTarget(channel="cli", chat_id="direct", metadata={})
         if not route_target:
             logger.warning(

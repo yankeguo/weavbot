@@ -354,7 +354,7 @@ class WecomChannel(BaseChannel):
             content = f"[wecom:{msg_type}]"
 
         session_key = build_session_key(
-            "wecom",
+            self.name,
             group_chat_id if chat_type == "group" and group_chat_id else sender_id,
         )
         metadata = {
@@ -374,12 +374,12 @@ class WecomChannel(BaseChannel):
         }
 
         await self._handle_message(
+            session_key,
             sender_id=sender_id or "unknown",
             chat_id=chat_id or sender_id or "unknown",
             content=content,
             media=media,
             metadata=metadata,
-            session_key=session_key,
         )
 
     async def _handle_event_callback(self, frame: dict[str, Any]) -> None:
@@ -404,7 +404,7 @@ class WecomChannel(BaseChannel):
             return
 
         session_key = build_session_key(
-            "wecom",
+            self.name,
             group_chat_id if chat_type == "group" and group_chat_id else sender_id,
         )
         content = f"[wecom:event:{event_type}]"
@@ -425,11 +425,11 @@ class WecomChannel(BaseChannel):
         }
 
         await self._handle_message(
+            session_key,
             sender_id=sender_id or "unknown",
             chat_id=chat_id or sender_id or "unknown",
             content=content,
             metadata=metadata,
-            session_key=session_key,
         )
 
     async def _parse_inbound_message_body(

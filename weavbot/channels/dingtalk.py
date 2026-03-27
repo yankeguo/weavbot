@@ -17,6 +17,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import DingTalkConfig
+from weavbot.utils.helpers import build_session_key
 
 try:
     from dingtalk_stream import (
@@ -463,12 +464,13 @@ class DingTalkChannel(BaseChannel):
     async def _on_message(self, content: str, sender_id: str, sender_name: str) -> None:
         """Handle incoming message (called by WeavbotDingTalkHandler).
 
-        Delegates to BaseChannel._handle_message() which enforces allow_from
+        Delegates to BaseChannel._handle_message(session_key, ...) which enforces allow_from
         permission checks before publishing to the bus.
         """
         try:
             logger.info("DingTalk inbound: {} from {}", content, sender_name)
             await self._handle_message(
+                build_session_key(self.name, str(sender_id)),
                 sender_id=sender_id,
                 chat_id=sender_id,  # For private chat, chat_id == sender_id
                 content=str(content),

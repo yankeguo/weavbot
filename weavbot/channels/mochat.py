@@ -18,6 +18,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import MochatConfig
+from weavbot.utils.helpers import build_session_key
 
 try:
     import socketio
@@ -846,6 +847,7 @@ class MochatChannel(BaseChannel):
         is_group = bool(last.group_id)
         body = build_buffered_body(entries, is_group) or "[empty message]"
         await self._handle_message(
+            build_session_key(self.name, str(target_id)),
             sender_id=last.author,
             chat_id=target_id,
             content=body,

@@ -308,7 +308,7 @@ async def _pick_heartbeat_target_from_sessions(
     return RouteTarget(
         channel="cli",
         chat_id="direct",
-        session_key=InboundMessage.default_session_key("cli", "direct"),
+        session_key=build_session_key("cli", "direct"),
         metadata={},
     )
 

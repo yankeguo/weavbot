@@ -262,13 +262,12 @@ class WechatChannel(BaseChannel):
             },
         }
         await self._handle_message(
+            build_session_key(self.name, account.key, sender_id),
             sender_id=sender_id,
             chat_id=sender_id,
             content=content,
             media=media,
             metadata=metadata,
-            # Include account key in session namespace for multi-account isolation.
-            session_key=build_session_key("wechat", account.key, sender_id),
         )
 
     async def _extract_inbound_content(

@@ -12,6 +12,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import QQConfig
+from weavbot.utils.helpers import build_session_key
 
 try:
     import botpy
@@ -134,6 +135,7 @@ class QQChannel(BaseChannel):
                 return
 
             await self._handle_message(
+                build_session_key(self.name, str(user_id)),
                 sender_id=user_id,
                 chat_id=user_id,
                 content=content,

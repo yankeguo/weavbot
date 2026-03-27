@@ -14,6 +14,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import DiscordConfig
+from weavbot.utils.helpers import build_session_key
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20MB
@@ -269,6 +270,7 @@ class DiscordChannel(BaseChannel):
         await self._start_typing(channel_id)
 
         await self._handle_message(
+            build_session_key(self.name, channel_id),
             sender_id=sender_id,
             chat_id=channel_id,
             content="\n".join(p for p in content_parts if p) or "[empty message]",

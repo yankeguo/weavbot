@@ -22,6 +22,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import EmailConfig
+from weavbot.utils.helpers import build_session_key
 
 
 class EmailChannel(BaseChannel):
@@ -96,6 +97,7 @@ class EmailChannel(BaseChannel):
                         self._last_message_id_by_chat[sender] = message_id
 
                     await self._handle_message(
+                        build_session_key(self.name, str(sender)),
                         sender_id=sender,
                         chat_id=sender,
                         content=item["content"],

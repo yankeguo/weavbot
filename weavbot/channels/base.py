@@ -10,7 +10,6 @@ from loguru import logger
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.store import ChannelStore, ChannelTarget
-from weavbot.utils.helpers import build_session_key
 
 
 class BaseChannel(ABC):
@@ -61,7 +60,7 @@ class BaseChannel(ABC):
         This should be a long-running async task that:
         1. Connects to the chat platform
         2. Listens for incoming messages
-        3. Forwards messages to the bus via _handle_message()
+        3. Forwards messages to the bus via _handle_message(session_key, ...)
         """
         pass
 
@@ -92,12 +91,12 @@ class BaseChannel(ABC):
 
     async def _handle_message(
         self,
+        session_key: str,
         sender_id: str,
         chat_id: str,
         content: str,
         media: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
-        session_key: str | None = None,
     ) -> None:
         """
         Handle an incoming message from the chat platform.
@@ -105,13 +104,19 @@ class BaseChannel(ABC):
         This method checks permissions and forwards to the bus.
 
         Args:
+            session_key: Partition key for the session; must be produced via
+                ``build_session_key`` at the channel call site.
             sender_id: The sender's identifier.
             chat_id: The chat/channel identifier.
             content: Message text content.
             media: Optional list of local media file paths.
             metadata: Optional channel-specific metadata.
-            session_key: Optional explicit session key (e.g. thread/account scoped key).
         """
+        resolved_key = str(session_key or "").strip()
+        if not resolved_key:
+            logger.warning("Empty session_key on channel {}, skipping inbound", self.name)
+            return
+
         if not self.is_allowed(sender_id):
             logger.warning(
                 "Access denied for sender {} on channel {}. "
@@ -139,11 +144,7 @@ class BaseChannel(ABC):
             channel=self.name,
             sender_id=str(sender_id),
             chat_id=str(chat_id),
-            session_key=(
-                build_session_key(str(session_key).strip())
-                if isinstance(session_key, str) and session_key.strip()
-                else InboundMessage.default_session_key(self.name, str(chat_id))
-            ),
+            session_key=resolved_key,
             content=content,
             media=image_media,
             metadata=metadata or {},

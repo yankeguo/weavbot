@@ -16,6 +16,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.store import ChannelStore, ChannelTarget
 from weavbot.config.schema import TelegramConfig
+from weavbot.utils.helpers import build_session_key
 
 
 def _markdown_to_telegram_html(text: str) -> str:
@@ -334,6 +335,7 @@ class TelegramChannel(BaseChannel):
         if not update.message or not update.effective_user:
             return
         await self._handle_message(
+            build_session_key(self.name, str(update.message.chat_id)),
             sender_id=self._sender_id(update.effective_user),
             chat_id=str(update.message.chat_id),
             content=update.message.text,
@@ -433,6 +435,7 @@ class TelegramChannel(BaseChannel):
 
         # Forward to the message bus
         await self._handle_message(
+            build_session_key(self.name, str_chat_id),
             sender_id=sender_id,
             chat_id=str_chat_id,
             content=content,
@@ -454,6 +457,7 @@ class TelegramChannel(BaseChannel):
                 return
             content = "\n".join(buf["contents"]) or "[empty message]"
             await self._handle_message(
+                build_session_key(self.name, buf["chat_id"]),
                 sender_id=buf["sender_id"],
                 chat_id=buf["chat_id"],
                 content=content,
