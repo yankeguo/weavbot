@@ -7,7 +7,6 @@ from weavbot.cli.commands import (
     _build_heartbeat_execute_input,
     _collect_heartbeat_progress,
     _looks_like_agent_error,
-    _parse_heartbeat_target,
     _pick_heartbeat_target_from_sessions,
     _suppress_background_progress,
 )
@@ -47,24 +46,6 @@ def test_heartbeat_progress_deduplicates_adjacent_text() -> None:
 def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
     assembled = _assemble_heartbeat_response([], "")
     assert assembled == ""
-
-
-def test_parse_heartbeat_target_wechat_scoped_key() -> None:
-    parsed = _parse_heartbeat_target("wechat_bot-main_u_123")
-    assert parsed is not None
-    assert parsed.channel == "wechat"
-    assert parsed.chat_id == "u_123"
-    assert parsed.session_key == "wechat_bot-main_u_123"
-    assert parsed.metadata == {"wechat": {"account_key": "bot-main"}}
-
-
-def test_parse_heartbeat_target_wechat_scoped_legacy_colon_key() -> None:
-    parsed = _parse_heartbeat_target("wechat:bot-main:u_123")
-    assert parsed is not None
-    assert parsed.channel == "wechat"
-    assert parsed.chat_id == "u_123"
-    assert parsed.session_key == "wechat_bot-main_u_123"
-    assert parsed.metadata == {"wechat": {"account_key": "bot-main"}}
 
 
 def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata() -> None:

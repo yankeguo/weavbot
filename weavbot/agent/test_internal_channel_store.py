@@ -121,24 +121,34 @@ async def test_process_direct_prefers_interactive_route_for_cron_internal_sessio
 
 
 @pytest.mark.asyncio
-async def test_system_message_upserts_internal_session_with_origin_route(tmp_path) -> None:
+async def test_system_message_upserts_internal_session_with_original_session_key(
+    tmp_path,
+) -> None:
     loop = AgentLoop(
         bus=MessageBus(),
         provider=_FakeProvider(),
         workspace=tmp_path,
         channel_store=ChannelStore(tmp_path / "channels"),
     )
-    session_key = build_session_key("system", build_session_key("slack", "C999"))
+    original_key = build_session_key("slack", "C999", "T111")
+    session_key = build_session_key("system", "sub", "task-42")
+    assert loop.channel_store is not None
+    loop.channel_store.upsert(
+        original_key,
+        ChannelTarget(
+            channel="slack",
+            chat_id="C999",
+            metadata={"slack": {"thread_ts": "T111", "channel_type": "channel"}},
+        ),
+    )
     msg = InboundMessage(
         channel="system",
         sender_id="subagent",
-        chat_id=build_session_key("slack", "C999"),
+        chat_id="subagent",
         session_key=session_key,
         content="subagent done",
         metadata={
-            "_origin_channel": "slack",
-            "_origin_chat_id": "C999",
-            "slack": {"thread_ts": "T111", "channel_type": "channel"},
+            "_original_session_key": original_key,
         },
     )
 
@@ -218,3 +228,65 @@ async def test_system_message_prefers_channel_store_target_over_chat_id_split(tm
     target = store.resolve(session_key)
     assert target is not None
     assert target.chat_id == "C999"
+
+
+@pytest.mark.asyncio
+async def test_system_message_uses_original_session_key_routing(tmp_path) -> None:
+    store = ChannelStore(tmp_path / "channels")
+    loop = AgentLoop(
+        bus=MessageBus(),
+        provider=_FakeProvider(),
+        workspace=tmp_path,
+        channel_store=store,
+    )
+    original_key = build_session_key("slack", "C777", "T888")
+    sub_key = build_session_key("system", "sub", "task-1")
+    store.upsert(
+        original_key,
+        ChannelTarget(
+            channel="slack",
+            chat_id="C777",
+            metadata={"slack": {"thread_ts": "T888", "channel_type": "channel"}},
+        ),
+    )
+    msg = InboundMessage(
+        channel="system",
+        sender_id="subagent",
+        chat_id="subagent",
+        session_key=sub_key,
+        content="subagent done",
+        metadata={"_original_session_key": original_key},
+    )
+
+    out = await loop._process_message(msg)
+
+    assert out is not None
+    assert out.content == "ok"
+    target = store.resolve(sub_key)
+    assert target is not None
+    assert target.channel == "slack"
+    assert target.chat_id == "C777"
+    assert target.metadata == {"slack": {"thread_ts": "T888", "channel_type": "channel"}}
+
+
+@pytest.mark.asyncio
+async def test_system_message_returns_error_when_route_unresolved(tmp_path) -> None:
+    loop = AgentLoop(
+        bus=MessageBus(),
+        provider=_FakeProvider(),
+        workspace=tmp_path,
+        channel_store=ChannelStore(tmp_path / "channels"),
+    )
+    msg = InboundMessage(
+        channel="system",
+        sender_id="subagent",
+        chat_id="slack_C999",
+        session_key=build_session_key("system", "missing-target"),
+        content="subagent done",
+        metadata={},
+    )
+
+    out = await loop._process_message(msg)
+
+    assert out is not None
+    assert out.content == "System message dropped: unresolved target session."

@@ -236,7 +236,7 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
         msg = InboundMessage(
             channel="system",
             sender_id="subagent",
-            chat_id=original_session_key,
+            chat_id="subagent",
             session_key=original_session_key,
             content=announce_content,
         )

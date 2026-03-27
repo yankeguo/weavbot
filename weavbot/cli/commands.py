@@ -256,58 +256,6 @@ async def _suppress_background_progress(_content: str, *, tool_hint: bool = Fals
     return None
 
 
-def _parse_heartbeat_target(key: str) -> RouteTarget | None:
-    """Parse a session key into heartbeat delivery target fields.
-
-    Returns routable target or None for invalid keys.
-    """
-    text = (key or "").strip()
-    if not text:
-        return None
-
-    # Wechat uses scoped session key: wechat_{account_key}_{peer_id}
-    if text.startswith("wechat_"):
-        parts = text.split("_", 2)
-        if len(parts) == 3 and parts[1] and parts[2]:
-            return RouteTarget(
-                channel="wechat",
-                chat_id=parts[2],
-                session_key=text,
-                metadata={"wechat": {"account_key": parts[1]}},
-            )
-        return None
-
-    # Legacy compatibility: wechat:{account_key}:{peer_id}
-    if text.startswith("wechat:"):
-        legacy_parts = text.split(":", 2)
-        if len(legacy_parts) == 3 and legacy_parts[1] and legacy_parts[2]:
-            return RouteTarget(
-                channel="wechat",
-                chat_id=legacy_parts[2],
-                session_key=build_session_key(*legacy_parts),
-                metadata={"wechat": {"account_key": legacy_parts[1]}},
-            )
-        return None
-
-    if "_" not in text:
-        return None
-    channel, chat_id = text.split("_", 1)
-    if not channel or not chat_id:
-        return None
-    return RouteTarget(channel=channel, chat_id=chat_id, session_key=text, metadata={})
-
-
-def _parse_cli_session_route(session_key: str) -> tuple[str, str]:
-    """Parse normalized session key to (channel, chat_id) for CLI ingress."""
-    normalized = validate_session_key(session_key)
-    if "_" not in normalized:
-        raise ValueError("session_key must include channel and chat_id, e.g. cli_direct")
-    channel, chat_id = normalized.split("_", 1)
-    if not channel or not chat_id:
-        raise ValueError("session_key must include channel and chat_id, e.g. cli_direct")
-    return channel, chat_id
-
-
 def _extract_interactive_target(
     item: dict[str, object], enabled_channels: set[str]
 ) -> RouteTarget | None:
@@ -894,10 +842,11 @@ def agent(
 
     try:
         normalized_session_id = validate_session_key(session_id)
-        cli_channel, cli_chat_id = _parse_cli_session_route(normalized_session_id)
     except ValueError as e:
         console.print(f"[red]Invalid --session: {e}[/red]")
         raise typer.Exit(1)
+    cli_channel = "cli"
+    cli_chat_id = "direct"
 
     # Show spinner when logs are off (no output to miss); skip when logs are on
     def _thinking_ctx():
@@ -1001,9 +950,7 @@ def agent(
                                 channel=cli_channel,
                                 sender_id="user",
                                 chat_id=cli_chat_id,
-                                session_key=InboundMessage.default_session_key(
-                                    cli_channel, cli_chat_id
-                                ),
+                                session_key=normalized_session_id,
                                 content=user_input,
                             )
                         )

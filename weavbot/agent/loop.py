@@ -866,28 +866,38 @@ class AgentLoop:
         """Process a single inbound message and return the response."""
         if msg.channel == "system":
             key = session_key or msg.session_key
-            channel = str(msg.metadata.get("_origin_channel") or "").strip()
-            chat_id = str(msg.metadata.get("_origin_chat_id") or "").strip()
-            if not channel or not chat_id:
-                resolved_route_target = self._resolve_channel_target(
-                    interactive_session_key
-                ) or self._resolve_channel_target(key)
-                if resolved_route_target:
-                    channel = str(resolved_route_target.channel)
-                    chat_id = str(resolved_route_target.chat_id)
-                elif "_" in msg.chat_id:
-                    channel, chat_id = msg.chat_id.split("_", 1)
-                elif ":" in msg.chat_id:
-                    # Legacy compatibility for pre-build_session_key system chat_id format.
-                    channel, chat_id = msg.chat_id.split(":", 1)
-                else:
-                    channel, chat_id = "cli", msg.chat_id
-            logger.info("Processing system message from {}", msg.sender_id)
-            route_target = self._resolve_channel_target(interactive_session_key) or ChannelTarget(
-                channel=channel,
-                chat_id=chat_id,
-                metadata=self._extract_interactive_route_metadata(msg.metadata),
+            target_session_key = (
+                interactive_session_key
+                or str(msg.metadata.get("_original_session_key") or "").strip()
+                or key
             )
+            resolved_route_target = self._resolve_channel_target(
+                target_session_key
+            ) or self._resolve_channel_target(key)
+            if not resolved_route_target:
+                target_session = self.sessions.get_or_create(target_session_key)
+                saved_interactive = self._resolve_saved_interactive_target(target_session)
+                if saved_interactive:
+                    resolved_route_target = ChannelTarget(
+                        channel=str(saved_interactive["channel"]),
+                        chat_id=str(saved_interactive["chat_id"]),
+                        metadata=dict(saved_interactive["metadata"]),
+                    )
+            if not resolved_route_target:
+                logger.warning(
+                    "System message missing routable target: session_key={}, target_session_key={}, sender={}",
+                    key,
+                    target_session_key,
+                    msg.sender_id,
+                )
+                return OutboundMessage(
+                    session_key=key,
+                    content="System message dropped: unresolved target session.",
+                )
+            channel = str(resolved_route_target.channel)
+            chat_id = str(resolved_route_target.chat_id)
+            logger.info("Processing system message from {}", msg.sender_id)
+            route_target = resolved_route_target
             if route_target and route_target.channel and route_target.chat_id:
                 self._upsert_internal_session_target(
                     session_key=key,
@@ -898,7 +908,7 @@ class AgentLoop:
             session = self.sessions.get_or_create(key)
             tool_context = self._build_tool_context(
                 session_key=key,
-                original_session_key=interactive_session_key or key,
+                original_session_key=target_session_key if target_session_key != key else None,
                 message_id=msg.metadata.get("message_id"),
             )
             history, messages = await self._build_initial_messages_with_compaction(
