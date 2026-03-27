@@ -14,7 +14,7 @@ from weavbot.utils.helpers import ensure_dir
 
 if TYPE_CHECKING:
     from weavbot.providers.base import LLMProvider
-    from weavbot.session.manager import Session
+    from weavbot.session.session import Session
 
 
 _CONSOLIDATION_SYSTEM_PROMPT = """\

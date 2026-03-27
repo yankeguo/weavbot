@@ -13,7 +13,7 @@ from weavbot.agent.messages import ChatMessage
 
 if TYPE_CHECKING:
     from weavbot.providers.base import LLMProvider
-    from weavbot.session.manager import Session
+    from weavbot.session.session import Session
 
 
 COMPACTION_SYSTEM_PROMPT = """You are a helpful AI assistant tasked with summarizing conversations.

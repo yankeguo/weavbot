@@ -37,7 +37,8 @@ from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.store import ChannelEndpoint, ChannelStore, is_internal_session_key
 from weavbot.providers.base import LLMProvider
-from weavbot.session.manager import Session, SessionManager
+from weavbot.session.manager import SessionManager
+from weavbot.session.session import Session
 from weavbot.utils.helpers import build_session_key, validate_session_key
 
 if TYPE_CHECKING:

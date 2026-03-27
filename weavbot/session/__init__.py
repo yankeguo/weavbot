@@ -1,5 +1,6 @@
 """Session management module."""
 
-from weavbot.session.manager import Session, SessionManager
+from weavbot.session.manager import SessionManager
+from weavbot.session.session import Session
 
 __all__ = ["SessionManager", "Session"]
