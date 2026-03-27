@@ -132,7 +132,7 @@ class BaseChannel(ABC):
 
         if non_image_paths:
             file_lines = "\n".join(f"- {p}" for p in non_image_paths)
-            file_note = f"Attached files (local path only, not multimodal):\n{file_lines}"
+            file_note = f"Attached files:\n{file_lines}"
             content = f"{content}\n{file_note}" if content else file_note
 
         msg = InboundMessage(
