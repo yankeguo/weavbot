@@ -82,13 +82,15 @@ Your workspace is at: {workspace_path}
 Reply directly with text for conversations. Only use the 'message' tool to send to a specific chat channel."""
 
     @staticmethod
-    def _build_runtime_context(channel: str | None, chat_id: str | None) -> str:
+    def _build_runtime_context(session_key: str | None, original_session_key: str | None) -> str:
         """Build runtime metadata block wrapped in XML for injection before the user message."""
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         tz = time.strftime("%Z") or "UTC"
         lines = [f"Current Time: {now} ({tz})"]
-        if channel and chat_id:
-            lines += [f"Channel: {channel}", f"Chat ID: {chat_id}"]
+        if session_key:
+            lines.append(f"Session Key: {session_key}")
+        if original_session_key:
+            lines.append(f"Original Session Key: {original_session_key}")
         body = "\n".join(lines)
         return f'<context role="metadata">\n{body}\n</context>'
 
@@ -109,11 +111,11 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
         history: list[ChatMessage],
         current_message: str,
         media: list[str] | None = None,
-        channel: str | None = None,
-        chat_id: str | None = None,
+        session_key: str | None = None,
+        original_session_key: str | None = None,
     ) -> list[ChatMessage]:
         """Build the complete message list for an LLM call."""
-        runtime_ctx = self._build_runtime_context(channel, chat_id)
+        runtime_ctx = self._build_runtime_context(session_key, original_session_key)
         merged_content = f"{runtime_ctx}\n{current_message}"
 
         return [

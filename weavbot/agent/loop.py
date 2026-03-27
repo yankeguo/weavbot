@@ -45,11 +45,9 @@ if TYPE_CHECKING:
     from weavbot.cron.service import CronService
 
 
-class InteractiveTarget(TypedDict):
-    """Minimal interactive route snapshot persisted on sessions."""
+class InteractiveSessionPointer(TypedDict):
+    """Minimal interactive session pointer persisted on sessions."""
 
-    channel: str
-    chat_id: str
     session_key: str
     metadata: dict[str, Any]
 
@@ -298,43 +296,33 @@ class AgentLoop:
         return out
 
     @classmethod
-    def _build_interactive_target(
+    def _build_interactive_pointer(
         cls,
         *,
-        channel: str,
-        chat_id: str,
         session_key: str,
         metadata: dict[str, Any] | None,
-    ) -> InteractiveTarget:
-        """Build a normalized interactive routing target snapshot."""
-        ch = str(channel or "").strip()
-        cid = str(chat_id or "").strip()
+    ) -> InteractiveSessionPointer:
+        """Build a normalized interactive session pointer snapshot."""
         skey = str(session_key or "").strip()
-        if not ch or not cid or not skey:
-            raise ValueError("interactive target requires non-empty channel/chat_id")
+        if not skey:
+            raise ValueError("interactive target requires non-empty session_key")
         return {
-            "channel": ch,
-            "chat_id": cid,
             "session_key": skey,
             "metadata": cls._extract_interactive_route_metadata(metadata),
         }
 
     @staticmethod
-    def _resolve_saved_interactive_target(
+    def _resolve_saved_interactive_pointer(
         session: Session,
-    ) -> InteractiveTarget | None:
-        """Read persisted interactive target from session metadata."""
+    ) -> InteractiveSessionPointer | None:
+        """Read persisted interactive session pointer from session metadata."""
         raw = session.metadata.get("interactive_target")
         payload = raw if isinstance(raw, dict) else {}
-        channel = str(payload.get("channel") or "").strip()
-        chat_id = str(payload.get("chat_id") or "").strip()
         session_key = str(payload.get("session_key") or "").strip()
         metadata = payload.get("metadata")
-        if not channel or not chat_id or not session_key:
+        if not session_key:
             return None
         return {
-            "channel": channel,
-            "chat_id": chat_id,
             "session_key": session_key,
             "metadata": dict(metadata) if isinstance(metadata, dict) else {},
         }
@@ -488,8 +476,8 @@ class AgentLoop:
         session: Session,
         current_message: str,
         *,
-        channel: str,
-        chat_id: str,
+        session_key: str,
+        original_session_key: str | None,
         media: list[str] | None = None,
     ) -> tuple[list[ChatMessage], list[ChatMessage]]:
         """Build initial messages and compact context when output budget cannot fit."""
@@ -504,8 +492,8 @@ class AgentLoop:
             history=history,
             current_message=current_message,
             media=media,
-            channel=channel,
-            chat_id=chat_id,
+            session_key=session_key,
+            original_session_key=original_session_key,
         )
 
         if self.compactor.can_fit(
@@ -568,8 +556,8 @@ class AgentLoop:
             history=history,
             current_message=current_message,
             media=media,
-            channel=channel,
-            chat_id=chat_id,
+            session_key=session_key,
+            original_session_key=original_session_key,
         )
         if not self.compactor.can_fit(
             initial_messages, self.max_context, self.max_tokens, **fit_params
@@ -871,18 +859,7 @@ class AgentLoop:
                 or str(msg.metadata.get("_original_session_key") or "").strip()
                 or key
             )
-            resolved_route_target = self._resolve_channel_target(
-                target_session_key
-            ) or self._resolve_channel_target(key)
-            if not resolved_route_target:
-                target_session = self.sessions.get_or_create(target_session_key)
-                saved_interactive = self._resolve_saved_interactive_target(target_session)
-                if saved_interactive:
-                    resolved_route_target = ChannelTarget(
-                        channel=str(saved_interactive["channel"]),
-                        chat_id=str(saved_interactive["chat_id"]),
-                        metadata=dict(saved_interactive["metadata"]),
-                    )
+            resolved_route_target = self._resolve_channel_target(target_session_key)
             if not resolved_route_target:
                 logger.warning(
                     "System message missing routable target: session_key={}, target_session_key={}, sender={}",
@@ -894,8 +871,6 @@ class AgentLoop:
                     session_key=key,
                     content="System message dropped: unresolved target session.",
                 )
-            channel = str(resolved_route_target.channel)
-            chat_id = str(resolved_route_target.chat_id)
             logger.info("Processing system message from {}", msg.sender_id)
             route_target = resolved_route_target
             if route_target and route_target.channel and route_target.chat_id:
@@ -914,8 +889,8 @@ class AgentLoop:
             history, messages = await self._build_initial_messages_with_compaction(
                 session,
                 msg.content,
-                channel=channel,
-                chat_id=chat_id,
+                session_key=key,
+                original_session_key=target_session_key if target_session_key != key else None,
             )
             final_content, _, all_msgs, turn_usage, _ = await self._run_agent_loop(
                 session, messages, tool_context
@@ -933,11 +908,9 @@ class AgentLoop:
 
         key = session_key or msg.session_key
         session = self.sessions.get_or_create(key)
-        saved_interactive = self._resolve_saved_interactive_target(session)
+        saved_interactive = self._resolve_saved_interactive_pointer(session)
         if msg.channel not in {"cli", "system"}:
-            current_interactive = self._build_interactive_target(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
+            current_interactive = self._build_interactive_pointer(
                 session_key=key,
                 metadata=msg.metadata,
             )
@@ -946,23 +919,33 @@ class AgentLoop:
         resolved_interactive_session_key = interactive_session_key or (
             str(saved_interactive["session_key"]) if saved_interactive else None
         )
-        route_target = self._resolve_channel_target(
-            resolved_interactive_session_key
-        ) or ChannelTarget(
-            channel=msg.channel,
-            chat_id=msg.chat_id,
-            metadata=self._extract_interactive_route_metadata(msg.metadata),
-        )
-        if route_target:
-            self._upsert_internal_session_target(
-                session_key=key,
-                channel=str(route_target.channel),
-                chat_id=str(route_target.chat_id),
-                metadata=route_target.metadata,
+        target_session_key = resolved_interactive_session_key or key
+        route_target = self._resolve_channel_target(target_session_key)
+        if not route_target and target_session_key == InboundMessage.default_session_key(
+            "cli", "direct"
+        ):
+            route_target = ChannelTarget(channel="cli", chat_id="direct", metadata={})
+        if not route_target:
+            logger.warning(
+                "Message missing routable target: session_key={}, target_session_key={}, channel={}, sender={}",
+                key,
+                target_session_key,
+                msg.channel,
+                msg.sender_id,
             )
+            return OutboundMessage(
+                session_key=msg.session_key,
+                content="Message dropped: unresolved target session.",
+            )
+        self._upsert_internal_session_target(
+            session_key=key,
+            channel=str(route_target.channel),
+            chat_id=str(route_target.chat_id),
+            metadata=route_target.metadata,
+        )
         tool_context = self._build_tool_context(
             session_key=key,
-            original_session_key=resolved_interactive_session_key,
+            original_session_key=target_session_key if target_session_key != key else None,
             message_id=msg.metadata.get("message_id"),
         )
 
@@ -996,8 +979,8 @@ class AgentLoop:
             session,
             msg.content,
             media=msg.media if msg.media else None,
-            channel=msg.channel,
-            chat_id=msg.chat_id,
+            session_key=key,
+            original_session_key=target_session_key if target_session_key != key else None,
         )
 
         async def _bus_progress(content: str, *, tool_hint: bool = False) -> None:
@@ -1066,8 +1049,6 @@ class AgentLoop:
         self,
         content: str,
         session_key: str = "cli_direct",
-        channel: str = "cli",
-        chat_id: str = "direct",
         metadata: dict[str, Any] | None = None,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
         interactive_session_key: str | None = None,
@@ -1075,22 +1056,29 @@ class AgentLoop:
         """Process a message directly (for CLI or cron usage)."""
         await self._connect_mcp()
         normalized_session_key = validate_session_key(session_key)
-        route_target = self._resolve_channel_target(interactive_session_key) or ChannelTarget(
-            channel=channel,
-            chat_id=chat_id,
-            metadata=self._extract_interactive_route_metadata(metadata),
-        )
-        if route_target:
-            self._upsert_internal_session_target(
-                session_key=normalized_session_key,
-                channel=str(route_target.channel),
-                chat_id=str(route_target.chat_id),
-                metadata=route_target.metadata,
+        target_session_key = interactive_session_key or normalized_session_key
+        route_target = self._resolve_channel_target(target_session_key)
+        if not route_target and target_session_key == InboundMessage.default_session_key(
+            "cli", "direct"
+        ):
+            route_target = ChannelTarget(channel="cli", chat_id="direct", metadata={})
+        if not route_target:
+            logger.warning(
+                "Direct message missing routable target: session_key={}, target_session_key={}",
+                normalized_session_key,
+                target_session_key,
             )
+            return "Direct message dropped: unresolved target session."
+        self._upsert_internal_session_target(
+            session_key=normalized_session_key,
+            channel=str(route_target.channel),
+            chat_id=str(route_target.chat_id),
+            metadata=route_target.metadata,
+        )
         msg = InboundMessage(
-            channel=channel,
+            channel=str(route_target.channel),
             sender_id="user",
-            chat_id=chat_id,
+            chat_id=str(route_target.chat_id),
             session_key=normalized_session_key,
             content=content,
             metadata=dict(metadata or {}),

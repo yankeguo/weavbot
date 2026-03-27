@@ -184,8 +184,7 @@ def _assemble_heartbeat_response(progress_items: list[str], final_content: str) 
 def _build_background_notify_contract(
     *,
     source: str,
-    channel: str,
-    chat_id: str,
+    target_session_key: str,
     target_metadata: dict[str, object] | None = None,
 ) -> str:
     """Build explicit notification contract for background-triggered turns."""
@@ -203,20 +202,20 @@ def _build_background_notify_contract(
         "- For routine/no-op outcomes, finish silently without calling `message`.\n"
         "- If an important result requires user action, call `message` once with concise content.\n"
         "- For `message` target routing, prefer current context defaults; if needed, use:\n"
-        f"  - session_key: {InboundMessage.default_session_key(channel, chat_id)}\n"
+        f"  - session_key: {target_session_key}\n"
         f"  - target metadata hint: {metadata_text}\n"
     )
 
 
 def _build_heartbeat_execute_input(
-    tasks: str, *, channel: str, chat_id: str, target_metadata: dict[str, object]
+    tasks: str, *, target_session_key: str, target_metadata: dict[str, object]
 ) -> str:
     """Compose heartbeat execution input with explicit notify contract."""
     task_text = (tasks or "").strip() or "(empty heartbeat tasks)"
     return (
         "[Heartbeat Task]\n"
         f"{task_text}\n\n"
-        f"{_build_background_notify_contract(source='Heartbeat', channel=channel, chat_id=chat_id, target_metadata=target_metadata)}"
+        f"{_build_background_notify_contract(source='Heartbeat', target_session_key=target_session_key, target_metadata=target_metadata)}"
     )
 
 
@@ -224,15 +223,15 @@ def _build_cron_execute_input(
     *,
     job_name: str,
     instruction: str,
-    channel: str,
-    chat_id: str,
+    target_session_key: str,
+    target_metadata: dict[str, object] | None = None,
 ) -> str:
     """Compose cron execution input with explicit notify contract."""
     return (
         "[Scheduled Task] Timer finished.\n\n"
         f"Task '{job_name}' has been triggered.\n"
         f"Scheduled instruction: {instruction}\n\n"
-        f"{_build_background_notify_contract(source='Cron', channel=channel, chat_id=chat_id)}"
+        f"{_build_background_notify_contract(source='Cron', target_session_key=target_session_key, target_metadata=target_metadata)}"
     )
 
 
@@ -257,9 +256,9 @@ async def _suppress_background_progress(_content: str, *, tool_hint: bool = Fals
 
 
 def _extract_interactive_target(
-    item: dict[str, object], enabled_channels: set[str]
+    item: dict[str, object], enabled_channels: set[str], channel_store: "ChannelStore"
 ) -> RouteTarget | None:
-    """Extract interactive delivery target from session item metadata or key fallback."""
+    """Extract interactive delivery target from session pointer then resolve via ChannelStore."""
     key = str(item.get("key") or "")
     if key.startswith(("heartbeat:", "heartbeat_", "cron:", "cron_", "system:", "system_")):
         return None
@@ -274,32 +273,32 @@ def _extract_interactive_target(
         else None
     )
     payload = raw_target if isinstance(raw_target, dict) else {}
-    channel = str(payload.get("channel") or "").strip()
-    chat_id = str(payload.get("chat_id") or "").strip()
-    session_key = str(payload.get("session_key") or "").strip()
-    target = (
-        RouteTarget(
-            channel=channel,
-            chat_id=chat_id,
-            session_key=session_key,
-            metadata=dict(payload.get("metadata") or {})
-            if isinstance(payload.get("metadata"), dict)
-            else {},
+    target_session_key = str(payload.get("session_key") or "").strip()
+    if not target_session_key:
+        return None
+    resolved = channel_store.resolve(target_session_key)
+    if (
+        resolved
+        and resolved.channel not in {"cli", "system"}
+        and resolved.channel in enabled_channels
+    ):
+        return RouteTarget(
+            channel=str(resolved.channel),
+            chat_id=str(resolved.chat_id),
+            session_key=target_session_key,
+            metadata=dict(resolved.metadata or {}),
         )
-        if channel and chat_id and session_key
-        else None
-    )
-    if target and target.channel not in {"cli", "system"} and target.channel in enabled_channels:
-        return target
     return None
 
 
 def _pick_heartbeat_target_from_sessions(
-    sessions: list[dict[str, object]], enabled_channels: set[str]
+    sessions: list[dict[str, object]],
+    enabled_channels: set[str],
+    channel_store: "ChannelStore",
 ) -> RouteTarget:
     """Pick routable heartbeat target from recent user-facing sessions."""
     for item in sessions:
-        target = _extract_interactive_target(item, enabled_channels)
+        target = _extract_interactive_target(item, enabled_channels, channel_store)
         if target:
             return target
     return RouteTarget(
@@ -604,19 +603,33 @@ def gateway(
             original_session_key=job.payload.original_session_key,
             primary=primary,
         )
+        cron_target_session_key = (
+            interactive_target.session_key
+            if interactive_target
+            else (job.payload.original_session_key or "")
+        )
+        if not cron_target_session_key:
+            logger.warning(
+                "Cron job missing target session key: id={}, name={}",
+                job.id,
+                job.name,
+            )
+            return f"[Cron Error] Task '{job.name}' failed: missing target session key."
         reminder_note = _build_cron_execute_input(
             job_name=job.name,
             instruction=job.payload.message,
-            channel=channel,
-            chat_id=chat_id,
+            target_session_key=cron_target_session_key,
+            target_metadata=(
+                dict(interactive_target.metadata or {})
+                if interactive_target
+                else dict(getattr(primary, "metadata", {}) or {})
+            ),
         )
 
         try:
             response = await agent.process_direct(
                 reminder_note,
                 session_key=build_session_key("cron", job.id),
-                channel=channel,
-                chat_id=chat_id,
                 metadata={"_cron_in_job": True},
                 on_progress=_suppress_background_progress,
                 interactive_session_key=(
@@ -645,11 +658,10 @@ def gateway(
             return err_content
 
         logger.info(
-            "Cron job completed without outbound notify: id={}, name={}, channel={}, chat_id={}",
+            "Cron job completed without outbound notify: id={}, name={}, target_session_key={}",
             job.id,
             job.name,
-            channel,
-            chat_id,
+            cron_target_session_key,
         )
         return ""
 
@@ -664,11 +676,12 @@ def gateway(
         return _pick_heartbeat_target_from_sessions(
             session_manager.list_sessions(),
             set(channels.enabled_channels),
+            channel_store,
         )
 
-    def _heartbeat_session_key(channel: str, chat_id: str) -> str:
+    def _heartbeat_session_key(target_session_key: str) -> str:
         """Rotate heartbeat context daily to avoid unbounded background-session growth."""
-        return build_session_key("heartbeat", channel, chat_id, date.today().isoformat())
+        return build_session_key("heartbeat", target_session_key, date.today().isoformat())
 
     # Create heartbeat service
     async def on_heartbeat_execute(tasks: str) -> str:
@@ -676,19 +689,16 @@ def gateway(
         nonlocal last_heartbeat_target
         target = _pick_heartbeat_target()
         last_heartbeat_target = target
-        session_key = _heartbeat_session_key(target.channel, target.chat_id)
+        session_key = _heartbeat_session_key(target.session_key)
         execute_input = _build_heartbeat_execute_input(
             tasks,
-            channel=target.channel,
-            chat_id=target.chat_id,
+            target_session_key=target.session_key,
             target_metadata=target.metadata,
         )
         try:
             final_content = await agent.process_direct(
                 execute_input,
                 session_key=session_key,
-                channel=target.channel,
-                chat_id=target.chat_id,
                 metadata=target.metadata,
                 on_progress=_suppress_background_progress,
                 interactive_session_key=target.session_key,
@@ -872,8 +882,6 @@ def agent(
                 response = await agent_loop.process_direct(
                     message,
                     normalized_session_id,
-                    channel=cli_channel,
-                    chat_id=cli_chat_id,
                     on_progress=_cli_progress,
                 )
             _print_agent_response(response, render_markdown=markdown)

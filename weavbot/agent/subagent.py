@@ -202,14 +202,26 @@ class SubagentManager:
 
             logger.info("Subagent [{}] completed successfully", task_id)
             await self._announce_result(
-                task_id, label, task, final_result, original_session_key, "ok"
+                task_id,
+                label,
+                task,
+                final_result,
+                subagent_session_key,
+                original_session_key,
+                "ok",
             )
 
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             logger.error("Subagent [{}] failed: {}", task_id, e)
             await self._announce_result(
-                task_id, label, task, error_msg, original_session_key, "error"
+                task_id,
+                label,
+                task,
+                error_msg,
+                subagent_session_key,
+                original_session_key,
+                "error",
             )
 
     async def _announce_result(
@@ -218,6 +230,7 @@ class SubagentManager:
         label: str,
         task: str,
         result: str,
+        session_key: str,
         original_session_key: str,
         status: str,
     ) -> None:
@@ -237,12 +250,18 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
             channel="system",
             sender_id="subagent",
             chat_id="subagent",
-            session_key=original_session_key,
+            session_key=session_key,
             content=announce_content,
+            metadata={"_original_session_key": original_session_key},
         )
 
         await self.bus.publish_inbound(msg)
-        logger.debug("Subagent [{}] announced result to {}", task_id, original_session_key)
+        logger.debug(
+            "Subagent [{}] announced result from {} to {}",
+            task_id,
+            session_key,
+            original_session_key,
+        )
 
     def _build_subagent_prompt(self) -> str:
         """Build a focused system prompt for the subagent."""

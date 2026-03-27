@@ -69,9 +69,7 @@ async def test_process_direct_upserts_cli_internal_session_to_channel_store(tmp_
     )
     session_key = build_session_key("cli", "direct")
 
-    out = await loop.process_direct(
-        "hello", session_key=session_key, channel="cli", chat_id="direct"
-    )
+    out = await loop.process_direct("hello", session_key=session_key)
 
     assert out == "ok"
     target = loop.channel_store.resolve(session_key) if loop.channel_store else None
@@ -107,8 +105,6 @@ async def test_process_direct_prefers_interactive_route_for_cron_internal_sessio
     out = await loop.process_direct(
         "cron task",
         session_key=session_key,
-        channel="cli",
-        chat_id="direct",
         interactive_session_key=interactive_session_key,
     )
 
@@ -176,12 +172,19 @@ async def test_process_direct_message_tool_to_interactive_target_skips_extra_fin
     )
     internal_key = build_session_key("cron", "job-42")
     interactive_key = build_session_key("slack", "C111", "T333")
+    assert loop.channel_store is not None
+    loop.channel_store.upsert(
+        interactive_key,
+        ChannelTarget(
+            channel="slack",
+            chat_id="C111",
+            metadata={"slack": {"thread_ts": "T333", "channel_type": "channel"}},
+        ),
+    )
 
     out = await loop.process_direct(
         "run cron",
         session_key=internal_key,
-        channel="cli",
-        chat_id="direct",
         interactive_session_key=interactive_key,
     )
 

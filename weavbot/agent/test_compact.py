@@ -96,8 +96,8 @@ async def test_build_initial_messages_triggers_compaction(tmp_path) -> None:
     history, initial = await loop._build_initial_messages_with_compaction(
         session,
         "continue task",
-        channel="cli",
-        chat_id="direct",
+        session_key="cli_direct",
+        original_session_key=None,
     )
 
     assert len(session.messages) == before_count + 1
@@ -133,8 +133,8 @@ async def test_build_initial_messages_compaction_failure_keeps_history(tmp_path)
     history, _ = await loop._build_initial_messages_with_compaction(
         session,
         "continue task",
-        channel="cli",
-        chat_id="direct",
+        session_key="cli_direct",
+        original_session_key=None,
     )
 
     assert session.messages == before
@@ -161,7 +161,7 @@ async def test_new_command_keeps_memory_only_archival(tmp_path) -> None:
     session.append_chat_message(ChatMessage(role="user", content="old message 1"))
     session.append_chat_message(ChatMessage(role="assistant", content="old message 2"))
 
-    content = await loop.process_direct("/new", session_key=key, channel="cli", chat_id="direct")
+    content = await loop.process_direct("/new", session_key=key)
 
     assert content == "New session started."
     assert session.messages == []
