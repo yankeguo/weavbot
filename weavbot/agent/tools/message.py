@@ -65,7 +65,11 @@ class MessageTool(Tool):
         channel = channel or context.channel
         chat_id = chat_id or context.chat_id
         message_id = message_id or context.message_id
-        metadata = dict(context.metadata or {})
+        if channel == context.channel and chat_id == context.chat_id:
+            metadata = dict(context.metadata or {})
+        else:
+            # Do not inherit channel-specific routing (e.g. thread_ts) when targeting another chat.
+            metadata = {}
         metadata["message_id"] = message_id
 
         if not channel or not chat_id:

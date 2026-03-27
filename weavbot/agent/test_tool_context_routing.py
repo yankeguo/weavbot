@@ -130,3 +130,33 @@ async def test_message_tool_context_isolation_across_concurrent_tasks() -> None:
     assert b_msg.metadata.get("message_id") == "m-b"
     assert b_msg.metadata.get("slack") == {"thread_ts": "thread-123"}
     assert b_msg.metadata.get("channel_type") == "group"
+
+
+@pytest.mark.asyncio
+async def test_message_tool_does_not_leak_metadata_when_target_differs_from_context() -> None:
+    sent: list[OutboundMessage] = []
+
+    async def _send(msg: OutboundMessage) -> None:
+        sent.append(msg)
+
+    tool = MessageTool(send_callback=_send)
+    ctx = ToolExecutionContext(
+        channel="slack",
+        chat_id="C111",
+        session_key="slack:C111:T222",
+        message_id="m-orig",
+        metadata={"slack": {"thread_ts": "T222"}, "channel_type": "group"},
+    )
+    await tool.execute(
+        context=ctx,
+        content="ping elsewhere",
+        channel="telegram",
+        chat_id="user-9",
+    )
+    assert len(sent) == 1
+    msg = sent[0]
+    assert msg.channel == "telegram"
+    assert msg.chat_id == "user-9"
+    assert msg.metadata.get("slack") is None
+    assert msg.metadata.get("channel_type") is None
+    assert msg.metadata.get("message_id") == "m-orig"
