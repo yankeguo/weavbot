@@ -111,8 +111,11 @@ class WechatChannel(BaseChannel):
 
     async def send(self, msg: OutboundMessage) -> None:
         state_data = await self.state.get("wechat", msg.chat_id)
+        wechat_meta = state_data.get("wechat", {}) if isinstance(state_data.get("wechat"), dict) else {}
         requested_account_key = (
-            str(state_data.get("account_key", "")).strip() or "default"
+            str(state_data.get("account_key", "")).strip()
+            or str(wechat_meta.get("account_key", "")).strip()
+            or "default"
         )
         account_key = self._resolve_outbound_account_key(requested_account_key, msg.chat_id)
         account = self._accounts.get(account_key)
@@ -133,6 +136,7 @@ class WechatChannel(BaseChannel):
         # Reply token is scoped by account+peer and can be supplied explicitly by callers.
         context_token = (
             str(state_data.get("context_token", "")).strip()
+            or str(wechat_meta.get("context_token", "")).strip()
             or self._context_tokens.get(f"{account_key}:{chat_id}", "")
         )
         typing_ticket = await self._typing.send_typing(

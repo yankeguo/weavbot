@@ -647,7 +647,12 @@ def gateway(
             sorted(target_meta.keys()),
         )
         if target_meta:
-            await channels.state_store.update(channel, chat_id, dict(target_meta))
+            state_payload = dict(target_meta)
+            if channel == "wechat":
+                wechat_meta = target_meta.get("wechat")
+                if isinstance(wechat_meta, dict):
+                    state_payload = dict(wechat_meta)
+            await channels.state_store.update(channel, chat_id, state_payload)
         await bus.publish_outbound(
             OutboundMessage(channel=channel, chat_id=chat_id, content=response)
         )
