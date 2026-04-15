@@ -630,6 +630,7 @@ def gateway(
     async def on_heartbeat_notify(response: str) -> None:
         """Deliver a heartbeat response to the user's channel."""
         from weavbot.bus.events import OutboundMessage
+        from weavbot.channels.state import ChannelStateStore
 
         channel, chat_id, target_meta = _pick_heartbeat_target()
         if channel == "cli":
@@ -641,10 +642,11 @@ def gateway(
             len(response or ""),
             sorted(target_meta.keys()),
         )
+        if target_meta:
+            store = ChannelStateStore()
+            await store.update(channel, chat_id, dict(target_meta))
         await bus.publish_outbound(
-            OutboundMessage(
-                channel=channel, chat_id=chat_id, content=response, metadata=target_meta
-            )
+            OutboundMessage(channel=channel, chat_id=chat_id, content=response)
         )
 
     hb_cfg = config.gateway.heartbeat
