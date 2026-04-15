@@ -47,18 +47,37 @@ class ChannelStateStore:
             self._save_task.cancel()
         self._save_task = asyncio.create_task(self._save_after_delay())
 
+    async def close(self) -> None:
+        """Cancel any pending debounced save and flush to disk immediately."""
+        if self._save_task is not None and not self._save_task.done():
+            self._save_task.cancel()
+            try:
+                await self._save_task
+            except asyncio.CancelledError:
+                pass
+        async with self._lock:
+            snapshot = self._snapshot_unlocked()
+        await self._save_unlocked(snapshot)
+
     async def _save_after_delay(self) -> None:
         try:
             await asyncio.sleep(_SAVE_DEBOUNCE_S)
         except asyncio.CancelledError:
             return
         async with self._lock:
-            await self._save_unlocked()
+            snapshot = self._snapshot_unlocked()
+        await self._save_unlocked(snapshot)
 
-    async def _save_unlocked(self) -> None:
+    def _snapshot_unlocked(self) -> dict[str, dict[str, dict[str, Any]]]:
+        return {
+            channel: {chat_id: dict(chat_data) for chat_id, chat_data in channel_data.items()}
+            for channel, channel_data in self._cache.items()
+        }
+
+    async def _save_unlocked(self, snapshot: dict[str, dict[str, dict[str, Any]]]) -> None:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            content = json.dumps(self._cache, ensure_ascii=False, indent=2)
+            content = json.dumps(snapshot, ensure_ascii=False, indent=2)
             fd, tmp = tempfile.mkstemp(dir=str(self._path.parent), suffix=".json")
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:

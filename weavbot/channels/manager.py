@@ -204,6 +204,12 @@ class ChannelManager:
             except Exception as e:
                 logger.error("Error stopping {}: {}", name, e)
 
+        # Flush pending state to disk
+        try:
+            await self.state_store.close()
+        except Exception as e:
+            logger.warning("Error flushing channel state: {}", e)
+
     async def _dispatch_outbound(self) -> None:
         """Dispatch outbound messages to the appropriate channel."""
         logger.info("Outbound dispatcher started")

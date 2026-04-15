@@ -70,7 +70,6 @@ class MessageTool(Tool):
         content: str,
         channel: str | None = None,
         chat_id: str | None = None,
-        message_id: str | None = None,
         media: list[str] | None = None,
         **kwargs: Any,
     ) -> str:

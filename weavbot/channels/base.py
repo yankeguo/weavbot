@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-if TYPE_CHECKING:
-    from weavbot.channels.state import ChannelStateStore
-
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
+
+if TYPE_CHECKING:
+    from weavbot.channels.state import ChannelStateStore
 
 
 class BaseChannel(ABC):
@@ -49,7 +49,12 @@ class BaseChannel(ABC):
         self.media_dir = workspace / "media"
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self._running = False
-        self.state = state or ChannelStateStore(path=data_path / "channels.json")
+        if state is not None:
+            self.state = state
+        else:
+            from weavbot.channels.state import ChannelStateStore
+
+            self.state = ChannelStateStore(path=data_path / "channels.json")
 
     def resolve_media_path(self, path: str) -> Path:
         """Resolve a media file path against workspace. Absolute paths are kept as-is."""
