@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -11,7 +12,6 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.state import ChannelStateStore
 from weavbot.config.schema import Config
-from weavbot.utils.helpers import ensure_data_path
 
 
 class ChannelManager:
@@ -24,13 +24,19 @@ class ChannelManager:
     - Route outbound messages
     """
 
-    def __init__(self, config: Config, bus: MessageBus):
+    def __init__(
+        self,
+        config: Config,
+        bus: MessageBus,
+        data_path: Path,
+        workspace_path: Path,
+    ):
         self.config = config
         self.bus = bus
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
-        self.data_path = ensure_data_path()
-        self.workspace_path = config.workspace_path
+        self.data_path = data_path
+        self.workspace_path = workspace_path
         self.state_store = ChannelStateStore(path=self.data_path / "channels.json")
 
         self._init_channels()

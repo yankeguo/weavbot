@@ -571,8 +571,13 @@ def gateway(
 
     cron.on_job = on_cron_job
 
+    from weavbot.utils.helpers import ensure_data_path, ensure_workspace_path
+
+    data_path = ensure_data_path()
+    workspace_path = ensure_workspace_path(config.agents.defaults.workspace)
+
     # Create channel manager
-    channels = ChannelManager(config, bus)
+    channels = ChannelManager(config, bus, data_path, workspace_path)
 
     def _pick_heartbeat_target() -> tuple[str, str, dict[str, object]]:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
