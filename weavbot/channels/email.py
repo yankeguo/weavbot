@@ -92,7 +92,6 @@ class EmailChannel(BaseChannel):
                         sender_id=sender,
                         chat_id=sender,
                         content=item["content"],
-                        metadata=item.get("metadata", {}),
                     )
             except Exception as e:
                 logger.error("Email polling error: {}", e)

@@ -175,12 +175,6 @@ class WechatChannel(BaseChannel):
                 ticket=typing_ticket,
             )
 
-    @staticmethod
-    def _extract_send_metadata(msg: OutboundMessage) -> tuple[dict[str, Any], dict[str, Any]]:
-        metadata = msg.metadata if isinstance(msg.metadata, dict) else {}
-        wechat_meta = metadata.get("wechat", {}) if isinstance(metadata.get("wechat"), dict) else {}
-        return metadata, wechat_meta
-
     def _resolve_outbound_account_key(self, requested: str, chat_id: str) -> str:
         """Resolve outbound account key with safe fallbacks.
 

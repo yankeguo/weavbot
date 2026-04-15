@@ -465,10 +465,6 @@ class DingTalkChannel(BaseChannel):
                 sender_id=sender_id,
                 chat_id=sender_id,  # For private chat, chat_id == sender_id
                 content=str(content),
-                metadata={
-                    "sender_name": sender_name,
-                    "platform": "dingtalk",
-                },
             )
         except Exception as e:
             logger.error("Error publishing DingTalk message: {}", e)

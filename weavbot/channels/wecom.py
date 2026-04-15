@@ -158,7 +158,7 @@ class WecomChannel(BaseChannel):
             return
 
         state_data = await self.state.get("wecom", msg.chat_id)
-        metadata = dict(state_data)
+        metadata = {**state_data, **(msg.metadata or {})}
         wecom_meta = metadata.get("wecom", {}) if isinstance(metadata.get("wecom"), dict) else {}
         req_id = self._extract_req_id(metadata, wecom_meta)
         chat_type = self._infer_chat_type(msg.chat_id, metadata, wecom_meta)
