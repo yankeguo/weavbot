@@ -24,7 +24,13 @@ class BaseChannel(ABC):
 
     name: str = "base"
 
-    def __init__(self, config: Any, bus: MessageBus, workspace: Path):
+    def __init__(
+        self,
+        config: Any,
+        bus: MessageBus,
+        workspace: Path,
+        state: "ChannelStateStore | None" = None,
+    ):
         """
         Initialize the channel.
 
@@ -32,6 +38,7 @@ class BaseChannel(ABC):
             config: Channel-specific configuration.
             bus: The message bus for communication.
             workspace: The workspace root directory.
+            state: Optional shared channel state store.
         """
         self.config = config
         self.bus = bus
@@ -39,19 +46,9 @@ class BaseChannel(ABC):
         self.media_dir = workspace / "media"
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self._running = False
+        from weavbot.channels.state import ChannelStateStore
 
-    @property
-    def state(self) -> "ChannelStateStore":
-        """Persistent state store for this channel."""
-        if not hasattr(self, "_state"):
-            from weavbot.channels.state import ChannelStateStore
-
-            self._state = ChannelStateStore()
-        return self._state
-
-    @state.setter
-    def state(self, value: "ChannelStateStore") -> None:
-        self._state = value
+        self.state = state or ChannelStateStore()
 
     def resolve_media_path(self, path: str) -> Path:
         """Resolve a media file path against workspace. Absolute paths are kept as-is."""

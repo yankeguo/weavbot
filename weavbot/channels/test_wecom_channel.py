@@ -5,13 +5,15 @@ import pytest
 
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
+from weavbot.channels.state import ChannelStateStore
 from weavbot.channels.wecom import EVENT_ENTER_CHAT, WecomChannel
 from weavbot.config.schema import WecomConfig
 
 
 def _make_channel(tmp_path):
     cfg = WecomConfig(bot_id="bot-id", secret="bot-secret")
-    return WecomChannel(cfg, MessageBus(), tmp_path)
+    store = ChannelStateStore(path=tmp_path / "channels.json")
+    return WecomChannel(cfg, MessageBus(), tmp_path, state=store)
 
 
 def test_parse_mixed_message(tmp_path):

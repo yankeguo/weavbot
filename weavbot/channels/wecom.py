@@ -62,8 +62,8 @@ class WecomChannel(BaseChannel):
     _VOICE_EXTS = {".amr"}
     _VIDEO_EXTS = {".mp4"}
 
-    def __init__(self, config: WecomConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(self, config: WecomConfig, bus: MessageBus, workspace: Path, state=None):
+        super().__init__(config, bus, workspace, state=state)
         self.config: WecomConfig = config
 
         self._ws: Any = None

@@ -42,8 +42,8 @@ class WechatChannel(BaseChannel):
 
     name = "wechat"
 
-    def __init__(self, config: WechatConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(self, config: WechatConfig, bus: MessageBus, workspace: Path, state=None):
+        super().__init__(config, bus, workspace, state=state)
         self.config: WechatConfig = config
         self._state_dir = resolve_state_dir(workspace, config.state_dir)
         self._accounts: dict[str, ResolvedWechatAccount] = {}

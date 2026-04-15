@@ -15,25 +15,9 @@ _SAVE_DEBOUNCE_S = 1.0
 
 
 class ChannelStateStore:
-    """Persistent key-value store for channel-specific send state per chat_id.
-
-    This class is designed as a singleton: the default instance is shared across
-    all channels so that concurrent updates do not clobber each other.
-    """
-
-    _instance: "ChannelStateStore | None" = None
-    _instance_lock = asyncio.Lock()
-
-    def __new__(cls, path: Path | None = None) -> "ChannelStateStore":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+    """Persistent key-value store for channel-specific send state per chat_id."""
 
     def __init__(self, path: Path | None = None):
-        if self._initialized:
-            return
-        self._initialized = True
         self._path = path or (ensure_data_path() / "channels.json")
         self._lock = asyncio.Lock()
         self._cache: dict[str, dict[str, dict[str, Any]]] = {}
@@ -82,12 +66,20 @@ class ChannelStateStore:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(content)
                 await asyncio.to_thread(os.replace, tmp, self._path)
+            except asyncio.CancelledError:
+                try:
+                    os.unlink(tmp)
+                except Exception:
+                    pass
+                raise
             except Exception:
                 try:
                     os.unlink(tmp)
                 except Exception:
                     pass
                 raise
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             logger.warning("Failed to save channel state: {}", e)
 

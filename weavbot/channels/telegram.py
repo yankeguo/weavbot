@@ -124,8 +124,9 @@ class TelegramChannel(BaseChannel):
         config: TelegramConfig,
         bus: MessageBus,
         workspace: Path,
+        state=None,
     ):
-        super().__init__(config, bus, workspace)
+        super().__init__(config, bus, workspace, state=state)
         self.config: TelegramConfig = config
         self._app: Application | None = None
         self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
