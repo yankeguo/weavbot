@@ -455,20 +455,6 @@ _CHANNEL_DEFS: list[dict[str, Any]] = [
         "extra": {"enabled": True},
     },
     {
-        "key": "email",
-        "name": "Email",
-        "fields": [
-            {"key": "imapHost", "label_key": "field_imap_host", "secret": False},
-            {"key": "imapUsername", "label_key": "field_imap_username", "secret": False},
-            {"key": "imapPassword", "label_key": "field_imap_password", "secret": True},
-            {"key": "smtpHost", "label_key": "field_smtp_host", "secret": False},
-            {"key": "smtpUsername", "label_key": "field_smtp_username", "secret": False},
-            {"key": "smtpPassword", "label_key": "field_smtp_password", "secret": True},
-            {"key": "fromAddress", "label_key": "field_from_address", "secret": False},
-        ],
-        "extra": {"consentGranted": True},
-    },
-    {
         "key": "mochat",
         "name": "Mochat",
         "fields": [

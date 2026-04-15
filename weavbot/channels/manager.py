@@ -96,18 +96,6 @@ class ChannelManager:
             except ImportError as e:
                 logger.warning("DingTalk channel not available: {}", e)
 
-        # Email channel
-        if self.config.channels.email.enabled:
-            try:
-                from weavbot.channels.email import EmailChannel
-
-                self.channels["email"] = EmailChannel(
-                    self.config.channels.email, self.bus, workspace=workspace
-                )
-                logger.info("Email channel enabled")
-            except ImportError as e:
-                logger.warning("Email channel not available: {}", e)
-
         # Slack channel
         if self.config.channels.slack.enabled:
             try:
