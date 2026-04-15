@@ -9,12 +9,6 @@
 
 A lightweight personal AI assistant framework.
 
-**Security Notice — March 24, 2026**
-
-🛡️ 本项目于分叉自主重构初期即移除 LiteLLM 依赖，不受此次上游供应链攻击影响。
-
-🛡️ LiteLLM was removed at the start of our independent fork, placing this project outside the scope of the upstream supply chain incident.
-
 ## Highlights
 
 - Interactive onboarding: configure provider, model, and channel in one flow
