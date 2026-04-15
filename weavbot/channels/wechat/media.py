@@ -86,15 +86,28 @@ async def upload_media_file(
         "aeskey": key_hex,
     }
     resp = await api.get_upload_url(upload_req)
+    ret = int(resp.get("ret", 0) or 0)
+    errcode = int(resp.get("errcode", 0) or 0)
+    if ret != 0 or errcode != 0:
+        raise RuntimeError(
+            f"getUploadUrl failed: ret={ret} errcode={errcode} errmsg={resp.get('errmsg')}"
+        )
+
+    upload_full_url = str(resp.get("upload_full_url", "")).strip()
     upload_param = str(resp.get("upload_param", "")).strip()
-    if not upload_param:
-        raise RuntimeError("getUploadUrl returned empty upload_param")
+    if not upload_full_url and not upload_param:
+        raise RuntimeError(
+            f"getUploadUrl returned no upload URL (need upload_full_url or upload_param): {resp}"
+        )
 
     cipher = _aes_ecb_encrypt(raw, key)
-    url = (
-        f"{cdn_base_url.rstrip('/')}/upload?encrypted_query_param={quote(upload_param, safe='')}"
-        f"&filekey={quote(filekey, safe='')}"
-    )
+    if upload_full_url:
+        url = upload_full_url
+    else:
+        url = (
+            f"{cdn_base_url.rstrip('/')}/upload?encrypted_query_param={quote(upload_param, safe='')}"
+            f"&filekey={quote(filekey, safe='')}"
+        )
     async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), follow_redirects=True) as client:
         cdn_resp = await client.post(
             url, content=cipher, headers={"Content-Type": "application/octet-stream"}
