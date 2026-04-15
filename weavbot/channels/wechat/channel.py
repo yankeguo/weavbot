@@ -12,7 +12,7 @@ from loguru import logger
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
-from weavbot.channels.wechat.accounts import resolve_accounts, resolve_state_dir
+from weavbot.channels.wechat.accounts import resolve_accounts
 from weavbot.channels.wechat.api import WechatApiClient
 from weavbot.channels.wechat.media import (
     download_media_file,
@@ -42,10 +42,11 @@ class WechatChannel(BaseChannel):
 
     name = "wechat"
 
-    def __init__(self, config: WechatConfig, bus: MessageBus, workspace: Path, state=None):
-        super().__init__(config, bus, workspace, state=state)
+    def __init__(self, config: WechatConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: WechatConfig = config
-        self._state_dir = resolve_state_dir(workspace, config.state_dir)
+        self._state_dir = self.data_path / "wechat"
+        self._state_dir.mkdir(parents=True, exist_ok=True)
         self._accounts: dict[str, ResolvedWechatAccount] = {}
         self._apis: dict[str, WechatApiClient] = {}
         self._poll_tasks: list[asyncio.Task[None]] = []

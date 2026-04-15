@@ -151,7 +151,6 @@ class WecomConfig(Base):
     per_chat_per_minute: int = 30
     per_chat_per_hour: int = 1000
     upload_chunk_size: int = 512 * 1024  # Max 512KB before base64
-    temp_media_dir: str = "media/wecom"
 
 
 class WechatAccountConfig(Base):
@@ -182,8 +181,6 @@ class WechatConfig(Base):
     max_consecutive_failures: int = 3
     session_pause_minutes: int = 60
     typing_keepalive_sec: int = 5
-    temp_media_dir: str = "media/wechat"
-    state_dir: str = "~/.weavbot/wechat"
     enabled_accounts: list[str] = Field(default_factory=list)
     accounts: dict[str, WechatAccountConfig] = Field(default_factory=dict)
 

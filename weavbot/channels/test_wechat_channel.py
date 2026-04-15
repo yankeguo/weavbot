@@ -45,7 +45,7 @@ def test_handle_inbound_sets_account_scoped_session_key(tmp_path: Path):
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="t", account_id="acc@im.bot")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     account = ResolvedWechatAccount(
         key="acc-key",
         account_id="acc@im.bot",
@@ -91,7 +91,7 @@ def test_send_text_routes_to_selected_account(tmp_path: Path):
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="t", account_id="acc@im.bot")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     ch._accounts = {
         "acc-key": ResolvedWechatAccount(
             key="acc-key",
@@ -134,7 +134,7 @@ def test_send_falls_back_to_single_account_when_default_missing(tmp_path: Path):
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="", account_id="")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     ch._accounts = {
         "acc-x": ResolvedWechatAccount(
             key="acc-x",
@@ -172,7 +172,7 @@ def test_send_skips_when_account_paused(tmp_path: Path):
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="", account_id="")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     ch._accounts = {
         "acc-x": ResolvedWechatAccount(
             key="acc-x",
@@ -198,7 +198,7 @@ def test_handle_inbound_rejects_sender_not_in_allow_list(tmp_path: Path):
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="t", account_id="acc@im.bot")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     account = ResolvedWechatAccount(
         key="acc-key",
         account_id="acc@im.bot",
@@ -230,7 +230,7 @@ def test_handle_inbound_skips_when_sender_id_missing(tmp_path: Path):
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="t", account_id="acc@im.bot")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     account = ResolvedWechatAccount(
         key="acc-key",
         account_id="acc@im.bot",
@@ -256,7 +256,7 @@ def test_extract_inbound_media_download_failure_placeholder(tmp_path: Path, monk
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="t", account_id="acc@im.bot")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     account = ResolvedWechatAccount(
         key="acc-key",
         account_id="acc@im.bot",
@@ -294,7 +294,7 @@ def test_extract_inbound_voice_marker(tmp_path: Path):
     bus = MessageBus()
     cfg = WechatConfig(enabled=True, token="t", account_id="acc@im.bot")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    ch = WechatChannel(cfg, bus, tmp_path, state=store)
+    ch = WechatChannel(cfg, bus, tmp_path, data_path=tmp_path, state=store)
     account = ResolvedWechatAccount(
         key="acc-key",
         account_id="acc@im.bot",

@@ -897,7 +897,6 @@ def wechat_login(
 ):
     """Scan QR code and save Wechat account credentials."""
     from weavbot.channels.wechat.accounts import (
-        resolve_state_dir,
         save_account_credentials,
         upsert_account_config,
     )
@@ -905,6 +904,7 @@ def wechat_login(
     from weavbot.channels.wechat.auth import account_key_from_account_id, wechat_qr_login
     from weavbot.config.loader import load_config, save_config
     from weavbot.config.schema import WechatAccountConfig
+    from weavbot.utils.helpers import ensure_data_path
 
     config = load_config()
     wc = config.channels.wechat
@@ -925,7 +925,8 @@ def wechat_login(
 
     result = asyncio.run(run_login())
     key = (account_key or account_key_from_account_id(result.account_id)).strip()
-    state_dir = resolve_state_dir(config.workspace_path, wc.state_dir)
+    state_dir = ensure_data_path() / "wechat"
+    state_dir.mkdir(parents=True, exist_ok=True)
     save_account_credentials(
         state_dir,
         key,
@@ -962,12 +963,10 @@ def wechat_login(
 @wechat_app.command("list-accounts")
 def wechat_list_accounts():
     """List saved Wechat account records."""
-    from weavbot.channels.wechat.accounts import list_account_credentials, resolve_state_dir
-    from weavbot.config.loader import load_config
+    from weavbot.channels.wechat.accounts import list_account_credentials
+    from weavbot.utils.helpers import ensure_data_path
 
-    config = load_config()
-    wc = config.channels.wechat
-    state_dir = resolve_state_dir(config.workspace_path, wc.state_dir)
+    state_dir = ensure_data_path() / "wechat"
     rows = list_account_credentials(state_dir)
     if not rows:
         console.print("[yellow]No wechat accounts found.[/yellow]")

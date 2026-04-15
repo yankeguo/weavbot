@@ -62,8 +62,8 @@ class WecomChannel(BaseChannel):
     _VOICE_EXTS = {".amr"}
     _VIDEO_EXTS = {".mp4"}
 
-    def __init__(self, config: WecomConfig, bus: MessageBus, workspace: Path, state=None):
-        super().__init__(config, bus, workspace, state=state)
+    def __init__(self, config: WecomConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: WecomConfig = config
 
         self._ws: Any = None
@@ -82,11 +82,7 @@ class WecomChannel(BaseChannel):
         self._stream_ids_by_req_id: OrderedDict[str, str] = OrderedDict()
         self._msgid_to_reqid: OrderedDict[str, str] = OrderedDict()
 
-        media_subdir = Path(self.config.temp_media_dir)
-        if media_subdir.is_absolute():
-            self._temp_media_dir = media_subdir
-        else:
-            self._temp_media_dir = self.workspace / media_subdir
+        self._temp_media_dir = self.media_dir
         self._temp_media_dir.mkdir(parents=True, exist_ok=True)
 
     async def start(self) -> None:

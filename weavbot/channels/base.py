@@ -29,6 +29,7 @@ class BaseChannel(ABC):
         config: Any,
         bus: MessageBus,
         workspace: Path,
+        data_path: Path,
         state: "ChannelStateStore | None" = None,
     ):
         """
@@ -38,17 +39,17 @@ class BaseChannel(ABC):
             config: Channel-specific configuration.
             bus: The message bus for communication.
             workspace: The workspace root directory.
+            data_path: The data directory for persistent channel state.
             state: Optional shared channel state store.
         """
         self.config = config
         self.bus = bus
         self.workspace = workspace
+        self.data_path = data_path
         self.media_dir = workspace / "media"
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self._running = False
-        from weavbot.channels.state import ChannelStateStore
-
-        self.state = state or ChannelStateStore()
+        self.state = state or ChannelStateStore(path=data_path / "channels.json")
 
     def resolve_media_path(self, path: str) -> Path:
         """Resolve a media file path against workspace. Absolute paths are kept as-is."""

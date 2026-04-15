@@ -13,7 +13,7 @@ from weavbot.config.schema import WecomConfig
 def _make_channel(tmp_path):
     cfg = WecomConfig(bot_id="bot-id", secret="bot-secret")
     store = ChannelStateStore(path=tmp_path / "channels.json")
-    return WecomChannel(cfg, MessageBus(), tmp_path, state=store)
+    return WecomChannel(cfg, MessageBus(), tmp_path, data_path=tmp_path, state=store)
 
 
 def test_parse_mixed_message(tmp_path):

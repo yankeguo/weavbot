@@ -12,14 +12,6 @@ from weavbot.channels.wechat.types import ResolvedWechatAccount
 from weavbot.config.schema import WechatAccountConfig, WechatConfig
 
 
-def resolve_state_dir(workspace: Path, state_dir: str) -> Path:
-    p = Path(state_dir).expanduser()
-    if not p.is_absolute():
-        p = workspace / p
-    p.mkdir(parents=True, exist_ok=True)
-    return p.resolve()
-
-
 def resolve_accounts(config: WechatConfig) -> list[ResolvedWechatAccount]:
     """Resolve root + accounts map into runtime account list."""
     resolved: list[ResolvedWechatAccount] = []

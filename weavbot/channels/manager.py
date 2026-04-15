@@ -11,6 +11,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.state import ChannelStateStore
 from weavbot.config.schema import Config
+from weavbot.utils.helpers import ensure_data_path
 
 
 class ChannelManager:
@@ -28,13 +29,16 @@ class ChannelManager:
         self.bus = bus
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
-        self.state_store = ChannelStateStore()
+        self.data_path = ensure_data_path()
+        self.workspace_path = config.workspace_path
+        self.state_store = ChannelStateStore(path=self.data_path / "channels.json")
 
         self._init_channels()
 
     def _init_channels(self) -> None:
         """Initialize channels based on config."""
-        workspace = self.config.workspace_path
+        workspace = self.workspace_path
+        data_path = self.data_path
         store = self.state_store
 
         # Telegram channel
@@ -46,6 +50,7 @@ class ChannelManager:
                     self.config.channels.telegram,
                     self.bus,
                     workspace=workspace,
+                    data_path=data_path,
                     state=store,
                 )
                 logger.info("Telegram channel enabled")
@@ -58,7 +63,7 @@ class ChannelManager:
                 from weavbot.channels.discord import DiscordChannel
 
                 self.channels["discord"] = DiscordChannel(
-                    self.config.channels.discord, self.bus, workspace=workspace, state=store
+                    self.config.channels.discord, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("Discord channel enabled")
             except ImportError as e:
@@ -70,7 +75,7 @@ class ChannelManager:
                 from weavbot.channels.feishu import FeishuChannel
 
                 self.channels["feishu"] = FeishuChannel(
-                    self.config.channels.feishu, self.bus, workspace=workspace, state=store
+                    self.config.channels.feishu, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("Feishu channel enabled")
             except ImportError as e:
@@ -82,7 +87,7 @@ class ChannelManager:
                 from weavbot.channels.mochat import MochatChannel
 
                 self.channels["mochat"] = MochatChannel(
-                    self.config.channels.mochat, self.bus, workspace=workspace, state=store
+                    self.config.channels.mochat, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("Mochat channel enabled")
             except ImportError as e:
@@ -94,7 +99,7 @@ class ChannelManager:
                 from weavbot.channels.dingtalk import DingTalkChannel
 
                 self.channels["dingtalk"] = DingTalkChannel(
-                    self.config.channels.dingtalk, self.bus, workspace=workspace, state=store
+                    self.config.channels.dingtalk, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("DingTalk channel enabled")
             except ImportError as e:
@@ -106,7 +111,7 @@ class ChannelManager:
                 from weavbot.channels.slack import SlackChannel
 
                 self.channels["slack"] = SlackChannel(
-                    self.config.channels.slack, self.bus, workspace=workspace, state=store
+                    self.config.channels.slack, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("Slack channel enabled")
             except ImportError as e:
@@ -118,7 +123,7 @@ class ChannelManager:
                 from weavbot.channels.qq import QQChannel
 
                 self.channels["qq"] = QQChannel(
-                    self.config.channels.qq, self.bus, workspace=workspace, state=store
+                    self.config.channels.qq, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("QQ channel enabled")
             except ImportError as e:
@@ -130,7 +135,7 @@ class ChannelManager:
                 from weavbot.channels.wecom import WecomChannel
 
                 self.channels["wecom"] = WecomChannel(
-                    self.config.channels.wecom, self.bus, workspace=workspace, state=store
+                    self.config.channels.wecom, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("Wecom channel enabled")
             except ImportError as e:
@@ -142,7 +147,7 @@ class ChannelManager:
                 from weavbot.channels.wechat import WechatChannel
 
                 self.channels["wechat"] = WechatChannel(
-                    self.config.channels.wechat, self.bus, workspace=workspace, state=store
+                    self.config.channels.wechat, self.bus, workspace=workspace, data_path=data_path, state=store
                 )
                 logger.info("Wechat channel enabled")
             except ImportError as e:

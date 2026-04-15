@@ -9,16 +9,14 @@ from typing import Any
 
 from loguru import logger
 
-from weavbot.utils.helpers import ensure_data_path
-
 _SAVE_DEBOUNCE_S = 1.0
 
 
 class ChannelStateStore:
     """Persistent key-value store for channel-specific send state per chat_id."""
 
-    def __init__(self, path: Path | None = None):
-        self._path = path or (ensure_data_path() / "channels.json")
+    def __init__(self, path: Path):
+        self._path = path
         self._lock = asyncio.Lock()
         self._cache: dict[str, dict[str, dict[str, Any]]] = {}
         self._save_task: asyncio.Task[None] | None = None
