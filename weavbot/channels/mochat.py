@@ -334,6 +334,7 @@ class MochatChannel(BaseChannel):
             "session_"
         )
         try:
+            state_data = await self.state.get("mochat", msg.chat_id)
             if is_panel:
                 await self._api_send(
                     "/api/claw/groups/panels/send",
@@ -341,7 +342,7 @@ class MochatChannel(BaseChannel):
                     target.id,
                     content,
                     msg.reply_to,
-                    self._read_group_id(msg.metadata),
+                    self._read_group_id(state_data),
                 )
             else:
                 await self._api_send(
@@ -834,21 +835,15 @@ class MochatChannel(BaseChannel):
         last = entries[-1]
         is_group = bool(last.group_id)
         body = build_buffered_body(entries, is_group) or "[empty message]"
+        await self.state.set(
+            "mochat",
+            target_id,
+            {"group_id": last.group_id},
+        )
         await self._handle_message(
             sender_id=last.author,
             chat_id=target_id,
             content=body,
-            metadata={
-                "message_id": last.message_id,
-                "timestamp": last.timestamp,
-                "is_group": is_group,
-                "group_id": last.group_id,
-                "sender_name": last.sender_name,
-                "sender_username": last.sender_username,
-                "target_kind": target_kind,
-                "was_mentioned": was_mentioned,
-                "buffered_count": len(entries),
-            },
         )
 
     async def _cancel_delay_timers(self) -> None:

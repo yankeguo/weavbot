@@ -3,9 +3,12 @@
 import mimetypes
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from weavbot.channels.state import ChannelStateStore
 
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
@@ -36,6 +39,19 @@ class BaseChannel(ABC):
         self.media_dir = workspace / "media"
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self._running = False
+
+    @property
+    def state(self) -> "ChannelStateStore":
+        """Persistent state store for this channel."""
+        if not hasattr(self, "_state"):
+            from weavbot.channels.state import ChannelStateStore
+
+            self._state = ChannelStateStore()
+        return self._state
+
+    @state.setter
+    def state(self, value: "ChannelStateStore") -> None:
+        self._state = value
 
     def resolve_media_path(self, path: str) -> Path:
         """Resolve a media file path against workspace. Absolute paths are kept as-is."""

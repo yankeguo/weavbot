@@ -70,7 +70,8 @@ def test_handle_inbound_sets_account_scoped_session_key(tmp_path: Path):
     assert inbound.channel == "wechat"
     assert inbound.chat_id == "u1@im.wechat"
     assert inbound.session_key == "wechat:acc-key:u1@im.wechat"
-    assert inbound.metadata["wechat"]["context_token"] == "ctx-1"
+    state_data = asyncio.run(ch.state.get("wechat", "u1@im.wechat"))
+    assert state_data.get("context_token") == "ctx-1"
 
 
 def test_send_text_routes_to_selected_account(tmp_path: Path):
@@ -101,11 +102,15 @@ def test_send_text_routes_to_selected_account(tmp_path: Path):
     }
     api = _FakeApi()
     ch._apis = {"acc-key": api}  # type: ignore[assignment]
+    asyncio.run(
+        ch.state.set(
+            "wechat", "u1@im.wechat", {"account_key": "acc-key", "context_token": "ctx-1"}
+        )
+    )
     msg = OutboundMessage(
         channel="wechat",
         chat_id="u1@im.wechat",
         content="pong",
-        metadata={"wechat": {"account_key": "acc-key", "context_token": "ctx-1"}},
     )
     asyncio.run(ch.send(msg))
     assert len(api.sent) == 1

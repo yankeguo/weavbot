@@ -92,9 +92,7 @@ class MessageTool(Tool):
             chat_id=chat_id,
             content=content,
             media=media or [],
-            metadata={
-                "message_id": message_id,
-            },
+            metadata={},
         )
 
         try:

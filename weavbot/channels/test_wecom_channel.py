@@ -85,8 +85,9 @@ def test_event_callback_publishes_inbound(tmp_path):
     inbound = asyncio.run(run_case())
     assert inbound.channel == "wecom"
     assert inbound.sender_id == "u1"
-    assert inbound.metadata["req_id"] == "req-1"
-    assert inbound.metadata["wecom"]["event_type"] == "feedback_event"
+    state_data = asyncio.run(channel.state.get("wecom", "u1"))
+    assert state_data.get("req_id") == "req-1"
+    assert state_data.get("wecom", {}).get("event_type") == "feedback_event"
 
 
 def test_send_enter_chat_uses_welcome_command(tmp_path):
@@ -103,14 +104,16 @@ def test_send_enter_chat_uses_welcome_command(tmp_path):
     channel._send_reply = fake_send_reply  # type: ignore[method-assign]
 
     async def run_case():
+        await channel.state.set(
+            "wecom",
+            "user-1",
+            {"wecom": {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT}},
+        )
         await channel.send(
             OutboundMessage(
                 channel="wecom",
                 chat_id="user-1",
                 content="hello",
-                metadata={
-                    "wecom": {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT},
-                },
             )
         )
 

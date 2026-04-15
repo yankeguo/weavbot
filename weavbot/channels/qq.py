@@ -102,7 +102,8 @@ class QQChannel(BaseChannel):
             logger.warning("QQ client not initialized")
             return
         try:
-            msg_id = msg.metadata.get("message_id")
+            state_data = await self.state.get("qq", msg.chat_id)
+            msg_id = state_data.get("message_id")
             await self._client.api.post_c2c_message(
                 openid=msg.chat_id,
                 msg_type=0,
@@ -126,11 +127,11 @@ class QQChannel(BaseChannel):
             if not content:
                 return
 
+            await self.state.set("qq", user_id, {"message_id": data.id})
             await self._handle_message(
                 sender_id=user_id,
                 chat_id=user_id,
                 content=content,
-                metadata={"message_id": data.id},
             )
         except Exception:
             logger.exception("Error handling QQ message")

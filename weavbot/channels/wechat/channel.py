@@ -109,11 +109,9 @@ class WechatChannel(BaseChannel):
         self._poll_tasks.clear()
 
     async def send(self, msg: OutboundMessage) -> None:
-        metadata, wechat_meta = self._extract_send_metadata(msg)
+        state_data = await self.state.get("wechat", msg.chat_id)
         requested_account_key = (
-            str(wechat_meta.get("account_key", "")).strip()
-            or str(metadata.get("account_key", "")).strip()
-            or "default"
+            str(state_data.get("account_key", "")).strip() or "default"
         )
         account_key = self._resolve_outbound_account_key(requested_account_key, msg.chat_id)
         account = self._accounts.get(account_key)
@@ -133,8 +131,7 @@ class WechatChannel(BaseChannel):
         chat_id = msg.chat_id
         # Reply token is scoped by account+peer and can be supplied explicitly by callers.
         context_token = (
-            str(wechat_meta.get("context_token", "")).strip()
-            or str(metadata.get("context_token", "")).strip()
+            str(state_data.get("context_token", "")).strip()
             or self._context_tokens.get(f"{account_key}:{chat_id}", "")
         )
         typing_ticket = await self._typing.send_typing(
@@ -237,26 +234,20 @@ class WechatChannel(BaseChannel):
         if not content and not media:
             content = "[wechat:empty]"
 
-        metadata = {
-            "account_key": account.key,
-            "account_id": account.account_id,
-            "message_id": msg.get("message_id"),
-            "context_token": context_token,
-            "wechat": {
+        await self.state.set(
+            "wechat",
+            sender_id,
+            {
                 "account_key": account.key,
                 "account_id": account.account_id,
                 "context_token": context_token,
-                "session_id": msg.get("session_id"),
-                "message_type": msg.get("message_type"),
-                "message_state": msg.get("message_state"),
             },
-        }
+        )
         await self._handle_message(
             sender_id=sender_id,
             chat_id=sender_id,
             content=content,
             media=media,
-            metadata=metadata,
             # Include account key in session namespace for multi-account isolation.
             session_key=f"wechat:{account.key}:{sender_id}",
         )

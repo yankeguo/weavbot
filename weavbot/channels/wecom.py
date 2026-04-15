@@ -157,7 +157,8 @@ class WecomChannel(BaseChannel):
             logger.warning("Wecom websocket is not connected.")
             return
 
-        metadata = msg.metadata or {}
+        state_data = await self.state.get("wecom", msg.chat_id)
+        metadata = dict(state_data)
         wecom_meta = metadata.get("wecom", {}) if isinstance(metadata.get("wecom"), dict) else {}
         req_id = self._extract_req_id(metadata, wecom_meta)
         chat_type = self._infer_chat_type(msg.chat_id, metadata, wecom_meta)
@@ -345,28 +346,31 @@ class WecomChannel(BaseChannel):
             if chat_type == "group" and group_chat_id
             else f"wecom:{sender_id}"
         )
-        metadata = {
-            "message_id": msg_id,
-            "req_id": req_id,
-            "msg_id": msg_id,
-            "chat_type": chat_type,
-            "msg_type": msg_type,
-            "wecom": {
+        await self.state.set(
+            "wecom",
+            chat_id or sender_id or "unknown",
+            {
+                "message_id": msg_id,
                 "req_id": req_id,
                 "msg_id": msg_id,
                 "chat_type": chat_type,
-                "chat_id": group_chat_id,
-                "sender_id": sender_id,
                 "msg_type": msg_type,
+                "wecom": {
+                    "req_id": req_id,
+                    "msg_id": msg_id,
+                    "chat_type": chat_type,
+                    "chat_id": group_chat_id,
+                    "sender_id": sender_id,
+                    "msg_type": msg_type,
+                },
             },
-        }
+        )
 
         await self._handle_message(
             sender_id=sender_id or "unknown",
             chat_id=chat_id or sender_id or "unknown",
             content=content,
             media=media,
-            metadata=metadata,
             session_key=session_key,
         )
 
@@ -397,27 +401,30 @@ class WecomChannel(BaseChannel):
             else f"wecom:{sender_id}"
         )
         content = f"[wecom:event:{event_type}]"
-        metadata = {
-            "message_id": msg_id,
-            "req_id": req_id,
-            "msg_id": msg_id,
-            "chat_type": chat_type,
-            "msg_type": "event",
-            "wecom": {
+        await self.state.set(
+            "wecom",
+            chat_id or sender_id or "unknown",
+            {
+                "message_id": msg_id,
                 "req_id": req_id,
                 "msg_id": msg_id,
                 "chat_type": chat_type,
-                "chat_id": group_chat_id,
-                "sender_id": sender_id,
-                "event_type": event_type,
+                "msg_type": "event",
+                "wecom": {
+                    "req_id": req_id,
+                    "msg_id": msg_id,
+                    "chat_type": chat_type,
+                    "chat_id": group_chat_id,
+                    "sender_id": sender_id,
+                    "event_type": event_type,
+                },
             },
-        }
+        )
 
         await self._handle_message(
             sender_id=sender_id or "unknown",
             chat_id=chat_id or sender_id or "unknown",
             content=content,
-            metadata=metadata,
             session_key=session_key,
         )
 
