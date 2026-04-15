@@ -103,7 +103,6 @@ class BaseChannel(ABC):
         chat_id: str,
         content: str,
         media: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
         session_key: str | None = None,
     ) -> None:
         """
@@ -116,7 +115,6 @@ class BaseChannel(ABC):
             chat_id: The chat/channel identifier.
             content: Message text content.
             media: Optional list of media URLs.
-            metadata: Optional channel-specific metadata.
             session_key: Optional session key override (e.g. thread-scoped sessions).
         """
         if not self.is_allowed(sender_id):
@@ -148,7 +146,6 @@ class BaseChannel(ABC):
             chat_id=str(chat_id),
             content=content,
             media=image_media,
-            metadata=metadata or {},
             session_key_override=session_key,
         )
 
