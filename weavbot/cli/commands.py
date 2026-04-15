@@ -809,12 +809,11 @@ def agent(
                 while True:
                     try:
                         msg = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
-                        if msg.metadata.get("_progress"):
-                            is_tool_hint = msg.metadata.get("_tool_hint", False)
+                        if msg.is_progress:
                             ch = agent_loop.channels_config
-                            if ch and is_tool_hint and not ch.send_tool_hints:
+                            if ch and msg.is_tool_hint and not ch.send_tool_hints:
                                 pass
-                            elif ch and not is_tool_hint and not ch.send_progress:
+                            elif ch and not msg.is_tool_hint and not ch.send_progress:
                                 pass
                             else:
                                 console.print(f"  [dim]↳ {msg.content}[/dim]")

@@ -87,7 +87,6 @@ class MessageTool(Tool):
             chat_id=chat_id,
             content=content,
             media=media or [],
-            metadata={},
         )
 
         try:

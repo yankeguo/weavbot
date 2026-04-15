@@ -158,7 +158,7 @@ class WecomChannel(BaseChannel):
             return
 
         state_data = await self.state.get("wecom", msg.chat_id)
-        metadata = {**state_data, **(msg.metadata or {})}
+        metadata = dict(state_data)
         wecom_meta = metadata.get("wecom", {}) if isinstance(metadata.get("wecom"), dict) else {}
         req_id = self._extract_req_id(metadata, wecom_meta)
         chat_type = self._infer_chat_type(msg.chat_id, metadata, wecom_meta)
@@ -182,7 +182,7 @@ class WecomChannel(BaseChannel):
         if not content:
             return
 
-        if metadata.get("_progress"):
+        if msg.is_progress:
             await self._send_stream_progress(
                 content, req_id=req_id, chat_id=msg.chat_id, chat_type=chat_type
             )

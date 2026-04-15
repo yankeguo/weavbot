@@ -148,7 +148,7 @@ def test_send_falls_back_to_single_account_when_default_missing(tmp_path: Path):
     ch._apis = {"acc-x": api}  # type: ignore[assignment]
 
     # Simulate message-tool style send without account metadata.
-    msg = OutboundMessage(channel="wechat", chat_id="u2@im.wechat", content="hello", metadata={})
+    msg = OutboundMessage(channel="wechat", chat_id="u2@im.wechat", content="hello")
     asyncio.run(ch.send(msg))
 
     assert len(api.sent) == 1
@@ -189,41 +189,6 @@ def test_send_skips_when_account_paused(tmp_path: Path):
 
     assert api.sent == []
 
-
-def test_send_ignores_non_dict_metadata(tmp_path: Path):
-    class _FakeApi:
-        def __init__(self):
-            self.sent = []
-
-        async def send_message(self, msg):
-            self.sent.append(msg)
-            return {"ret": 0}
-
-        async def get_config(self, *_args, **_kwargs):
-            return {}
-
-    bus = MessageBus()
-    cfg = WechatConfig(enabled=True, token="", account_id="")
-    ch = WechatChannel(cfg, bus, tmp_path)
-    ch._accounts = {
-        "acc-x": ResolvedWechatAccount(
-            key="acc-x",
-            account_id="x@im.bot",
-            token="tok",
-            base_url="https://ilinkai.weixin.qq.com",
-            cdn_base_url="https://novac2c.cdn.weixin.qq.com/c2c",
-            route_tag=None,
-            allow_from=[],
-        )
-    }
-    api = _FakeApi()
-    ch._apis = {"acc-x": api}  # type: ignore[assignment]
-
-    msg = OutboundMessage(channel="wechat", chat_id="u3@im.wechat", content="hello")
-    msg.metadata = "bad-metadata"  # type: ignore[assignment]
-    asyncio.run(ch.send(msg))
-
-    assert len(api.sent) == 1
 
 
 def test_handle_inbound_rejects_sender_not_in_allow_list(tmp_path: Path):

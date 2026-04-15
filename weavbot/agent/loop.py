@@ -661,7 +661,6 @@ class AgentLoop:
                             channel=msg.channel,
                             chat_id=msg.chat_id,
                             content="",
-                            metadata={},
                         )
                     )
             except asyncio.CancelledError:
@@ -779,7 +778,8 @@ class AgentLoop:
                     channel=msg.channel,
                     chat_id=msg.chat_id,
                     content=content,
-                    metadata={"_progress": True, "_tool_hint": tool_hint},
+                    is_progress=True,
+                    is_tool_hint=tool_hint,
                 )
             )
 
@@ -805,7 +805,6 @@ class AgentLoop:
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=final_content,
-            metadata={},
         )
 
     @staticmethod
