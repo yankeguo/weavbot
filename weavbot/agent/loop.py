@@ -565,6 +565,17 @@ class AgentLoop:
             )
 
             if response.has_tool_calls:
+                if usage["completion_tokens"] == 0 and all(not tc.arguments for tc in response.tool_calls):
+                    logger.warning(
+                        "Detected zero-completion empty tool calls (likely API gateway artifact), aborting turn"
+                    )
+                    final_content = (
+                        "Sorry, the AI returned an unexpected empty tool call. "
+                        "This can happen when the API gateway forces a function call while the model refuses to generate. "
+                        "Please try again."
+                    )
+                    break
+
                 if on_progress:
                     clean = self._strip_think(response.content)
                     if clean:
