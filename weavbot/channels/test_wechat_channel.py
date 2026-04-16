@@ -1,10 +1,12 @@
 import asyncio
+import typing
 from pathlib import Path
 
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
 from weavbot.channels.state import ChannelStateStore
 from weavbot.channels.wechat.accounts import resolve_accounts
+from weavbot.channels.wechat.api import WechatApiClient
 from weavbot.channels.wechat.channel import WechatChannel
 from weavbot.channels.wechat.session_guard import SessionGuard
 from weavbot.channels.wechat.types import (
@@ -104,7 +106,7 @@ def test_send_text_routes_to_selected_account(tmp_path: Path):
         )
     }
     api = _FakeApi()
-    ch._apis = {"acc-key": api}  # type: ignore[assignment]
+    ch._apis = {"acc-key": typing.cast(WechatApiClient, api)}
     asyncio.run(
         store.set(
             "wechat", "acc-key:u1@im.wechat", {"account_key": "acc-key", "context_token": "ctx-1"}
@@ -149,7 +151,7 @@ def test_send_falls_back_to_single_account_when_default_missing(tmp_path: Path):
         )
     }
     api = _FakeApi()
-    ch._apis = {"acc-x": api}  # type: ignore[assignment]
+    ch._apis = {"acc-x": typing.cast(WechatApiClient, api)}
 
     # Simulate message-tool style send without account metadata.
     msg = OutboundMessage(channel="wechat", chat_id="acc-x:u2@im.wechat", content="hello")
@@ -187,7 +189,7 @@ def test_send_skips_when_account_paused(tmp_path: Path):
         )
     }
     api = _FakeApi()
-    ch._apis = {"acc-x": api}  # type: ignore[assignment]
+    ch._apis = {"acc-x": typing.cast(WechatApiClient, api)}
     ch._guard.pause("acc-x")
 
     asyncio.run(

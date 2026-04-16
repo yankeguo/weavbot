@@ -103,7 +103,7 @@ class ShellTool(Tool):
         workdir: str | None = None,
         timeout: int | None = None,
         entrypoint: str | None = None,
-        **kwargs: Any,
+        *args: Any, **kwargs: Any,
     ) -> str:
         if workdir:
             wd = Path(workdir).expanduser()

@@ -1,8 +1,10 @@
 import asyncio
+from typing import cast
 
 from weavbot.agent.tools.add_cron import AddCronTool
 from weavbot.agent.tools.list_cron import ListCronTool
 from weavbot.agent.tools.remove_cron import RemoveCronTool
+from weavbot.cron.service import CronService
 from weavbot.cron.types import CronJob, CronPayload, CronSchedule
 
 
@@ -54,7 +56,7 @@ class _FakeCronService:
 
 def test_add_cron_requires_message_and_context():
     svc = _FakeCronService()
-    tool = AddCronTool(svc)
+    tool = AddCronTool(cast(CronService, svc))
     assert (
         asyncio.run(tool.execute(message="", interval=60)) == "Error: message is required for add"
     )
@@ -66,7 +68,7 @@ def test_add_cron_requires_message_and_context():
 
 def test_add_cron_rejects_tz_without_expr_and_unknown_tz():
     svc = _FakeCronService()
-    tool = AddCronTool(svc)
+    tool = AddCronTool(cast(CronService, svc))
     tool.set_context("telegram", "u1")
 
     assert (
@@ -81,7 +83,7 @@ def test_add_cron_rejects_tz_without_expr_and_unknown_tz():
 
 def test_add_cron_adds_interval_job():
     svc = _FakeCronService()
-    tool = AddCronTool(svc)
+    tool = AddCronTool(cast(CronService, svc))
     tool.set_context("telegram", "u1")
 
     out = asyncio.run(tool.execute(message="Take a break", interval=120))
@@ -95,7 +97,7 @@ def test_add_cron_adds_interval_job():
 
 def test_add_cron_blocks_nested_schedule():
     svc = _FakeCronService()
-    tool = AddCronTool(svc)
+    tool = AddCronTool(cast(CronService, svc))
     tool.set_context("telegram", "u1")
     token = tool.set_cron_context(True)
     try:
@@ -107,11 +109,11 @@ def test_add_cron_blocks_nested_schedule():
 
 def test_list_cron_outputs_jobs():
     svc = _FakeCronService()
-    add_tool = AddCronTool(svc)
+    add_tool = AddCronTool(cast(CronService, svc))
     add_tool.set_context("telegram", "u1")
     asyncio.run(add_tool.execute(message="job one", interval=60))
 
-    list_tool = ListCronTool(svc)
+    list_tool = ListCronTool(cast(CronService, svc))
     out = asyncio.run(list_tool.execute())
     assert "Scheduled jobs:" in out
     assert "job one" in out
@@ -119,18 +121,18 @@ def test_list_cron_outputs_jobs():
 
 def test_remove_cron_requires_job_id_and_handles_missing():
     svc = _FakeCronService()
-    tool = RemoveCronTool(svc)
+    tool = RemoveCronTool(cast(CronService, svc))
     assert asyncio.run(tool.execute()) == "Error: job_id is required for remove"
     assert asyncio.run(tool.execute(job_id="missing")) == "Job missing not found"
 
 
 def test_remove_cron_removes_existing_job():
     svc = _FakeCronService()
-    add_tool = AddCronTool(svc)
+    add_tool = AddCronTool(cast(CronService, svc))
     add_tool.set_context("telegram", "u1")
     asyncio.run(add_tool.execute(message="job one", interval=60))
     job_id = svc.jobs[0].id
 
-    remove_tool = RemoveCronTool(svc)
+    remove_tool = RemoveCronTool(cast(CronService, svc))
     out = asyncio.run(remove_tool.execute(job_id=job_id))
     assert out == f"Removed job {job_id}"

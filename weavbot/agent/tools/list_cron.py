@@ -28,7 +28,7 @@ class ListCronTool(Tool):
             "required": [],
         }
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def execute(self, *args: Any, **kwargs: Any) -> str:
         jobs = self._cron.list_jobs()
         if not jobs:
             return "No scheduled jobs."

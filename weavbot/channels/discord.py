@@ -46,10 +46,12 @@ class DiscordChannel(BaseChannel):
 
     name = "discord"
 
-    def __init__(self, config: DiscordConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: DiscordConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: DiscordConfig = config
-        self._ws: websockets.WebSocketClientProtocol | None = None
+        self._ws: Any = None
         self._seq: int | None = None
         self._heartbeat_task: asyncio.Task | None = None
         self._typing_tasks: dict[str, asyncio.Task] = {}
@@ -125,6 +127,8 @@ class DiscordChannel(BaseChannel):
         self, url: str, headers: dict[str, str], payload: dict[str, Any]
     ) -> bool:
         """Send a single Discord API payload with retry on rate-limit. Returns True on success."""
+        if self._http is None:
+            raise RuntimeError("Discord HTTP client not initialized")
         for attempt in range(3):
             try:
                 response = await self._http.post(url, headers=headers, json=payload)
@@ -275,6 +279,8 @@ class DiscordChannel(BaseChannel):
             headers = {"Authorization": f"Bot {self.config.token}"}
             while self._running:
                 try:
+                    if self._http is None:
+                        return
                     await self._http.post(url, headers=headers)
                 except asyncio.CancelledError:
                     return

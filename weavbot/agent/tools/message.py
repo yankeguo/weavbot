@@ -71,7 +71,7 @@ class MessageTool(Tool):
         channel: str | None = None,
         chat_id: str | None = None,
         media: list[str] | None = None,
-        **kwargs: Any,
+        *args: Any, **kwargs: Any,
     ) -> str:
         channel = channel or self._default_channel
         chat_id = chat_id or self._default_chat_id

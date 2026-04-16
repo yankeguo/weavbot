@@ -125,7 +125,7 @@ class ReadFileTool(Tool):
         path: str,
         offset: int | None = None,
         limit: int | None = None,
-        **kwargs: Any,
+        *args: Any, **kwargs: Any,
     ) -> str:
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)

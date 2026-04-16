@@ -65,6 +65,7 @@ class GrepFileTool(Tool):
         pattern: str,
         path: str | None = None,
         glob: str | None = None,
+        *args: Any,
         **kwargs: Any,
     ) -> str:
         try:
@@ -80,7 +81,7 @@ class GrepFileTool(Tool):
                 return f"Error: Not a directory: {search_path_str}"
 
             search_path = str(base.resolve())
-            args = [
+            rg_args = [
                 "rg",
                 "-nH",
                 "--hidden",
@@ -90,15 +91,15 @@ class GrepFileTool(Tool):
                 pattern,
             ]
             if glob:
-                args.extend(["--glob", glob])
-            args.append(search_path)
+                rg_args.extend(["--glob", glob])
+            rg_args.append(search_path)
 
             env = os.environ.copy()
             env["PATH"] = env.get("PATH", "") + os.pathsep + _WEAVBOT_BIN
 
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    *args,
+                    *rg_args,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=search_path,

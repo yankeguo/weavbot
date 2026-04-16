@@ -33,7 +33,7 @@ class WriteFileTool(Tool):
             "required": ["path", "content"],
         }
 
-    async def execute(self, path: str, content: str, **kwargs: Any) -> str:
+    async def execute(self, path: str, content: str, *args: Any, **kwargs: Any) -> str:
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             file_path.parent.mkdir(parents=True, exist_ok=True)

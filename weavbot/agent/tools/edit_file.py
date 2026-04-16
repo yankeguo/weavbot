@@ -316,7 +316,7 @@ Usage:
         old_text: str,
         new_text: str,
         replace_all: bool = False,
-        **kwargs: Any,
+        *args: Any, **kwargs: Any,
     ) -> str:
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)

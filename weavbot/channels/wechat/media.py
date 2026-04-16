@@ -7,6 +7,7 @@ import base64
 import hashlib
 import mimetypes
 import secrets
+import typing
 from pathlib import Path
 from urllib.parse import quote
 
@@ -157,7 +158,7 @@ async def upload_media_file(
                 "len": str(rawsize),
             },
         }
-    return media_item_type, item
+    return media_item_type, typing.cast(MessageItem, item)
 
 
 def _parse_aes_key(aes_key: str) -> bytes:

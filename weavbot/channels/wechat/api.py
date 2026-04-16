@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import random
+import typing
 from typing import Any
 
 import httpx
@@ -71,8 +72,11 @@ class WechatApiClient:
     async def get_updates(self, get_updates_buf: str) -> GetUpdatesResp:
         payload = {"get_updates_buf": get_updates_buf, "base_info": {"channel_version": "weavbot"}}
         try:
-            return await self._post_json(
-                "ilink/bot/getupdates", payload, timeout_ms=self.long_poll_timeout_ms
+            return typing.cast(
+                GetUpdatesResp,
+                await self._post_json(
+                    "ilink/bot/getupdates", payload, timeout_ms=self.long_poll_timeout_ms
+                ),
             )
         except httpx.TimeoutException:
             return {"ret": 0, "msgs": [], "get_updates_buf": get_updates_buf}

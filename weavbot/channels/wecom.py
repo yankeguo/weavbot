@@ -11,6 +11,7 @@ import random
 import re
 import string
 import time
+import typing
 from collections import OrderedDict, deque
 from datetime import datetime
 from pathlib import Path
@@ -31,8 +32,10 @@ try:
     WECOM_AVAILABLE = True
 except ImportError:
     WECOM_AVAILABLE = False
-    websockets = None  # type: ignore[assignment]
-    ConnectionClosed = Exception  # type: ignore[assignment,misc]
+    websockets = typing.cast(Any, None)
+    # Keep Exception as fallback so "except ConnectionClosed" doesn't crash
+    # if this module is restructured and the guard is bypassed.
+    ConnectionClosed: Any = Exception
 
 
 CMD_SUBSCRIBE = "aibot_subscribe"

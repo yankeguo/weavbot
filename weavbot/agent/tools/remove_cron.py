@@ -30,7 +30,7 @@ class RemoveCronTool(Tool):
             "required": ["job_id"],
         }
 
-    async def execute(self, job_id: str | None = None, **kwargs: Any) -> str:
+    async def execute(self, job_id: str | None = None, *args: Any, **kwargs: Any) -> str:
         if not job_id:
             return "Error: job_id is required for remove"
         if self._cron.remove_job(job_id):
