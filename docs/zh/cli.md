@@ -14,6 +14,7 @@ nav_order: 5
 | `weavbot gateway` | 启动网关 |
 | `weavbot agent` | 交互式对话 |
 | `weavbot agent -m "..."` | 发送单条消息 |
+| `weavbot wechat list-accounts` | 列出已保存的微信账号 |
 
 ## `weavbot onboard`
 
@@ -54,6 +55,50 @@ weavbot onboard \
 ```
 
 值会尽量自动推断类型（`true`、`false`、数字、`null`），其余按字符串处理。
+
+## `weavbot gateway`
+
+启动常驻网关，管理代理、渠道、定时任务与心跳。
+
+| 选项 | 说明 |
+| --- | --- |
+| `--verbose`、`-v` | 启用调试日志 |
+
+## `weavbot agent`
+
+与代理直接交互。
+
+| 选项 | 说明 |
+| --- | --- |
+| `--message`、`-m` | 发送单条消息后退出 |
+| `--session`、`-s` | 会话 ID（默认 `cli:direct`） |
+| `--markdown` / `--no-markdown` | 以 Markdown 渲染输出（默认启用） |
+| `--logs` / `--no-logs` | 聊天时显示运行日志（默认关闭） |
+
+## `weavbot wechat`
+
+### `weavbot wechat login`
+
+扫码登录并保存微信账号凭据。
+
+```bash
+weavbot wechat login
+```
+
+| 选项 | 说明 |
+| --- | --- |
+| `--account`、`-a` | 保存到 `channels.wechat.accounts` 的账号键名 |
+| `--base-url` | 微信 API 地址（默认使用配置值） |
+| `--route-tag` | 可选 `SKRouteTag` 请求头 |
+| `--timeout-ms` | 二维码登录超时（毫秒，默认 480000） |
+
+### `weavbot wechat list-accounts`
+
+列出已保存的微信账号记录。
+
+```bash
+weavbot wechat list-accounts
+```
 
 ## 聊天命令
 

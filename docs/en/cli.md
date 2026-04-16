@@ -14,6 +14,7 @@ nav_order: 5
 | `weavbot gateway` | Start the gateway |
 | `weavbot agent` | Interactive chat mode |
 | `weavbot agent -m "..."` | Send a single message |
+| `weavbot wechat list-accounts` | List saved Wechat accounts |
 
 ## `weavbot onboard`
 
@@ -55,6 +56,25 @@ weavbot onboard \
 
 Values are auto-coerced where possible (`true`, `false`, numbers, `null`), otherwise treated as strings.
 
+## `weavbot gateway`
+
+Starts the long-running gateway that manages the agent, channels, scheduled tasks, and heartbeat.
+
+| Option | Description |
+| --- | --- |
+| `--verbose`, `-v` | Enable debug logging |
+
+## `weavbot agent`
+
+Interact with the agent directly.
+
+| Option | Description |
+| --- | --- |
+| `--message`, `-m` | Send a single message and exit |
+| `--session`, `-s` | Session ID (default `cli:direct`) |
+| `--markdown` / `--no-markdown` | Render output as Markdown (default: enabled) |
+| `--logs` / `--no-logs` | Show runtime logs during chat (default: disabled) |
+
 ## Chat Commands
 
 In interactive mode or any chat channel (Telegram, Discord, etc.), you can use slash commands:
@@ -64,5 +84,30 @@ In interactive mode or any chat channel (Telegram, Discord, etc.), you can use s
 | `/new` | Start a new conversation (archive long-term memory first, then clear the session) |
 | `/stop` | Stop the current running task (including subagents) |
 | `/help` | Show available commands |
+
+## weavbot wechat
+
+### `weavbot wechat login`
+
+Scan QR code and save Wechat account credentials.
+
+```bash
+weavbot wechat login
+```
+
+| Option | Description |
+| --- | --- |
+| `--account`, `-a` | Account key name to save in `channels.wechat.accounts` |
+| `--base-url` | Wechat API base URL (default from config) |
+| `--route-tag` | Optional `SKRouteTag` header value |
+| `--timeout-ms` | QR login timeout in milliseconds (default 480000) |
+
+### `weavbot wechat list-accounts`
+
+List saved Wechat account records.
+
+```bash
+weavbot wechat list-accounts
+```
 
 [Quick Start]({{ site.baseurl }}/en/quick-start/) | [Configuration]({{ site.baseurl }}/en/configuration/)
