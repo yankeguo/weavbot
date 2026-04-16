@@ -222,18 +222,20 @@ async def wechat_qr_login(
             token = str(status_resp.get("bot_token", "")).strip()
             account_id = str(status_resp.get("ilink_bot_id", "")).strip()
             user_id = str(status_resp.get("ilink_user_id", "")).strip()
+            base_url = str(status_resp.get("baseurl", "")).strip() or DEFAULT_BASE_URL
             del _active_logins[session_key]
             logger.info(
-                "Login confirmed! ilink_bot_id={} ilink_user_id={}",
+                "Login confirmed! ilink_bot_id={} ilink_user_id={} base_url={}",
                 account_id,
                 user_id,
+                base_url,
             )
             if not token or not account_id:
                 raise RuntimeError(f"confirmed without token/account_id: {status_resp}")
             return LoginResult(
                 account_id=account_id,
                 token=token,
-                base_url=DEFAULT_BASE_URL,
+                base_url=base_url,
                 user_id=user_id,
             )
 
