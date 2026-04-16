@@ -2,8 +2,6 @@
 
 from typing import Any, Awaitable, Callable
 
-from loguru import logger
-
 from weavbot.agent.tools.base import Tool
 from weavbot.bus.events import OutboundMessage
 
@@ -24,7 +22,6 @@ class MessageTool(Tool):
 
     def set_context(self, channel: str, chat_id: str) -> None:
         """Set the current message context."""
-        logger.debug("MessageTool.set_context: channel={}, chat_id={}", channel, chat_id)
         self._default_channel = channel
         self._default_chat_id = chat_id
 
@@ -78,17 +75,6 @@ class MessageTool(Tool):
     ) -> str:
         resolved_channel = channel or self._default_channel
         resolved_chat_id = chat_id or self._default_chat_id
-        logger.debug(
-            "MessageTool.execute: raw_content={!r}, raw_channel={!r}, raw_chat_id={!r}, "
-            "defaults=({!r}, {!r}), resolved=({!r}, {!r})",
-            content,
-            channel,
-            chat_id,
-            self._default_channel,
-            self._default_chat_id,
-            resolved_channel,
-            resolved_chat_id,
-        )
         channel = resolved_channel
         chat_id = resolved_chat_id
         if not channel or not chat_id:
