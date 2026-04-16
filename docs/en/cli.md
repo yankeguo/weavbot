@@ -98,7 +98,7 @@ weavbot wechat login
 | Option | Description |
 | --- | --- |
 | `--account`, `-a` | Account key name to save in `channels.wechat.accounts` |
-| `--base-url` | Wechat API base URL (default from config) |
+| `--base-url` | Wechat API base URL (defaults to the built-in default base URL) |
 | `--route-tag` | Optional `SKRouteTag` header value |
 | `--timeout-ms` | QR login timeout in milliseconds (default 480000) |
 

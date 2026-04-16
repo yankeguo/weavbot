@@ -88,7 +88,7 @@ weavbot wechat login
 | 选项 | 说明 |
 | --- | --- |
 | `--account`、`-a` | 保存到 `channels.wechat.accounts` 的账号键名 |
-| `--base-url` | 微信 API 地址（默认使用配置值） |
+| `--base-url` | 微信 API 地址（默认使用内置默认地址） |
 | `--route-tag` | 可选 `SKRouteTag` 请求头 |
 | `--timeout-ms` | 二维码登录超时（毫秒，默认 480000） |
 
