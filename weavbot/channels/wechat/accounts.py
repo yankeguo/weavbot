@@ -8,7 +8,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from weavbot.channels.wechat.types import ResolvedWechatAccount
+from weavbot.channels.wechat.types import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CDN_BASE_URL,
+    ResolvedWechatAccount,
+)
 from weavbot.config.schema import WechatAccountConfig, WechatConfig
 
 
@@ -24,8 +28,8 @@ def resolve_accounts(config: WechatConfig) -> list[ResolvedWechatAccount]:
                     key="default",
                     account_id=config.account_id or "default",
                     token=config.token,
-                    base_url=config.base_url,
-                    cdn_base_url=config.cdn_base_url,
+                    base_url=DEFAULT_BASE_URL,
+                    cdn_base_url=DEFAULT_CDN_BASE_URL,
                     route_tag=config.route_tag or None,
                     allow_from=list(config.allow_from or []),
                     enabled=True,
@@ -42,8 +46,8 @@ def resolve_accounts(config: WechatConfig) -> list[ResolvedWechatAccount]:
                 key=key,
                 account_id=account.account_id or key,
                 token=account.token,
-                base_url=account.base_url or config.base_url,
-                cdn_base_url=account.cdn_base_url or config.cdn_base_url,
+                base_url=DEFAULT_BASE_URL,
+                cdn_base_url=DEFAULT_CDN_BASE_URL,
                 route_tag=account.route_tag or config.route_tag or None,
                 allow_from=list(account.allow_from or config.allow_from or []),
                 enabled=True,
@@ -95,14 +99,12 @@ def save_account_credentials(
     *,
     account_id: str,
     token: str,
-    base_url: str,
     user_id: str = "",
 ) -> None:
     path = account_credentials_path(state_dir, account_key)
     payload: dict[str, Any] = {
         "account_id": account_id,
         "token": token,
-        "base_url": base_url,
     }
     if user_id:
         payload["user_id"] = user_id
@@ -123,7 +125,6 @@ def list_account_credentials(state_dir: Path) -> list[dict[str, str]]:
             {
                 "key": path.stem,
                 "account_id": str(data.get("account_id", "")).strip(),
-                "base_url": str(data.get("base_url", "")).strip(),
                 "user_id": str(data.get("user_id", "")).strip(),
             }
         )

@@ -28,6 +28,9 @@ TYPING_STATUS_CANCEL = 2
 
 SESSION_EXPIRED_ERRCODE = -14
 
+DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com"
+DEFAULT_CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c"
+
 
 class CdnMedia(TypedDict, total=False):
     encrypt_query_param: str

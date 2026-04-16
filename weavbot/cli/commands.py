@@ -895,15 +895,14 @@ def wechat_login(
     )
     from weavbot.channels.wechat.api import WechatApiClient
     from weavbot.channels.wechat.auth import account_key_from_account_id, wechat_qr_login
+    from weavbot.channels.wechat.types import DEFAULT_BASE_URL
     from weavbot.config.loader import load_config, save_config
     from weavbot.config.schema import WechatAccountConfig
     from weavbot.utils.helpers import ensure_data_path
 
     config = load_config()
     wc = config.channels.wechat
-    api_base = (base_url or wc.base_url).strip()
-    if not api_base:
-        raise typer.BadParameter("wechat baseUrl is empty")
+    api_base = (base_url or DEFAULT_BASE_URL).strip()
 
     api = WechatApiClient(
         base_url=api_base,
@@ -925,7 +924,6 @@ def wechat_login(
         key,
         account_id=result.account_id,
         token=result.token,
-        base_url=result.base_url,
         user_id=result.user_id,
     )
 
@@ -936,8 +934,6 @@ def wechat_login(
             enabled=True,
             account_id=result.account_id,
             token=result.token,
-            base_url=result.base_url,
-            cdn_base_url=wc.cdn_base_url,
             route_tag=route_tag or wc.route_tag or "",
             allow_from=list(wc.allow_from or []),
         ),

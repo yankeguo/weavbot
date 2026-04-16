@@ -13,8 +13,9 @@ from loguru import logger
 from rich.console import Console
 
 from weavbot.channels.wechat.api import WechatApiClient, _common_headers
+from weavbot.channels.wechat.types import DEFAULT_BASE_URL
 
-FIXED_BASE_URL = "https://ilinkai.weixin.qq.com"
+FIXED_BASE_URL = DEFAULT_BASE_URL
 QR_LONG_POLL_TIMEOUT_MS = 35_000
 MAX_QR_REFRESH_COUNT = 3
 DEFAULT_ILINK_BOT_TYPE = "3"
@@ -220,7 +221,6 @@ async def wechat_qr_login(
 
             token = str(status_resp.get("bot_token", "")).strip()
             account_id = str(status_resp.get("ilink_bot_id", "")).strip()
-            base_url = str(status_resp.get("baseurl", "")).strip() or api.base_url.rstrip("/")
             user_id = str(status_resp.get("ilink_user_id", "")).strip()
             del _active_logins[session_key]
             logger.info(
@@ -233,7 +233,7 @@ async def wechat_qr_login(
             return LoginResult(
                 account_id=account_id,
                 token=token,
-                base_url=base_url,
+                base_url=DEFAULT_BASE_URL,
                 user_id=user_id,
             )
 
