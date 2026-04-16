@@ -265,7 +265,8 @@ class StreamingMarkdownFilter:
             return ""
 
         if typ == "italic":
-            for j in range(len(acc)):
+            j = 0
+            while j < len(acc):
                 if acc[j] == "\n":
                     r = "*" + acc[: j + 1]
                     self._buf = acc[j + 1 :]
@@ -274,7 +275,7 @@ class StreamingMarkdownFilter:
                     return r
                 if acc[j] == "*":
                     if j + 1 < len(acc) and acc[j + 1] == "*":
-                        j += 1
+                        j += 2
                         continue
                     content = acc[:j]
                     self._buf = acc[j + 1 :]
@@ -282,10 +283,12 @@ class StreamingMarkdownFilter:
                     if _contains_cjk(content):
                         return content
                     return f"*{content}*"
+                j += 1
             return ""
 
         if typ == "uitalic":
-            for j in range(len(acc)):
+            j = 0
+            while j < len(acc):
                 if acc[j] == "\n":
                     r = "_" + acc[: j + 1]
                     self._buf = acc[j + 1 :]
@@ -294,7 +297,7 @@ class StreamingMarkdownFilter:
                     return r
                 if acc[j] == "_":
                     if j + 1 < len(acc) and acc[j + 1] == "_":
-                        j += 1
+                        j += 2
                         continue
                     content = acc[:j]
                     self._buf = acc[j + 1 :]
@@ -302,6 +305,7 @@ class StreamingMarkdownFilter:
                     if _contains_cjk(content):
                         return content
                     return f"_{content}_"
+                j += 1
             return ""
 
         if typ == "image":
