@@ -159,8 +159,6 @@ class WechatAccountConfig(Base):
     enabled: bool = True
     account_id: str = ""  # Platform account id, e.g. xxx@im.bot
     token: str = ""  # Bot token obtained via QR login
-    base_url: str = "https://ilinkai.weixin.qq.com"
-    cdn_base_url: str = "https://novac2c.cdn.weixin.qq.com/c2c"
     route_tag: str = ""
     allow_from: list[str] = Field(default_factory=list)
 
@@ -171,8 +169,6 @@ class WechatConfig(Base):
     enabled: bool = False
     account_id: str = ""  # Default account id
     token: str = ""  # Default account token
-    base_url: str = "https://ilinkai.weixin.qq.com"
-    cdn_base_url: str = "https://novac2c.cdn.weixin.qq.com/c2c"
     route_tag: str = ""
     allow_from: list[str] = Field(default_factory=list)  # Allowed sender IDs (empty = allow all)
     request_timeout_sec: int = 15

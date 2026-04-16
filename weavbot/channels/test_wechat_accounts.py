@@ -33,7 +33,6 @@ def test_list_account_credentials_skips_bad_files(tmp_path: Path):
         "acc-a",
         account_id="a@im.bot",
         token="token-a",
-        base_url="https://ilinkai.weixin.qq.com",
         user_id="u-a",
     )
     bad = tmp_path / "accounts" / "bad.json"
@@ -45,7 +44,7 @@ def test_list_account_credentials_skips_bad_files(tmp_path: Path):
         {
             "key": "acc-a",
             "account_id": "a@im.bot",
-            "base_url": "https://ilinkai.weixin.qq.com",
             "user_id": "u-a",
+            "base_url": "",
         }
     ]

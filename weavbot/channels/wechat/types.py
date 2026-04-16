@@ -28,11 +28,15 @@ TYPING_STATUS_CANCEL = 2
 
 SESSION_EXPIRED_ERRCODE = -14
 
+DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com"
+DEFAULT_CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c"
+
 
 class CdnMedia(TypedDict, total=False):
     encrypt_query_param: str
     aes_key: str
     encrypt_type: int
+    full_url: str
 
 
 class MessageItem(TypedDict, total=False):
@@ -50,7 +54,10 @@ class WechatMessage(TypedDict, total=False):
     message_id: int
     from_user_id: str
     to_user_id: str
+    client_id: str
     create_time_ms: int
+    update_time_ms: int
+    delete_time_ms: int
     session_id: str
     group_id: str
     message_type: int

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import time
 from dataclasses import dataclass
 
@@ -10,11 +11,17 @@ from loguru import logger
 from weavbot.channels.wechat.api import WechatApiClient
 from weavbot.channels.wechat.types import TYPING_STATUS_CANCEL, TYPING_STATUS_TYPING
 
+_INITIAL_RETRY_DELAY_SEC = 2.0
+_MAX_RETRY_DELAY_SEC = 3600.0
+
 
 @dataclass(slots=True)
 class _TypingCacheEntry:
     ticket: str
     updated_at: float
+    ever_succeeded: bool
+    next_fetch_at: float
+    retry_delay_sec: float = _INITIAL_RETRY_DELAY_SEC
 
 
 class TypingManager:
@@ -31,19 +38,46 @@ class TypingManager:
         self, api: WechatApiClient, account_key: str, user_id: str, context_token: str | None
     ) -> str | None:
         key = self._cache_key(account_key, user_id)
-        cached = self._cache.get(key)
         now = time.time()
-        if cached and (now - cached.updated_at) < self.ttl_sec:
-            return cached.ticket
-        try:
-            resp = await api.get_config(user_id, context_token=context_token)
-        except Exception as exc:
-            logger.debug("Wechat getConfig failed for typing: {}", exc)
-            return None
-        ticket = str(resp.get("typing_ticket", "")).strip()
-        if ticket:
-            self._cache[key] = _TypingCacheEntry(ticket=ticket, updated_at=now)
-        return ticket or None
+        entry = self._cache.get(key)
+        should_fetch = not entry or now >= entry.next_fetch_at
+
+        if should_fetch:
+            fetch_ok = False
+            try:
+                resp = await api.get_config(user_id, context_token=context_token)
+                if int(resp.get("ret", 0) or 0) == 0:
+                    ticket = str(resp.get("typing_ticket", "")).strip()
+                    if ticket:
+                        jittered_ttl = self.ttl_sec * random.uniform(0.5, 1.0)
+                        self._cache[key] = _TypingCacheEntry(
+                            ticket=ticket,
+                            updated_at=now,
+                            ever_succeeded=True,
+                            next_fetch_at=now + jittered_ttl,
+                            retry_delay_sec=_INITIAL_RETRY_DELAY_SEC,
+                        )
+                        fetch_ok = True
+            except Exception as exc:
+                logger.debug("Wechat getConfig failed for typing: {}", exc)
+
+            if not fetch_ok:
+                prev_delay = entry.retry_delay_sec if entry else _INITIAL_RETRY_DELAY_SEC
+                next_delay = min(prev_delay * 2, _MAX_RETRY_DELAY_SEC)
+                if entry:
+                    entry.next_fetch_at = now + next_delay
+                    entry.retry_delay_sec = next_delay
+                else:
+                    self._cache[key] = _TypingCacheEntry(
+                        ticket="",
+                        updated_at=now,
+                        ever_succeeded=False,
+                        next_fetch_at=now + _INITIAL_RETRY_DELAY_SEC,
+                        retry_delay_sec=_INITIAL_RETRY_DELAY_SEC,
+                    )
+
+        cached = self._cache.get(key)
+        return cached.ticket if cached and cached.ticket else None
 
     async def send_typing(
         self, api: WechatApiClient, account_key: str, user_id: str, context_token: str | None
