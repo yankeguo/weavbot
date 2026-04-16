@@ -15,6 +15,7 @@ from weavbot.bus.queue import MessageBus
 from weavbot.channels.base import BaseChannel
 from weavbot.channels.wechat.accounts import resolve_accounts
 from weavbot.channels.wechat.api import WechatApiClient
+from weavbot.channels.wechat.markdown_filter import StreamingMarkdownFilter
 from weavbot.channels.wechat.media import (
     download_media_file,
     ensure_local_media_path,
@@ -167,7 +168,9 @@ class WechatChannel(BaseChannel):
 
             text = (msg.content or "").strip()
             if text:
-                text_item = {"type": ITEM_TYPE_TEXT, "text_item": {"text": text}}
+                f = StreamingMarkdownFilter()
+                filtered_text = f.feed(text) + f.flush()
+                text_item = {"type": ITEM_TYPE_TEXT, "text_item": {"text": filtered_text}}
                 await api.send_message(
                     self._build_bot_message(
                         to_user_id=raw_chat_id,

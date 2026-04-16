@@ -35,6 +35,7 @@ async def run_long_poll(
     """Run one account long-poll worker until stop_event is set."""
     cursor = load_sync_buf(state_dir, account.key)
     failures = 0
+    next_timeout_ms = api.long_poll_timeout_ms
 
     while not stop_event.is_set():
         if guard.is_paused(account.key):
@@ -47,9 +48,19 @@ async def run_long_poll(
             await asyncio.sleep(min(remain, 5))
             continue
         try:
-            resp: GetUpdatesResp = await api.get_updates(cursor)
+            resp: GetUpdatesResp = await api.get_updates(cursor, timeout_ms=next_timeout_ms)
             ret = int(resp.get("ret", 0) or 0)
             errcode = int(resp.get("errcode", 0) or 0)
+
+            longpoll_timeout_ms = resp.get("longpolling_timeout_ms")
+            if isinstance(longpoll_timeout_ms, int) and longpoll_timeout_ms > 0:
+                next_timeout_ms = longpoll_timeout_ms
+                logger.debug(
+                    "Wechat account {} updated poll timeout to {}ms",
+                    account.key,
+                    next_timeout_ms,
+                )
+
             if ret != 0 or errcode != 0:
                 if errcode == SESSION_EXPIRED_ERRCODE or ret == SESSION_EXPIRED_ERRCODE:
                     guard.pause(account.key)
