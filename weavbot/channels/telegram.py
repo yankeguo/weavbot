@@ -192,7 +192,8 @@ class TelegramChannel(BaseChannel):
             logger.warning("Failed to register bot commands: {}", e)
 
         # Start polling (this runs until stopped)
-        assert self._app.updater is not None
+        if self._app.updater is None:
+            raise RuntimeError("Telegram updater not initialized")
         await self._app.updater.start_polling(
             allowed_updates=["message"],
             drop_pending_updates=True,  # Ignore old messages on startup
@@ -217,8 +218,8 @@ class TelegramChannel(BaseChannel):
 
         if self._app:
             logger.info("Stopping Telegram bot...")
-            assert self._app.updater is not None
-            await self._app.updater.stop()
+            if self._app.updater is not None:
+                await self._app.updater.stop()
             await self._app.stop()
             await self._app.shutdown()
             self._app = None

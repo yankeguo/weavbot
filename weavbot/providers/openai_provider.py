@@ -207,16 +207,19 @@ class OpenAIProvider(LLMProvider):
     def _parse(self, response: Any) -> LLMResponse:
         choice = response.choices[0]
         msg = choice.message
+
+        def _parse_arguments(raw: str | object) -> dict[str, Any]:
+            parsed = json_repair.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(parsed, dict):
+                return cast(dict[str, Any], parsed)
+            logger.debug("Unexpected tool-call arguments type: {}", type(parsed))
+            return {}
+
         tool_calls = [
             ToolCallRequest(
                 id=tc.id,
                 name=tc.function.name,
-                arguments=cast(
-                    dict[str, Any],
-                    json_repair.loads(tc.function.arguments)
-                    if isinstance(tc.function.arguments, str)
-                    else tc.function.arguments,
-                ),
+                arguments=_parse_arguments(tc.function.arguments),
             )
             for tc in (msg.tool_calls or [])
         ]
