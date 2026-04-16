@@ -22,8 +22,8 @@ class SlackChannel(BaseChannel):
 
     name = "slack"
 
-    def __init__(self, config: SlackConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(self, config: SlackConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: SlackConfig = config
         self._web_client: AsyncWebClient | None = None
         self._socket_client: SocketModeClient | None = None
@@ -78,9 +78,9 @@ class SlackChannel(BaseChannel):
             logger.warning("Slack client not running")
             return
         try:
-            slack_meta = msg.metadata.get("slack", {}) if msg.metadata else {}
-            thread_ts = slack_meta.get("thread_ts")
-            channel_type = slack_meta.get("channel_type")
+            state_data = await self.state.get("slack", msg.chat_id)
+            thread_ts = state_data.get("thread_ts")
+            channel_type = state_data.get("channel_type")
             # Only reply in thread for channel/group messages; DMs don't use threads
             use_thread = thread_ts and channel_type != "im"
             thread_ts_param = thread_ts if use_thread else None
@@ -181,17 +181,18 @@ class SlackChannel(BaseChannel):
         session_key = f"slack:{chat_id}:{thread_ts}" if thread_ts and channel_type != "im" else None
 
         try:
+            await self.state.set(
+                "slack",
+                chat_id,
+                {
+                    "thread_ts": thread_ts,
+                    "channel_type": channel_type,
+                },
+            )
             await self._handle_message(
                 sender_id=sender_id,
                 chat_id=chat_id,
                 content=text,
-                metadata={
-                    "slack": {
-                        "event": event,
-                        "thread_ts": thread_ts,
-                        "channel_type": channel_type,
-                    },
-                },
                 session_key=session_key,
             )
         except Exception:

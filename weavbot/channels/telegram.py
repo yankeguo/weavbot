@@ -124,8 +124,10 @@ class TelegramChannel(BaseChannel):
         config: TelegramConfig,
         bus: MessageBus,
         workspace: Path,
+        data_path: Path,
+        state=None,
     ):
-        super().__init__(config, bus, workspace)
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: TelegramConfig = config
         self._app: Application | None = None
         self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
@@ -247,7 +249,8 @@ class TelegramChannel(BaseChannel):
 
         reply_params = None
         if self.config.reply_to_message:
-            reply_to_message_id = msg.metadata.get("message_id")
+            state_data = await self.state.get("telegram", msg.chat_id)
+            reply_to_message_id = state_data.get("message_id")
             if reply_to_message_id:
                 reply_params = ReplyParameters(
                     message_id=reply_to_message_id, allow_sending_without_reply=True
@@ -400,6 +403,13 @@ class TelegramChannel(BaseChannel):
 
         str_chat_id = str(chat_id)
 
+        # Persist send state per chat_id
+        await self.state.set(
+            "telegram",
+            str_chat_id,
+            {"message_id": message.message_id},
+        )
+
         # Telegram media groups: buffer briefly, forward as one aggregated turn.
         if media_group_id := getattr(message, "media_group_id", None):
             key = f"{str_chat_id}:{media_group_id}"
@@ -409,13 +419,7 @@ class TelegramChannel(BaseChannel):
                     "chat_id": str_chat_id,
                     "contents": [],
                     "media": [],
-                    "metadata": {
-                        "message_id": message.message_id,
-                        "user_id": user.id,
-                        "username": user.username,
-                        "first_name": user.first_name,
-                        "is_group": message.chat.type != "private",
-                    },
+                    "message_id": message.message_id,
                 }
                 self._start_typing(str_chat_id)
             buf = self._media_group_buffers[key]
@@ -435,13 +439,6 @@ class TelegramChannel(BaseChannel):
             chat_id=str_chat_id,
             content=content,
             media=media_paths,
-            metadata={
-                "message_id": message.message_id,
-                "user_id": user.id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "is_group": message.chat.type != "private",
-            },
         )
 
     async def _flush_media_group(self, key: str) -> None:
@@ -451,12 +448,16 @@ class TelegramChannel(BaseChannel):
             if not (buf := self._media_group_buffers.pop(key, None)):
                 return
             content = "\n".join(buf["contents"]) or "[empty message]"
+            await self.state.set(
+                "telegram",
+                buf["chat_id"],
+                {"message_id": buf.get("message_id")},
+            )
             await self._handle_message(
                 sender_id=buf["sender_id"],
                 chat_id=buf["chat_id"],
                 content=content,
                 media=list(dict.fromkeys(buf["media"])),
-                metadata=buf["metadata"],
             )
         finally:
             self._media_group_tasks.pop(key, None)

@@ -234,14 +234,16 @@ class MochatChannel(BaseChannel):
 
     name = "mochat"
 
-    def __init__(self, config: MochatConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(
+        self, config: MochatConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: MochatConfig = config
         self._http: httpx.AsyncClient | None = None
         self._socket: Any = None
         self._ws_connected = self._ws_ready = False
 
-        self._state_dir = self.workspace / "mochat"
+        self._state_dir = self.data_path / "mochat"
         self._cursor_path = self._state_dir / "session_cursors.json"
         self._session_cursor: dict[str, int] = {}
         self._cursor_save_task: asyncio.Task | None = None
@@ -334,6 +336,7 @@ class MochatChannel(BaseChannel):
             "session_"
         )
         try:
+            state_data = await self.state.get("mochat", msg.chat_id)
             if is_panel:
                 await self._api_send(
                     "/api/claw/groups/panels/send",
@@ -341,7 +344,7 @@ class MochatChannel(BaseChannel):
                     target.id,
                     content,
                     msg.reply_to,
-                    self._read_group_id(msg.metadata),
+                    self._read_group_id(state_data),
                 )
             else:
                 await self._api_send(
@@ -834,21 +837,15 @@ class MochatChannel(BaseChannel):
         last = entries[-1]
         is_group = bool(last.group_id)
         body = build_buffered_body(entries, is_group) or "[empty message]"
+        await self.state.set(
+            "mochat",
+            target_id,
+            {"group_id": last.group_id},
+        )
         await self._handle_message(
             sender_id=last.author,
             chat_id=target_id,
             content=body,
-            metadata={
-                "message_id": last.message_id,
-                "timestamp": last.timestamp,
-                "is_group": is_group,
-                "group_id": last.group_id,
-                "sender_name": last.sender_name,
-                "sender_username": last.sender_username,
-                "target_kind": target_kind,
-                "was_mentioned": was_mentioned,
-                "buffered_count": len(entries),
-            },
         )
 
     async def _cancel_delay_timers(self) -> None:
@@ -1006,5 +1003,5 @@ class MochatChannel(BaseChannel):
     def _read_group_id(metadata: dict[str, Any]) -> str | None:
         if not isinstance(metadata, dict):
             return None
-        value = metadata.get("group_id") or metadata.get("groupId")
+        value = metadata.get("group_id")
         return value.strip() if isinstance(value, str) and value.strip() else None

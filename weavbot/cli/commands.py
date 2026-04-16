@@ -1,7 +1,6 @@
 """CLI commands for weavbot."""
 
 import asyncio
-import json
 import os
 import select
 import signal
@@ -173,15 +172,8 @@ def _build_background_notify_contract(
     source: str,
     channel: str,
     chat_id: str,
-    target_metadata: dict[str, object] | None = None,
 ) -> str:
     """Build explicit notification contract for background-triggered turns."""
-    metadata_text = "{}"
-    if target_metadata:
-        try:
-            metadata_text = json.dumps(target_metadata, ensure_ascii=False, sort_keys=True)
-        except TypeError:
-            metadata_text = "{}"
     return (
         f"[{source} Notification Contract]\n"
         "- This is a background task run.\n"
@@ -192,19 +184,16 @@ def _build_background_notify_contract(
         "- For `message` target routing, prefer current context defaults; if needed, use:\n"
         f"  - channel: {channel}\n"
         f"  - chat_id: {chat_id}\n"
-        f"  - metadata: {metadata_text}\n"
     )
 
 
-def _build_heartbeat_execute_input(
-    tasks: str, *, channel: str, chat_id: str, target_metadata: dict[str, object]
-) -> str:
+def _build_heartbeat_execute_input(tasks: str, *, channel: str, chat_id: str) -> str:
     """Compose heartbeat execution input with explicit notify contract."""
     task_text = (tasks or "").strip() or "(empty heartbeat tasks)"
     return (
         "[Heartbeat Task]\n"
         f"{task_text}\n\n"
-        f"{_build_background_notify_contract(source='Heartbeat', channel=channel, chat_id=chat_id, target_metadata=target_metadata)}"
+        f"{_build_background_notify_contract(source='Heartbeat', channel=channel, chat_id=chat_id)}"
     )
 
 
@@ -257,7 +246,7 @@ def _parse_heartbeat_target(key: str) -> tuple[str, str, dict[str, object]] | No
     if text.startswith("wechat:"):
         parts = text.split(":", 2)
         if len(parts) == 3 and parts[1] and parts[2]:
-            return "wechat", parts[2], {"wechat": {"account_key": parts[1]}}
+            return "wechat", f"{parts[1]}:{parts[2]}", {}
         return None
 
     if ":" not in text:
@@ -276,11 +265,11 @@ def _pick_heartbeat_target_from_sessions(
         parsed = _parse_heartbeat_target(str(item.get("key") or ""))
         if not parsed:
             continue
-        channel, chat_id, metadata = parsed
+        channel, chat_id, target_meta = parsed
         if channel in {"cli", "system"}:
             continue
         if channel in enabled_channels and chat_id:
-            return channel, chat_id, metadata
+            return channel, chat_id, target_meta
     return "cli", "direct", {}
 
 
@@ -571,8 +560,13 @@ def gateway(
 
     cron.on_job = on_cron_job
 
+    from weavbot.utils.helpers import ensure_data_path, ensure_workspace_path
+
+    data_path = ensure_data_path()
+    workspace_path = ensure_workspace_path(config.agents.defaults.workspace)
+
     # Create channel manager
-    channels = ChannelManager(config, bus)
+    channels = ChannelManager(config, bus, data_path, workspace_path)
 
     def _pick_heartbeat_target() -> tuple[str, str, dict[str, object]]:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
@@ -594,7 +588,6 @@ def gateway(
             tasks,
             channel=channel,
             chat_id=chat_id,
-            target_metadata=target_meta,
         )
         try:
             final_content = await agent.process_direct(
@@ -641,10 +634,10 @@ def gateway(
             len(response or ""),
             sorted(target_meta.keys()),
         )
+        if target_meta:
+            await channels.state_store.update(channel, chat_id, dict(target_meta))
         await bus.publish_outbound(
-            OutboundMessage(
-                channel=channel, chat_id=chat_id, content=response, metadata=target_meta
-            )
+            OutboundMessage(channel=channel, chat_id=chat_id, content=response)
         )
 
     hb_cfg = config.gateway.heartbeat
@@ -809,12 +802,11 @@ def agent(
                 while True:
                     try:
                         msg = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
-                        if msg.metadata.get("_progress"):
-                            is_tool_hint = msg.metadata.get("_tool_hint", False)
+                        if msg.is_progress:
                             ch = agent_loop.channels_config
-                            if ch and is_tool_hint and not ch.send_tool_hints:
+                            if ch and msg.is_tool_hint and not ch.send_tool_hints:
                                 pass
-                            elif ch and not is_tool_hint and not ch.send_progress:
+                            elif ch and not msg.is_tool_hint and not ch.send_progress:
                                 pass
                             else:
                                 console.print(f"  [dim]↳ {msg.content}[/dim]")
@@ -898,7 +890,6 @@ def wechat_login(
 ):
     """Scan QR code and save Wechat account credentials."""
     from weavbot.channels.wechat.accounts import (
-        resolve_state_dir,
         save_account_credentials,
         upsert_account_config,
     )
@@ -906,6 +897,7 @@ def wechat_login(
     from weavbot.channels.wechat.auth import account_key_from_account_id, wechat_qr_login
     from weavbot.config.loader import load_config, save_config
     from weavbot.config.schema import WechatAccountConfig
+    from weavbot.utils.helpers import ensure_data_path
 
     config = load_config()
     wc = config.channels.wechat
@@ -926,7 +918,8 @@ def wechat_login(
 
     result = asyncio.run(run_login())
     key = (account_key or account_key_from_account_id(result.account_id)).strip()
-    state_dir = resolve_state_dir(config.workspace_path, wc.state_dir)
+    state_dir = ensure_data_path() / "wechat"
+    state_dir.mkdir(parents=True, exist_ok=True)
     save_account_credentials(
         state_dir,
         key,
@@ -963,12 +956,10 @@ def wechat_login(
 @wechat_app.command("list-accounts")
 def wechat_list_accounts():
     """List saved Wechat account records."""
-    from weavbot.channels.wechat.accounts import list_account_credentials, resolve_state_dir
-    from weavbot.config.loader import load_config
+    from weavbot.channels.wechat.accounts import list_account_credentials
+    from weavbot.utils.helpers import ensure_data_path
 
-    config = load_config()
-    wc = config.channels.wechat
-    state_dir = resolve_state_dir(config.workspace_path, wc.state_dir)
+    state_dir = ensure_data_path() / "wechat"
     rows = list_account_credentials(state_dir)
     if not rows:
         console.print("[yellow]No wechat accounts found.[/yellow]")

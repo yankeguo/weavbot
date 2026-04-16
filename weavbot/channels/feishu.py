@@ -277,8 +277,8 @@ class FeishuChannel(BaseChannel):
 
     name = "feishu"
 
-    def __init__(self, config: FeishuConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(self, config: FeishuConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: FeishuConfig = config
         self._client: Any = None
         self._ws_client: Any = None
@@ -846,11 +846,6 @@ class FeishuChannel(BaseChannel):
                 chat_id=reply_to,
                 content=content,
                 media=media_paths,
-                metadata={
-                    "message_id": message_id,
-                    "chat_type": chat_type,
-                    "msg_type": msg_type,
-                },
             )
 
         except Exception as e:

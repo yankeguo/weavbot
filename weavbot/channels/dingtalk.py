@@ -104,8 +104,8 @@ class DingTalkChannel(BaseChannel):
     _AUDIO_EXTS = {".amr", ".mp3", ".wav", ".ogg", ".m4a", ".aac"}
     _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
-    def __init__(self, config: DingTalkConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(self, config: DingTalkConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: DingTalkConfig = config
         self._client: Any = None
         self._http: httpx.AsyncClient | None = None
@@ -465,10 +465,6 @@ class DingTalkChannel(BaseChannel):
                 sender_id=sender_id,
                 chat_id=sender_id,  # For private chat, chat_id == sender_id
                 content=str(content),
-                metadata={
-                    "sender_name": sender_name,
-                    "platform": "dingtalk",
-                },
             )
         except Exception as e:
             logger.error("Error publishing DingTalk message: {}", e)

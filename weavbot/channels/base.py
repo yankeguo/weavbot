@@ -3,12 +3,15 @@
 import mimetypes
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from weavbot.bus.events import InboundMessage, OutboundMessage
 from weavbot.bus.queue import MessageBus
+
+if TYPE_CHECKING:
+    from weavbot.channels.state import ChannelStateStore
 
 
 class BaseChannel(ABC):
@@ -21,7 +24,14 @@ class BaseChannel(ABC):
 
     name: str = "base"
 
-    def __init__(self, config: Any, bus: MessageBus, workspace: Path):
+    def __init__(
+        self,
+        config: Any,
+        bus: MessageBus,
+        workspace: Path,
+        data_path: Path,
+        state: "ChannelStateStore | None" = None,
+    ):
         """
         Initialize the channel.
 
@@ -29,13 +39,22 @@ class BaseChannel(ABC):
             config: Channel-specific configuration.
             bus: The message bus for communication.
             workspace: The workspace root directory.
+            data_path: The data directory for persistent channel state.
+            state: Optional shared channel state store.
         """
         self.config = config
         self.bus = bus
         self.workspace = workspace
+        self.data_path = data_path
         self.media_dir = workspace / "media"
         self.media_dir.mkdir(parents=True, exist_ok=True)
         self._running = False
+        if state is not None:
+            self.state = state
+        else:
+            from weavbot.channels.state import ChannelStateStore
+
+            self.state = ChannelStateStore(path=data_path / "channels.json")
 
     def resolve_media_path(self, path: str) -> Path:
         """Resolve a media file path against workspace. Absolute paths are kept as-is."""
@@ -87,7 +106,6 @@ class BaseChannel(ABC):
         chat_id: str,
         content: str,
         media: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
         session_key: str | None = None,
     ) -> None:
         """
@@ -100,7 +118,6 @@ class BaseChannel(ABC):
             chat_id: The chat/channel identifier.
             content: Message text content.
             media: Optional list of media URLs.
-            metadata: Optional channel-specific metadata.
             session_key: Optional session key override (e.g. thread-scoped sessions).
         """
         if not self.is_allowed(sender_id):
@@ -132,7 +149,6 @@ class BaseChannel(ABC):
             chat_id=str(chat_id),
             content=content,
             media=image_media,
-            metadata=metadata or {},
             session_key_override=session_key,
         )
 

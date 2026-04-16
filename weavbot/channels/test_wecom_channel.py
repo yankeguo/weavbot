@@ -5,13 +5,15 @@ import pytest
 
 from weavbot.bus.events import OutboundMessage
 from weavbot.bus.queue import MessageBus
+from weavbot.channels.state import ChannelStateStore
 from weavbot.channels.wecom import EVENT_ENTER_CHAT, WecomChannel
 from weavbot.config.schema import WecomConfig
 
 
 def _make_channel(tmp_path):
     cfg = WecomConfig(bot_id="bot-id", secret="bot-secret")
-    return WecomChannel(cfg, MessageBus(), tmp_path)
+    store = ChannelStateStore(path=tmp_path / "channels.json")
+    return WecomChannel(cfg, MessageBus(), tmp_path, data_path=tmp_path, state=store)
 
 
 def test_parse_mixed_message(tmp_path):
@@ -43,7 +45,7 @@ def test_parse_mixed_message(tmp_path):
 def test_extract_req_id_via_message_id_cache(tmp_path):
     channel = _make_channel(tmp_path)
     channel._remember_msgid_reqid("m1", "r1")
-    req_id = channel._extract_req_id({"message_id": "m1"}, {})
+    req_id = channel._extract_req_id({"message_id": "m1"})
     assert req_id == "r1"
 
 
@@ -85,8 +87,9 @@ def test_event_callback_publishes_inbound(tmp_path):
     inbound = asyncio.run(run_case())
     assert inbound.channel == "wecom"
     assert inbound.sender_id == "u1"
-    assert inbound.metadata["req_id"] == "req-1"
-    assert inbound.metadata["wecom"]["event_type"] == "feedback_event"
+    state_data = asyncio.run(channel.state.get("wecom", "u1"))
+    assert state_data.get("req_id") == "req-1"
+    assert state_data.get("event_type") == "feedback_event"
 
 
 def test_send_enter_chat_uses_welcome_command(tmp_path):
@@ -103,14 +106,16 @@ def test_send_enter_chat_uses_welcome_command(tmp_path):
     channel._send_reply = fake_send_reply  # type: ignore[method-assign]
 
     async def run_case():
+        await channel.state.set(
+            "wecom",
+            "user-1",
+            {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT},
+        )
         await channel.send(
             OutboundMessage(
                 channel="wecom",
                 chat_id="user-1",
                 content="hello",
-                metadata={
-                    "wecom": {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT},
-                },
             )
         )
 

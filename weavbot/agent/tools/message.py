@@ -14,19 +14,16 @@ class MessageTool(Tool):
         send_callback: Callable[[OutboundMessage], Awaitable[None]] | None = None,
         default_channel: str = "",
         default_chat_id: str = "",
-        default_message_id: str | None = None,
     ):
         self._send_callback = send_callback
         self._default_channel = default_channel
         self._default_chat_id = default_chat_id
-        self._default_message_id = default_message_id
         self._sent_in_turn: bool = False
 
-    def set_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+    def set_context(self, channel: str, chat_id: str) -> None:
         """Set the current message context."""
         self._default_channel = channel
         self._default_chat_id = chat_id
-        self._default_message_id = message_id
 
     def set_send_callback(self, callback: Callable[[OutboundMessage], Awaitable[None]]) -> None:
         """Set the callback for sending messages."""
@@ -73,14 +70,11 @@ class MessageTool(Tool):
         content: str,
         channel: str | None = None,
         chat_id: str | None = None,
-        message_id: str | None = None,
         media: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
         channel = channel or self._default_channel
         chat_id = chat_id or self._default_chat_id
-        message_id = message_id or self._default_message_id
-
         if not channel or not chat_id:
             return "Error: No target channel/chat specified"
 
@@ -92,9 +86,6 @@ class MessageTool(Tool):
             chat_id=chat_id,
             content=content,
             media=media or [],
-            metadata={
-                "message_id": message_id,
-            },
         )
 
         try:

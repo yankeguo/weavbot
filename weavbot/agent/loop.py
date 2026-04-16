@@ -179,12 +179,12 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
-    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+    def _set_tool_context(self, channel: str, chat_id: str) -> None:
         """Update context for all tools that need routing info."""
         for name in ("message", "spawn", "add_cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
+                    tool.set_context(channel, chat_id)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -661,7 +661,6 @@ class AgentLoop:
                             channel=msg.channel,
                             chat_id=msg.chat_id,
                             content="",
-                            metadata=msg.metadata or {},
                         )
                     )
             except asyncio.CancelledError:
@@ -706,7 +705,7 @@ class AgentLoop:
             logger.info("Processing system message from {}", msg.sender_id)
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
-            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+            self._set_tool_context(channel, chat_id)
             history, messages = await self._build_initial_messages_with_compaction(
                 session,
                 msg.content,
@@ -760,7 +759,7 @@ class AgentLoop:
                 content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
 
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
+        self._set_tool_context(msg.channel, msg.chat_id)
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
@@ -774,15 +773,13 @@ class AgentLoop:
         )
 
         async def _bus_progress(content: str, *, tool_hint: bool = False) -> None:
-            meta = dict(msg.metadata or {})
-            meta["_progress"] = True
-            meta["_tool_hint"] = tool_hint
             await self.bus.publish_outbound(
                 OutboundMessage(
                     channel=msg.channel,
                     chat_id=msg.chat_id,
                     content=content,
-                    metadata=meta,
+                    is_progress=True,
+                    is_tool_hint=tool_hint,
                 )
             )
 
@@ -808,7 +805,6 @@ class AgentLoop:
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=final_content,
-            metadata=msg.metadata or {},
         )
 
     @staticmethod

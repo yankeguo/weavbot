@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 
 @dataclass
@@ -15,7 +14,6 @@ class InboundMessage:
     content: str  # Message text
     timestamp: datetime = field(default_factory=datetime.now)
     media: list[str] = field(default_factory=list)  # Media URLs
-    metadata: dict[str, Any] = field(default_factory=dict)  # Channel-specific data
     session_key_override: str | None = None  # Optional override for thread-scoped sessions
 
     @property
@@ -33,4 +31,5 @@ class OutboundMessage:
     content: str
     reply_to: str | None = None
     media: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    is_progress: bool = False
+    is_tool_hint: bool = False

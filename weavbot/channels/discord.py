@@ -46,8 +46,8 @@ class DiscordChannel(BaseChannel):
 
     name = "discord"
 
-    def __init__(self, config: DiscordConfig, bus: MessageBus, workspace: Path):
-        super().__init__(config, bus, workspace)
+    def __init__(self, config: DiscordConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+        super().__init__(config, bus, workspace, data_path, state=state)
         self.config: DiscordConfig = config
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._seq: int | None = None
@@ -257,8 +257,6 @@ class DiscordChannel(BaseChannel):
                 logger.warning("Failed to download Discord attachment: {}", e)
                 content_parts.append(f"[attachment: {filename} - download failed]")
 
-        reply_to = (payload.get("referenced_message") or {}).get("id")
-
         await self._start_typing(channel_id)
 
         await self._handle_message(
@@ -266,11 +264,6 @@ class DiscordChannel(BaseChannel):
             chat_id=channel_id,
             content="\n".join(p for p in content_parts if p) or "[empty message]",
             media=media_paths,
-            metadata={
-                "message_id": str(payload.get("id", "")),
-                "guild_id": payload.get("guild_id"),
-                "reply_to": reply_to,
-            },
         )
 
     async def _start_typing(self, channel_id: str) -> None:
