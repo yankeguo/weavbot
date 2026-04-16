@@ -89,6 +89,7 @@ class HeartbeatService:
 
         Returns (action, tasks) where action is 'skip' or 'run'.
         """
+        logger.debug("Heartbeat _decide: content_len={}", len(content))
         response = await self.provider.chat(
             messages=[
                 ChatMessage(
@@ -111,11 +112,23 @@ class HeartbeatService:
             model=self.model,
         )
 
+        logger.debug(
+            "Heartbeat _decide response: has_tool_calls={}, content_preview={}, tool_calls={}",
+            response.has_tool_calls,
+            (response.content or "")[:80],
+            [
+                {"id": tc.id, "name": tc.name, "arguments": tc.arguments}
+                for tc in response.tool_calls
+            ],
+        )
         if not response.has_tool_calls:
             return "skip", ""
 
         args = response.tool_calls[0].arguments
-        return args.get("action", "skip"), args.get("tasks", "")
+        action = args.get("action", "skip")
+        tasks = args.get("tasks", "")
+        logger.debug("Heartbeat _decide parsed: action={}, tasks_preview={}", action, tasks[:80])
+        return action, tasks
 
     async def start(self) -> None:
         """Start the heartbeat service."""
@@ -176,10 +189,15 @@ class HeartbeatService:
 
     async def trigger_now(self) -> str | None:
         """Manually trigger a heartbeat."""
+        logger.debug("Heartbeat trigger_now called")
         content = self._read_heartbeat_file()
         if not content:
+            logger.debug("Heartbeat trigger_now: HEARTBEAT.md missing or empty")
             return None
         action, tasks = await self._decide(content)
         if action != "run" or not self.on_execute:
+            logger.debug("Heartbeat trigger_now: action={}, on_execute={}", action, bool(self.on_execute))
             return None
-        return await self.on_execute(tasks)
+        result = await self.on_execute(tasks)
+        logger.debug("Heartbeat trigger_now result preview: {}", (result or "")[:80])
+        return result

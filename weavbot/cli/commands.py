@@ -505,6 +505,13 @@ def gateway(
 
         channel = job.payload.channel or "cli"
         chat_id = job.payload.to or "direct"
+        logger.debug(
+            "on_cron_job: job_id={}, channel={}, chat_id={}, session_key=cron:{}",
+            job.id,
+            channel,
+            chat_id,
+            job.id,
+        )
         reminder_note = _build_cron_execute_input(
             job_name=job.name,
             instruction=job.payload.message,
@@ -584,6 +591,13 @@ def gateway(
         """Phase 2: execute heartbeat tasks through the full agent loop."""
         channel, chat_id, target_meta = _pick_heartbeat_target()
         session_key = _heartbeat_session_key(channel, chat_id)
+        logger.debug(
+            "on_heartbeat_execute: channel={}, chat_id={}, session_key={}, tasks_preview={}",
+            channel,
+            chat_id,
+            session_key,
+            tasks[:80],
+        )
         execute_input = _build_heartbeat_execute_input(
             tasks,
             channel=channel,

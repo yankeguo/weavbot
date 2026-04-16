@@ -183,10 +183,16 @@ class AgentLoop:
 
     def _set_tool_context(self, channel: str, chat_id: str) -> None:
         """Update context for all tools that need routing info."""
+        logger.debug("_set_tool_context: channel={}, chat_id={}", channel, chat_id)
         for name in ("message", "spawn", "add_cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
+                    logger.debug("_set_tool_context: updating tool '{}'", name)
                     cast(Any, tool).set_context(channel, chat_id)
+                else:
+                    logger.debug("_set_tool_context: tool '{}' has no set_context", name)
+            else:
+                logger.debug("_set_tool_context: tool '{}' not found in registry", name)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -512,13 +518,28 @@ class AgentLoop:
                 messages, estimate_multiplier=fit_params["estimate_multiplier"]
             )
 
+            tool_defs = self.tools.get_definitions()
+            logger.debug(
+                "_run_agent_loop call #{}: model={}, temperature={}, tools_count={}",
+                iteration,
+                self.model,
+                self.temperature,
+                len(tool_defs),
+            )
             response = await self.provider.chat(
                 messages=messages,
-                tools=self.tools.get_definitions(),
+                tools=tool_defs,
                 model=self.model,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 reasoning_effort=self.reasoning_effort,
+            )
+            logger.debug(
+                "_run_agent_loop response #{}: finish_reason={}, has_tool_calls={}, content_preview={}",
+                iteration,
+                response.finish_reason,
+                response.has_tool_calls,
+                (response.content or "")[:80],
             )
             usage = self._normalize_usage(response.usage)
             self._record_estimation_error(
@@ -562,7 +583,20 @@ class AgentLoop:
                     tools_used.append(tool_call.name)
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
+                    logger.debug(
+                        "_run_agent_loop tool_call detail: id={}, name={}, arguments={}",
+                        tool_call.id,
+                        tool_call.name,
+                        args_str,
+                    )
+
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    result_preview = str(getattr(result, "content", result))[:200]
+                    logger.debug(
+                        "_run_agent_loop tool_result: name={}, result_preview={}",
+                        tool_call.name,
+                        result_preview,
+                    )
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -728,6 +762,14 @@ class AgentLoop:
         logger.info("Processing message from {}:{}: {}", msg.channel, msg.sender_id, preview)
 
         key = session_key or msg.session_key
+        logger.debug(
+            "_process_message: session_key={}, msg.session_key={}, key={}, msg.channel={}, msg.chat_id={}",
+            session_key,
+            msg.session_key,
+            key,
+            msg.channel,
+            msg.chat_id,
+        )
         session = self.sessions.get_or_create(key)
 
         # Slash commands
@@ -778,6 +820,11 @@ class AgentLoop:
 
         self._set_tool_context(msg.channel, msg.chat_id)
         if message_tool := self.tools.get("message"):
+            logger.debug(
+                "_process_message: after _set_tool_context, message_tool defaults channel={}, chat_id={}",
+                getattr(message_tool, "_default_channel", "N/A"),
+                getattr(message_tool, "_default_chat_id", "N/A"),
+            )
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
 
@@ -858,6 +905,13 @@ class AgentLoop:
         on_progress: Callable[[str], Awaitable[None]] | None = None,
     ) -> str:
         """Process a message directly (for CLI or cron usage)."""
+        logger.debug(
+            "process_direct: session_key={}, channel={}, chat_id={}, content_preview={}",
+            session_key,
+            channel,
+            chat_id,
+            content[:80],
+        )
         await self._connect_mcp()
         msg = InboundMessage(channel=channel, sender_id="user", chat_id=chat_id, content=content)
         response = await self._process_message(
