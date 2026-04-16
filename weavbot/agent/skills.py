@@ -111,12 +111,12 @@ class SkillsLoader:
             meta = self.get_skill_metadata(s["name"]) or {}
             weavbot_meta = _parse_weavbot_metadata(meta.get("metadata", ""))
             available = self._check_requirements(weavbot_meta)
-            desc = meta.get("description", s["name"])
+            desc = str(meta.get("description", s["name"]))
 
             lines.append(f'  <skill available="{str(available).lower()}">')
             lines.append(f"    <name>{_esc(s['name'])}</name>")
             lines.append(f"    <description>{_esc(desc)}</description>")
-            lines.append(f"    <location>{s['path']}</location>")
+            lines.append(f"    <location>{_esc(s['path'])}</location>")
 
             if not available:
                 missing = self._get_missing_requirements(weavbot_meta)

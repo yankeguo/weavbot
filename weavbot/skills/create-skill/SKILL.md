@@ -32,7 +32,7 @@ description: <one-line description>
 Instructions for the agent.
 ```
 
-Frontmatter uses simple `key: value` pairs (one per line). No nested objects, no multi-line values.
+Frontmatter is YAML parsed by `python-frontmatter`. Use simple top-level fields (`name`, `description`, `always`) for most skills. Advanced settings like dependency declarations go in the `metadata` field as a JSON string.
 
 ## Frontmatter Fields
 
@@ -41,6 +41,7 @@ Frontmatter uses simple `key: value` pairs (one per line). No nested objects, no
 | `name` | Yes | Skill name, must match the directory name (`skills/<name>/`) |
 | `description` | Yes | One-line summary shown in the skills directory |
 | `always` | No | Set to `true` to always load this skill into context (use sparingly) |
+| `metadata` | No | JSON string for advanced settings. Supports `requires.bins` (list of CLI tools) and `requires.env` (list of env vars). Skill shows as unavailable until all requirements are met. Example: `metadata: '{"weavbot":{"requires":{"bins":["ffmpeg"]}}}'` |
 
 ## Creation Steps
 
