@@ -40,6 +40,7 @@ from weavbot.session.manager import Session, SessionManager
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
     from weavbot.cron.service import CronService
+    from weavbot.heartbeat.service import HeartbeatService
 
 
 class AgentLoop:
@@ -67,7 +68,7 @@ class AgentLoop:
         workspace: Path,
         model: str | None = None,
         max_iterations: int = 40,
-        temperature: float = 0.1,
+        temperature: float | None = None,
         max_tokens: int = 4096,
         max_context: int = 131072,
         reasoning_effort: str | None = None,
@@ -121,6 +122,7 @@ class AgentLoop:
         self._mcp_connecting = False
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
         self._processing_lock = asyncio.Lock()
+        self.heartbeat_service: HeartbeatService | None = None
         self._register_default_tools()
 
     def _register_default_tools(self) -> None:
@@ -181,6 +183,7 @@ class AgentLoop:
 
     def _set_tool_context(self, channel: str, chat_id: str) -> None:
         """Update context for all tools that need routing info."""
+        logger.debug("_set_tool_context: channel={}, chat_id={}", channel, chat_id)
         for name in ("message", "spawn", "add_cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
@@ -518,6 +521,13 @@ class AgentLoop:
                 max_tokens=self.max_tokens,
                 reasoning_effort=self.reasoning_effort,
             )
+            logger.debug(
+                "_run_agent_loop response #{}: finish_reason={}, has_tool_calls={}, content_preview={}",
+                iteration,
+                response.finish_reason,
+                response.has_tool_calls,
+                (response.content or "")[:80],
+            )
             usage = self._normalize_usage(response.usage)
             self._record_estimation_error(
                 session,
@@ -541,7 +551,7 @@ class AgentLoop:
                 usage["total_tokens"],
             )
 
-            if response.has_tool_calls:
+            if response.finish_reason == "tool_calls" and response.has_tool_calls:
                 if on_progress:
                     clean = self._strip_think(response.content)
                     if clean:
@@ -560,7 +570,14 @@ class AgentLoop:
                     tools_used.append(tool_call.name)
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
+
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    result_preview = str(getattr(result, "content", result))[:200]
+                    logger.debug(
+                        "_run_agent_loop tool_result: name={}, result_preview={}",
+                        tool_call.name,
+                        result_preview,
+                    )
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -579,6 +596,11 @@ class AgentLoop:
                         logger.error("LLM returned error: {}", text[:500])
                     final_content = clean or "Sorry, I encountered an error calling the AI model."
                     break
+                if response.has_tool_calls and response.finish_reason != "tool_calls":
+                    logger.warning(
+                        "LLM returned tool calls with unexpected finish_reason='{}', ignoring them",
+                        response.finish_reason,
+                    )
                 messages = self.context.add_assistant_message(
                     messages,
                     clean,
@@ -752,11 +774,32 @@ class AgentLoop:
             return OutboundMessage(
                 channel=msg.channel, chat_id=msg.chat_id, content="New session started."
             )
+        if cmd == "/heartbeat":
+            if not self.heartbeat_service:
+                return OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    content="Heartbeat service is not available.",
+                )
+            try:
+                result = await self.heartbeat_service.trigger_now()
+                if result is None:
+                    content = "Heartbeat triggered: no tasks to run."
+                else:
+                    content = result.strip()
+                    if not content:
+                        # Heartbeat already delivered via message tool; suppress duplicate reply
+                        return None
+            except Exception as e:
+                logger.exception("Heartbeat trigger failed")
+                content = f"Heartbeat trigger failed: {e}"
+            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=content)
+
         if cmd == "/help":
             return OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
+                content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/heartbeat — Trigger a heartbeat check\n/help — Show available commands",
             )
 
         self._set_tool_context(msg.channel, msg.chat_id)

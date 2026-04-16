@@ -73,8 +73,10 @@ class MessageTool(Tool):
         media: list[str] | None = None,
         *args: Any, **kwargs: Any,
     ) -> str:
-        channel = channel or self._default_channel
-        chat_id = chat_id or self._default_chat_id
+        resolved_channel = channel or self._default_channel
+        resolved_chat_id = chat_id or self._default_chat_id
+        channel = resolved_channel
+        chat_id = resolved_chat_id
         if not channel or not chat_id:
             return "Error: No target channel/chat specified"
 

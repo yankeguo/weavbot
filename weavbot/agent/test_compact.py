@@ -24,7 +24,7 @@ class _FakeProvider(LLMProvider):
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
-        temperature: float = 0.7,
+        temperature: float | None = 0.7,
         reasoning_effort: str | None = None,
     ) -> LLMResponse:
         if tools and any(t.get("function", {}).get("name") == "save_memory" for t in tools):
@@ -32,6 +32,7 @@ class _FakeProvider(LLMProvider):
             if self.memory_ok:
                 return LLMResponse(
                     content=None,
+                    finish_reason="tool_calls",
                     tool_calls=[
                         ToolCallRequest(
                             id="save-1",
