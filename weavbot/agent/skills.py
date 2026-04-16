@@ -2,11 +2,11 @@
 
 import json
 import os
-import re
 import shutil
 from pathlib import Path
 
-# Default builtin skills directory (relative to this file)
+import frontmatter
+
 BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
 
@@ -23,120 +23,105 @@ class SkillsLoader:
         self.workspace_skills = workspace / "skills"
         self.builtin_skills = builtin_skills_dir or BUILTIN_SKILLS_DIR
 
-    def list_skills(self, filter_unavailable: bool = True) -> list[dict[str, str]]:
-        """
-        List all available skills.
+    def _load_skill_post(self, name: str):
+        """Load and parse a skill file. Returns frontmatter.Post or None."""
+        raw = self._read_skill_file(name)
+        if raw is None:
+            return None
+        try:
+            return frontmatter.loads(raw)
+        except Exception:
+            return None
 
-        Args:
-            filter_unavailable: If True, filter out skills with unmet requirements.
-
-        Returns:
-            List of skill info dicts with 'name', 'path', 'source'.
-        """
-        skills = []
-
-        # Workspace skills (highest priority)
-        if self.workspace_skills.exists():
-            for skill_dir in sorted(self.workspace_skills.iterdir()):
-                if skill_dir.is_dir():
-                    skill_file = skill_dir / "SKILL.md"
-                    if skill_file.exists():
-                        skills.append(
-                            {"name": skill_dir.name, "path": str(skill_file), "source": "workspace"}
-                        )
-
-        # Built-in skills
-        if self.builtin_skills and self.builtin_skills.exists():
-            for skill_dir in sorted(self.builtin_skills.iterdir()):
-                if skill_dir.is_dir():
-                    skill_file = skill_dir / "SKILL.md"
-                    if skill_file.exists() and not any(s["name"] == skill_dir.name for s in skills):
-                        skills.append(
-                            {"name": skill_dir.name, "path": str(skill_file), "source": "builtin"}
-                        )
-
-        # Filter by requirements
-        if filter_unavailable:
-            return [s for s in skills if self._check_requirements(self._get_skill_meta(s["name"]))]
-        return skills
+    def _read_skill_file(self, name: str) -> str | None:
+        """Read raw skill file content from workspace (priority) then builtin."""
+        for base in (self.workspace_skills, self.builtin_skills):
+            if base:
+                path = base / name / "SKILL.md"
+                if path.exists():
+                    return path.read_text(encoding="utf-8")
+        return None
 
     def load_skill(self, name: str) -> str | None:
-        """
-        Load a skill by name.
+        return self._read_skill_file(name)
 
-        Args:
-            name: Skill name (directory name).
-
-        Returns:
-            Skill content or None if not found.
-        """
-        # Check workspace first
-        workspace_skill = self.workspace_skills / name / "SKILL.md"
-        if workspace_skill.exists():
-            return workspace_skill.read_text(encoding="utf-8")
-
-        # Check built-in
-        if self.builtin_skills:
-            builtin_skill = self.builtin_skills / name / "SKILL.md"
-            if builtin_skill.exists():
-                return builtin_skill.read_text(encoding="utf-8")
-
+    def get_skill_metadata(self, name: str) -> dict | None:
+        post = self._load_skill_post(name)
+        if post and isinstance(post.metadata, dict) and post.metadata:
+            return post.metadata
         return None
 
     def load_skills_for_context(self, skill_names: list[str]) -> str:
-        """
-        Load specific skills for inclusion in agent context.
-
-        Args:
-            skill_names: List of skill names to load.
-
-        Returns:
-            Formatted skills content.
-        """
         parts = []
         for name in skill_names:
-            content = self.load_skill(name)
-            if content:
-                content = self._strip_frontmatter(content)
-                parts.append(f'<skill name="{name}">\n{content}\n</skill>')
-
+            post = self._load_skill_post(name)
+            if post:
+                body = post.content.strip() if post.content else ""
+                parts.append(f'<skill name="{name}">\n{body}\n</skill>')
         return "\n\n---\n\n".join(parts) if parts else ""
 
+    def get_always_skills(self) -> list[str]:
+        result = []
+        for s in self.list_skills(filter_unavailable=True):
+            meta = self.get_skill_metadata(s["name"]) or {}
+            weavbot_meta = _parse_weavbot_metadata(meta.get("metadata", ""))
+            if weavbot_meta.get("always") or meta.get("always"):
+                result.append(s["name"])
+        return result
+
+    def list_skills(self, filter_unavailable: bool = True) -> list[dict[str, str]]:
+        skills: list[dict[str, str]] = []
+
+        if self.workspace_skills.exists():
+            for skill_dir in sorted(self.workspace_skills.iterdir()):
+                if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                    skills.append(
+                        {
+                            "name": skill_dir.name,
+                            "path": str(skill_dir / "SKILL.md"),
+                            "source": "workspace",
+                        }
+                    )
+
+        if self.builtin_skills and self.builtin_skills.exists():
+            for skill_dir in sorted(self.builtin_skills.iterdir()):
+                if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                    if not any(s["name"] == skill_dir.name for s in skills):
+                        skills.append(
+                            {
+                                "name": skill_dir.name,
+                                "path": str(skill_dir / "SKILL.md"),
+                                "source": "builtin",
+                            }
+                        )
+
+        if filter_unavailable:
+            return [
+                s for s in skills if self._check_requirements(self._get_weavbot_meta(s["name"]))
+            ]
+        return skills
+
     def build_skills_summary(self) -> str:
-        """
-        Build a summary of all skills (name, description, path, availability).
-
-        This is used for progressive loading - the agent can read the full
-        skill content using read_file when needed.
-
-        Returns:
-            XML-formatted skills summary.
-        """
         all_skills = self.list_skills(filter_unavailable=False)
         if not all_skills:
             return ""
 
-        def escape_xml(s: str) -> str:
-            return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
         lines = ["<skills>"]
         for s in all_skills:
-            name = escape_xml(s["name"])
-            path = s["path"]
-            desc = escape_xml(self._get_skill_description(s["name"]))
-            skill_meta = self._get_skill_meta(s["name"])
-            available = self._check_requirements(skill_meta)
+            meta = self.get_skill_metadata(s["name"]) or {}
+            weavbot_meta = _parse_weavbot_metadata(meta.get("metadata", ""))
+            available = self._check_requirements(weavbot_meta)
+            desc = meta.get("description", s["name"])
 
             lines.append(f'  <skill available="{str(available).lower()}">')
-            lines.append(f"    <name>{name}</name>")
-            lines.append(f"    <description>{desc}</description>")
-            lines.append(f"    <location>{path}</location>")
+            lines.append(f"    <name>{_esc(s['name'])}</name>")
+            lines.append(f"    <description>{_esc(desc)}</description>")
+            lines.append(f"    <location>{s['path']}</location>")
 
-            # Show missing requirements for unavailable skills
             if not available:
-                missing = self._get_missing_requirements(skill_meta)
+                missing = self._get_missing_requirements(weavbot_meta)
                 if missing:
-                    lines.append(f"    <requires>{escape_xml(missing)}</requires>")
+                    lines.append(f"    <requires>{_esc(missing)}</requires>")
 
             lines.append("  </skill>")
         lines.append("</skills>")
@@ -144,7 +129,6 @@ class SkillsLoader:
         return "\n".join(lines)
 
     def _get_missing_requirements(self, skill_meta: dict) -> str:
-        """Get a description of missing requirements."""
         missing = []
         requires = skill_meta.get("requires", {})
         for b in requires.get("bins", []):
@@ -155,31 +139,7 @@ class SkillsLoader:
                 missing.append(f"ENV: {env}")
         return ", ".join(missing)
 
-    def _get_skill_description(self, name: str) -> str:
-        """Get the description of a skill from its frontmatter."""
-        meta = self.get_skill_metadata(name)
-        if meta and meta.get("description"):
-            return meta["description"]
-        return name  # Fallback to skill name
-
-    def _strip_frontmatter(self, content: str) -> str:
-        """Remove YAML frontmatter from markdown content."""
-        if content.startswith("---"):
-            match = re.match(r"^---\n.*?\n---\n", content, re.DOTALL)
-            if match:
-                return content[match.end() :].strip()
-        return content
-
-    def _parse_weavbot_metadata(self, raw: str) -> dict:
-        """Parse skill metadata JSON from frontmatter (supports weavbot and openclaw keys)."""
-        try:
-            data = json.loads(raw)
-            return data.get("weavbot", data.get("openclaw", {})) if isinstance(data, dict) else {}
-        except (json.JSONDecodeError, TypeError):
-            return {}
-
     def _check_requirements(self, skill_meta: dict) -> bool:
-        """Check if skill requirements are met (bins, env vars)."""
         requires = skill_meta.get("requires", {})
         for b in requires.get("bins", []):
             if not shutil.which(b):
@@ -189,44 +149,19 @@ class SkillsLoader:
                 return False
         return True
 
-    def _get_skill_meta(self, name: str) -> dict:
-        """Get weavbot metadata for a skill (cached in frontmatter)."""
+    def _get_weavbot_meta(self, name: str) -> dict:
         meta = self.get_skill_metadata(name) or {}
-        return self._parse_weavbot_metadata(meta.get("metadata", ""))
+        return _parse_weavbot_metadata(meta.get("metadata", ""))
 
-    def get_always_skills(self) -> list[str]:
-        """Get skills marked as always=true that meet requirements."""
-        result = []
-        for s in self.list_skills(filter_unavailable=True):
-            meta = self.get_skill_metadata(s["name"]) or {}
-            skill_meta = self._parse_weavbot_metadata(meta.get("metadata", ""))
-            if skill_meta.get("always") or meta.get("always"):
-                result.append(s["name"])
-        return result
 
-    def get_skill_metadata(self, name: str) -> dict | None:
-        """
-        Get metadata from a skill's frontmatter.
+def _esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-        Args:
-            name: Skill name.
 
-        Returns:
-            Metadata dict or None.
-        """
-        content = self.load_skill(name)
-        if not content:
-            return None
-
-        if content.startswith("---"):
-            match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-            if match:
-                # Simple YAML parsing
-                metadata = {}
-                for line in match.group(1).split("\n"):
-                    if ":" in line:
-                        key, value = line.split(":", 1)
-                        metadata[key.strip()] = value.strip().strip("\"'")
-                return metadata
-
-        return None
+def _parse_weavbot_metadata(raw: str) -> dict:
+    """Parse skill metadata JSON (supports weavbot and openclaw keys)."""
+    try:
+        data = json.loads(raw)
+        return data.get("weavbot", data.get("openclaw", {})) if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}

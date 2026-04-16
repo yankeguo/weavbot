@@ -44,6 +44,8 @@ dependencies = [
     # Pin chardet for requests compatibility (requests expects chardet<6)
     "chardet>=5.2.0,<6",
     "anthropic>=0.95.0",
+    "pyyaml>=6.0.3",
+    "python-frontmatter>=1.1.0",
 ]
 
 [project.optional-dependencies]
