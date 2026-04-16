@@ -176,8 +176,14 @@ class MemoryStore:
                 model=model,
             )
 
-            if not response.has_tool_calls:
-                logger.warning("Memory consolidation: LLM did not call save_memory, skipping")
+            if response.finish_reason != "tool_calls" or not response.has_tool_calls:
+                if response.has_tool_calls and response.finish_reason != "tool_calls":
+                    logger.warning(
+                        "Memory consolidation: unexpected finish_reason='{}' with tool calls, skipping",
+                        response.finish_reason,
+                    )
+                else:
+                    logger.warning("Memory consolidation: LLM did not call save_memory, skipping")
                 return False
 
             args = response.tool_calls[0].arguments

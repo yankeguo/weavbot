@@ -113,7 +113,8 @@ class HeartbeatService:
         )
 
         logger.debug(
-            "Heartbeat _decide response: has_tool_calls={}, content_preview={}, tool_calls={}",
+            "Heartbeat _decide response: finish_reason={}, has_tool_calls={}, content_preview={}, tool_calls={}",
+            response.finish_reason,
             response.has_tool_calls,
             (response.content or "")[:80],
             [
@@ -121,7 +122,12 @@ class HeartbeatService:
                 for tc in response.tool_calls
             ],
         )
-        if not response.has_tool_calls:
+        if response.finish_reason != "tool_calls" or not response.has_tool_calls:
+            if response.has_tool_calls and response.finish_reason != "tool_calls":
+                logger.warning(
+                    "Heartbeat _decide: unexpected finish_reason='{}' with tool calls, treating as skip",
+                    response.finish_reason,
+                )
             return "skip", ""
 
         args = response.tool_calls[0].arguments

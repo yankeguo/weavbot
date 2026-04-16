@@ -150,7 +150,7 @@ class SubagentManager:
                     reasoning_effort=self.reasoning_effort,
                 )
 
-                if response.has_tool_calls:
+                if response.finish_reason == "tool_calls" and response.has_tool_calls:
                     messages.append(
                         ChatMessage(
                             role="assistant",
@@ -184,6 +184,12 @@ class SubagentManager:
                             )
                         )
                 else:
+                    if response.has_tool_calls and response.finish_reason != "tool_calls":
+                        logger.warning(
+                            "Subagent [{}] received tool calls with unexpected finish_reason='{}', ignoring them",
+                            task_id,
+                            response.finish_reason,
+                        )
                     final_result = response.content
                     break
 
