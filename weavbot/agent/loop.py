@@ -564,18 +564,7 @@ class AgentLoop:
                 usage["total_tokens"],
             )
 
-            if response.has_tool_calls:
-                if usage["completion_tokens"] == 0 and all(not tc.arguments for tc in response.tool_calls):
-                    logger.warning(
-                        "Detected zero-completion empty tool calls (likely API gateway artifact), aborting turn"
-                    )
-                    final_content = (
-                        "Sorry, the AI returned an unexpected empty tool call. "
-                        "This can happen when the API gateway forces a function call while the model refuses to generate. "
-                        "Please try again."
-                    )
-                    break
-
+            if response.finish_reason == "tool_calls" and response.has_tool_calls:
                 if on_progress:
                     clean = self._strip_think(response.content)
                     if clean:
@@ -626,6 +615,11 @@ class AgentLoop:
                         logger.error("LLM returned error: {}", text[:500])
                     final_content = clean or "Sorry, I encountered an error calling the AI model."
                     break
+                if response.has_tool_calls and response.finish_reason != "tool_calls":
+                    logger.warning(
+                        "LLM returned tool calls with unexpected finish_reason='{}', ignoring them",
+                        response.finish_reason,
+                    )
                 messages = self.context.add_assistant_message(
                     messages,
                     clean,
