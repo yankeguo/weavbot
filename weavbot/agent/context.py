@@ -56,7 +56,6 @@ class ContextBuilder:
 
     def _build_identity_section(self) -> str:
         """Build the core identity section."""
-        workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
 
@@ -66,10 +65,10 @@ class ContextBuilder:
 {runtime}
 
 ## Workspace
-Your workspace is at: {workspace_path}
-- Long-term memory: {workspace_path}/MEMORY.md (write important facts here)
-- History log: {workspace_path}/memory/YYYY-MM-DD.md (daily files, grep-searchable). Each entry starts with [YYYY-MM-DD HH:MM].
-- Custom skills: {workspace_path}/skills/{{skill-name}}/SKILL.md
+All file tools accept paths relative to the workspace root or absolute paths.
+- Long-term memory: MEMORY.md (write important facts here)
+- History log: memory/YYYY-MM-DD.md (daily files, grep-searchable). Each entry starts with [YYYY-MM-DD HH:MM].
+- Custom skills: skills/{{skill-name}}/SKILL.md
 
 ## Guidelines
 - When a task matches a skill (cron, memory, etc.), read the skill's SKILL.md before using tools.
