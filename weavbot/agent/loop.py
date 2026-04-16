@@ -789,7 +789,13 @@ class AgentLoop:
                 )
             try:
                 result = await self.heartbeat_service.trigger_now()
-                content = result.strip() if result else "Heartbeat triggered: no tasks to run."
+                if result is None:
+                    content = "Heartbeat triggered: no tasks to run."
+                else:
+                    content = result.strip()
+                    if not content:
+                        # Heartbeat already delivered via message tool; suppress duplicate reply
+                        return None
             except Exception as e:
                 logger.exception("Heartbeat trigger failed")
                 content = f"Heartbeat trigger failed: {e}"
