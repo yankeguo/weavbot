@@ -205,7 +205,7 @@ class AgentDefaults(Base):
     provider: str = ""  # Provider name — must match a key in the providers dict
     max_tokens: int = 8192  # Max generated tokens (output)
     max_context: int = 131072  # Context window size (default 128k)
-    temperature: float = 0.1
+    temperature: float | None = None
     max_tool_iterations: int = 40
     reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
 

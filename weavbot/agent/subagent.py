@@ -34,7 +34,7 @@ class SubagentManager:
         workspace: Path,
         bus: MessageBus,
         model: str | None = None,
-        temperature: float = 0.7,
+        temperature: float | None = None,
         max_tokens: int = 4096,
         reasoning_effort: str | None = None,
         web_proxy: str | None = None,

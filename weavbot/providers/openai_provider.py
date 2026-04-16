@@ -168,7 +168,7 @@ class OpenAIProvider(LLMProvider):
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
-        temperature: float = 0.7,
+        temperature: float | None = 0.7,
         reasoning_effort: str | None = None,
     ) -> LLMResponse:
         serialized = self._serialize_messages(messages)
@@ -176,8 +176,9 @@ class OpenAIProvider(LLMProvider):
             "model": model or self.default_model,
             "messages": serialized,
             "max_tokens": max(1, max_tokens),
-            "temperature": temperature,
         }
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         if reasoning_effort:
             kwargs["reasoning_effort"] = reasoning_effort
         if tools:

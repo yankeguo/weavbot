@@ -289,7 +289,7 @@ class AnthropicProvider(LLMProvider):
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
-        temperature: float = 0.7,
+        temperature: float | None = 0.7,
         reasoning_effort: str | None = None,
     ) -> LLMResponse:
         system_blocks, converted = self._serialize_messages_anthropic(
@@ -312,7 +312,7 @@ class AnthropicProvider(LLMProvider):
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
             kwargs["max_tokens"] = max(effective_max, budget + 4096)
             kwargs["temperature"] = 1
-        else:
+        elif temperature is not None:
             kwargs["temperature"] = temperature
 
         if tools:
