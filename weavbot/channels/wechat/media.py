@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import math
 import mimetypes
 import secrets
 import typing
@@ -53,7 +54,7 @@ def _aes_ecb_decrypt(data: bytes, key: bytes) -> bytes:
 
 
 def _cipher_size(plain_size: int) -> int:
-    return ((plain_size + 16) // 16) * 16
+    return math.ceil(plain_size / 16) * 16
 
 
 def _guess_media_type(path: Path) -> tuple[int, int]:
@@ -63,6 +64,43 @@ def _guess_media_type(path: Path) -> tuple[int, int]:
     if (mime or "").startswith("video/"):
         return ITEM_TYPE_VIDEO, UPLOAD_MEDIA_VIDEO
     return ITEM_TYPE_FILE, UPLOAD_MEDIA_FILE
+
+
+async def _cdn_upload_with_retries(
+    url: str, cipher: bytes, *, max_retries: int = 3, label: str = "CDN upload"
+) -> str:
+    last_error: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(20.0), follow_redirects=True
+            ) as client:
+                cdn_resp = await client.post(
+                    url, content=cipher, headers={"Content-Type": "application/octet-stream"}
+                )
+                if cdn_resp.status_code >= 400 and cdn_resp.status_code < 500:
+                    raise RuntimeError(
+                        f"{label} client error {cdn_resp.status_code}: "
+                        f"{cdn_resp.headers.get('x-error-message', cdn_resp.text)}"
+                    )
+                if cdn_resp.status_code != 200:
+                    raise RuntimeError(
+                        f"{label} server error: "
+                        f"{cdn_resp.headers.get('x-error-message', f'status {cdn_resp.status_code}')}"
+                    )
+                download_param = cdn_resp.headers.get("x-encrypted-param", "")
+                if not download_param:
+                    raise RuntimeError(f"{label}: response missing x-encrypted-param header")
+                return download_param
+        except Exception as exc:
+            last_error = exc
+            if isinstance(exc, RuntimeError) and "client error" in str(exc):
+                raise
+            if attempt < max_retries:
+                logger.warning("{} attempt {} failed, retrying: {}", label, attempt, exc)
+            else:
+                logger.error("{} all {} attempts failed: {}", label, max_retries, exc)
+    raise last_error or RuntimeError(f"{label} failed after {max_retries} attempts")
 
 
 async def upload_media_file(
@@ -109,15 +147,9 @@ async def upload_media_file(
             f"{cdn_base_url.rstrip('/')}/upload?encrypted_query_param={quote(upload_param, safe='')}"
             f"&filekey={quote(filekey, safe='')}"
         )
-    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), follow_redirects=True) as client:
-        cdn_resp = await client.post(
-            url, content=cipher, headers={"Content-Type": "application/octet-stream"}
-        )
-        if cdn_resp.status_code != 200:
-            raise RuntimeError(f"CDN upload failed: {cdn_resp.status_code} {cdn_resp.text}")
-        download_param = cdn_resp.headers.get("x-encrypted-param", "")
-        if not download_param:
-            raise RuntimeError("CDN upload missing x-encrypted-param")
+    download_param = await _cdn_upload_with_retries(
+        url, cipher, label=f"CDN upload[{file_path.name}]"
+    )
 
     if media_item_type == ITEM_TYPE_IMAGE:
         item = {
@@ -178,11 +210,16 @@ async def download_media_file(
     encrypt_query_param: str,
     aes_key: str | None,
     output_path: Path,
+    *,
+    full_url: str | None = None,
 ) -> Path:
-    url = (
-        f"{cdn_base_url.rstrip('/')}/download?encrypted_query_param="
-        f"{quote(encrypt_query_param, safe='')}"
-    )
+    if full_url:
+        url = full_url
+    else:
+        url = (
+            f"{cdn_base_url.rstrip('/')}/download?encrypted_query_param="
+            f"{quote(encrypt_query_param, safe='')}"
+        )
     async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), follow_redirects=True) as client:
         resp = await client.get(url)
         resp.raise_for_status()

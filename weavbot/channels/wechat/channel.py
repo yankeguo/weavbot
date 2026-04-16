@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import secrets
 import typing
 from pathlib import Path
@@ -136,7 +137,9 @@ class WechatChannel(BaseChannel):
             )
             return
         if self._guard.is_paused(account_key):
-            logger.warning("Wechat outbound skipped, account paused: {}", account_key)
+            logger.warning(
+                "Wechat outbound skipped, session paused (errcode=-14) for account {}", account_key
+            )
             return
 
         # Reply token is scoped by account+peer and can be supplied explicitly by callers.
@@ -277,8 +280,34 @@ class WechatChannel(BaseChannel):
                 if isinstance(text_item, dict):
                     text = str(text_item.get("text", "")).strip()
                     if text:
-                        parts.append(text)
+                        ref = item.get("ref_msg")
+                        if isinstance(ref, dict):
+                            ref_parts: list[str] = []
+                            ref_title = str(ref.get("title", "")).strip()
+                            if ref_title:
+                                ref_parts.append(ref_title)
+                            ref_msg_item = ref.get("message_item")
+                            if isinstance(ref_msg_item, dict):
+                                ref_text_item = ref_msg_item.get("text_item")
+                                if isinstance(ref_text_item, dict):
+                                    ref_body = str(ref_text_item.get("text", "")).strip()
+                                    if ref_body:
+                                        ref_parts.append(ref_body)
+                            if ref_parts:
+                                parts.append(f"[引用: {' | '.join(ref_parts)}]\n{text}")
+                            else:
+                                parts.append(text)
+                        else:
+                            parts.append(text)
                 continue
+
+            if item_type == ITEM_TYPE_VOICE:
+                voice_item = item.get("voice_item")
+                if isinstance(voice_item, dict):
+                    voice_text = str(voice_item.get("text", "")).strip()
+                    if voice_text:
+                        parts.append(voice_text)
+                        continue
 
             media_node, marker = self._resolve_media_node(item, item_type)
 
@@ -289,8 +318,21 @@ class WechatChannel(BaseChannel):
             media_val = media_node.get("media")
             media_ref = media_val if isinstance(media_val, dict) else {}
             encrypt_param = str(media_ref.get("encrypt_query_param", "")).strip()
+            full_url = (
+                str(media_ref.get("full_url", "")).strip() if isinstance(media_val, dict) else ""
+            )
             aes_key = str(media_ref.get("aes_key", "")).strip() or None
-            if not encrypt_param:
+
+            if marker == "image":
+                item_aeskey = (
+                    str(item.get("image_item", {}).get("aeskey", "")).strip()
+                    if isinstance(item.get("image_item"), dict)
+                    else ""
+                )
+                if item_aeskey and not aes_key:
+                    aes_key = base64.b64encode(bytes.fromhex(item_aeskey)).decode("ascii")
+
+            if not encrypt_param and not full_url:
                 parts.append(f"[wechat:{marker}]")
                 continue
 
@@ -303,7 +345,13 @@ class WechatChannel(BaseChannel):
                 self.media_dir / f"wechat_{account.key}_{msg.get('message_id', 'm')}_{idx}{suffix}"
             )
             try:
-                path = await download_media_file(account.cdn_base_url, encrypt_param, aes_key, out)
+                path = await download_media_file(
+                    account.cdn_base_url,
+                    encrypt_param,
+                    aes_key,
+                    out,
+                    full_url=full_url or None,
+                )
                 media_paths.append(str(path))
                 parts.append(f"[wechat:{marker}]")
             except Exception as exc:
