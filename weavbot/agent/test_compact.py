@@ -32,6 +32,7 @@ class _FakeProvider(LLMProvider):
             if self.memory_ok:
                 return LLMResponse(
                     content=None,
+                    finish_reason="tool_calls",
                     tool_calls=[
                         ToolCallRequest(
                             id="save-1",

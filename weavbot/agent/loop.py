@@ -570,12 +570,6 @@ class AgentLoop:
                     tools_used.append(tool_call.name)
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
-                    logger.debug(
-                        "_run_agent_loop tool_call detail: id={}, name={}, arguments={}",
-                        tool_call.id,
-                        tool_call.name,
-                        args_str,
-                    )
 
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
                     result_preview = str(getattr(result, "content", result))[:200]
