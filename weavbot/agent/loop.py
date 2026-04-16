@@ -40,6 +40,7 @@ from weavbot.session.manager import Session, SessionManager
 if TYPE_CHECKING:
     from weavbot.config.schema import ChannelsConfig, ExecToolConfig
     from weavbot.cron.service import CronService
+    from weavbot.heartbeat.service import HeartbeatService
 
 
 class AgentLoop:
@@ -121,6 +122,7 @@ class AgentLoop:
         self._mcp_connecting = False
         self._active_tasks: dict[str, list[asyncio.Task]] = {}  # session_key -> tasks
         self._processing_lock = asyncio.Lock()
+        self.heartbeat_service: HeartbeatService | None = None
         self._register_default_tools()
 
     def _register_default_tools(self) -> None:
@@ -752,11 +754,26 @@ class AgentLoop:
             return OutboundMessage(
                 channel=msg.channel, chat_id=msg.chat_id, content="New session started."
             )
+        if cmd == "/heartbeat":
+            if not self.heartbeat_service:
+                return OutboundMessage(
+                    channel=msg.channel,
+                    chat_id=msg.chat_id,
+                    content="Heartbeat service is not available.",
+                )
+            try:
+                result = await self.heartbeat_service.trigger_now()
+                content = result.strip() if result else "Heartbeat triggered: no tasks to run."
+            except Exception as e:
+                logger.exception("Heartbeat trigger failed")
+                content = f"Heartbeat trigger failed: {e}"
+            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=content)
+
         if cmd == "/help":
             return OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
+                content="🧶 weavbot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/heartbeat — Trigger a heartbeat check\n/help — Show available commands",
             )
 
         self._set_tool_context(msg.channel, msg.chat_id)

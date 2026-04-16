@@ -650,6 +650,7 @@ def gateway(
         interval_s=hb_cfg.interval_s,
         enabled=hb_cfg.enabled,
     )
+    agent.heartbeat_service = heartbeat
 
     if channels.enabled_channels:
         console.print(
