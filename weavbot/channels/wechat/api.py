@@ -14,8 +14,8 @@ import httpx
 
 from weavbot.channels.wechat.types import GetUpdatesResp
 
-# iLink app identifier; kept empty for compatibility (upstream reads from package.json).
-ILINK_APP_ID: str = ""
+# iLink app identifier; matches upstream package.json "ilink_appid": "bot".
+ILINK_APP_ID: str = "bot"
 
 
 def _base_url(url: str) -> str:
