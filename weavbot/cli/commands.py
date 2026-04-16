@@ -925,6 +925,7 @@ def wechat_login(
         account_id=result.account_id,
         token=result.token,
         user_id=result.user_id,
+        base_url=result.base_url,
     )
 
     upsert_account_config(

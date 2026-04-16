@@ -100,6 +100,7 @@ def save_account_credentials(
     account_id: str,
     token: str,
     user_id: str = "",
+    base_url: str = "",
 ) -> None:
     path = account_credentials_path(state_dir, account_key)
     payload: dict[str, Any] = {
@@ -108,6 +109,8 @@ def save_account_credentials(
     }
     if user_id:
         payload["user_id"] = user_id
+    if base_url:
+        payload["base_url"] = base_url
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -126,6 +129,7 @@ def list_account_credentials(state_dir: Path) -> list[dict[str, str]]:
                 "key": path.stem,
                 "account_id": str(data.get("account_id", "")).strip(),
                 "user_id": str(data.get("user_id", "")).strip(),
+                "base_url": str(data.get("base_url", "")).strip(),
             }
         )
     return out

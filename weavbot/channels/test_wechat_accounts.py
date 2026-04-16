@@ -45,5 +45,6 @@ def test_list_account_credentials_skips_bad_files(tmp_path: Path):
             "key": "acc-a",
             "account_id": "a@im.bot",
             "user_id": "u-a",
+            "base_url": "",
         }
     ]
