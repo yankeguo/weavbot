@@ -34,7 +34,7 @@ class MCPToolWrapper(Tool):
     def parameters(self) -> dict[str, Any]:
         return self._parameters
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def execute(self, *args: Any, **kwargs: Any) -> str:
         from mcp import types
 
         try:

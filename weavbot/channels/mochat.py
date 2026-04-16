@@ -6,9 +6,9 @@ import asyncio
 import json
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from loguru import logger
@@ -23,7 +23,7 @@ try:
 
     SOCKETIO_AVAILABLE = True
 except ImportError:
-    socketio = None
+    socketio: Any = None
     SOCKETIO_AVAILABLE = False
 
 try:
@@ -115,7 +115,7 @@ def _make_synthetic_event(
         payload["authorInfo"] = _safe_dict(author_info)
     return {
         "type": "message.add",
-        "timestamp": timestamp or datetime.utcnow().isoformat(),
+        "timestamp": timestamp or datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "payload": payload,
     }
 
@@ -383,6 +383,7 @@ class MochatChannel(BaseChannel):
             else:
                 logger.warning("msgpack not installed but socket_disable_msgpack=false; using JSON")
 
+        assert socketio is not None
         client = socketio.AsyncClient(
             reconnection=True,
             reconnection_attempts=self.config.max_retry_attempts or None,
@@ -663,9 +664,10 @@ class MochatChannel(BaseChannel):
                 )
                 msgs = resp.get("messages")
                 if isinstance(msgs, list):
-                    for m in reversed(msgs):
-                        if not isinstance(m, dict):
+                    for m_raw in reversed(msgs):
+                        if not isinstance(m_raw, dict):
                             continue
+                        m = cast(dict[str, Any], m_raw)
                         evt = _make_synthetic_event(
                             message_id=str(m.get("messageId") or ""),
                             author=str(m.get("author") or ""),
@@ -942,7 +944,7 @@ class MochatChannel(BaseChannel):
                 json.dumps(
                     {
                         "schemaVersion": 1,
-                        "updatedAt": datetime.utcnow().isoformat(),
+                        "updatedAt": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                         "cursors": self._session_cursor,
                     },
                     ensure_ascii=False,

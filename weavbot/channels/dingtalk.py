@@ -6,7 +6,7 @@ import mimetypes
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import unquote, urlparse
 
 import httpx
@@ -31,10 +31,10 @@ try:
 except ImportError:
     DINGTALK_AVAILABLE = False
     # Fallback so class definitions don't crash at module level
-    CallbackHandler = object  # type: ignore[assignment,misc]
-    CallbackMessage = None  # type: ignore[assignment,misc]
-    AckMessage = None  # type: ignore[assignment,misc]
-    ChatbotMessage = None  # type: ignore[assignment,misc]
+    CallbackHandler = cast(Any, object)
+    CallbackMessage = cast(Any, None)
+    AckMessage = cast(Any, None)
+    ChatbotMessage = cast(Any, None)
 
 
 class WeavbotDingTalkHandler(CallbackHandler):
@@ -51,7 +51,7 @@ class WeavbotDingTalkHandler(CallbackHandler):
         """Process incoming stream message."""
         try:
             # Parse using SDK's ChatbotMessage for robust handling
-            chatbot_msg = ChatbotMessage.from_dict(message.data)
+            chatbot_msg = cast(Any, ChatbotMessage).from_dict(message.data)
 
             # Extract text content; fall back to raw dict if SDK object is empty
             content = ""
@@ -65,7 +65,7 @@ class WeavbotDingTalkHandler(CallbackHandler):
                     "Received empty or unsupported message type: {}",
                     chatbot_msg.message_type,
                 )
-                return AckMessage.STATUS_OK, "OK"
+                return cast(Any, AckMessage).STATUS_OK, "OK"
 
             sender_id = chatbot_msg.sender_staff_id or chatbot_msg.sender_id
             sender_name = chatbot_msg.sender_nick or "Unknown"
@@ -80,12 +80,12 @@ class WeavbotDingTalkHandler(CallbackHandler):
             self.channel._background_tasks.add(task)
             task.add_done_callback(self.channel._background_tasks.discard)
 
-            return AckMessage.STATUS_OK, "OK"
+            return cast(Any, AckMessage).STATUS_OK, "OK"
 
         except Exception as e:
             logger.error("Error processing DingTalk message: {}", e)
             # Return OK to avoid retry loop from DingTalk server
-            return AckMessage.STATUS_OK, "Error"
+            return cast(Any, AckMessage).STATUS_OK, "Error"
 
 
 class DingTalkChannel(BaseChannel):
@@ -104,7 +104,9 @@ class DingTalkChannel(BaseChannel):
     _AUDIO_EXTS = {".amr", ".mp3", ".wav", ".ogg", ".m4a", ".aac"}
     _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
-    def __init__(self, config: DingTalkConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: DingTalkConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: DingTalkConfig = config
         self._client: Any = None
@@ -140,7 +142,7 @@ class DingTalkChannel(BaseChannel):
 
             # Register standard handler
             handler = WeavbotDingTalkHandler(self)
-            self._client.register_callback_handler(ChatbotMessage.TOPIC, handler)
+            self._client.register_callback_handler(cast(Any, ChatbotMessage).TOPIC, handler)
 
             logger.info("DingTalk bot started with Stream Mode")
 

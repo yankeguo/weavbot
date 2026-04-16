@@ -3,7 +3,7 @@
 import asyncio
 from collections import deque
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -19,15 +19,16 @@ try:
     QQ_AVAILABLE = True
 except ImportError:
     QQ_AVAILABLE = False
-    botpy = None
-    C2CMessage = None
+    botpy: Any = None
+    C2CMessage: Any = None
 
 if TYPE_CHECKING:
     from botpy.message import C2CMessage
 
 
-def _make_bot_class(channel: "QQChannel") -> "type[botpy.Client]":
+def _make_bot_class(channel: "QQChannel") -> "type[Any]":
     """Create a botpy Client subclass bound to the given channel."""
+    assert botpy is not None
     intents = botpy.Intents(public_messages=True, direct_message=True)
 
     class _Bot(botpy.Client):
@@ -52,10 +53,12 @@ class QQChannel(BaseChannel):
 
     name = "qq"
 
-    def __init__(self, config: QQConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: QQConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: QQConfig = config
-        self._client: "botpy.Client | None" = None
+        self._client: Any = None
         self._processed_ids: deque = deque(maxlen=1000)
 
     async def start(self) -> None:
@@ -79,6 +82,7 @@ class QQChannel(BaseChannel):
         """Run the bot connection with auto-reconnect."""
         while self._running:
             try:
+                assert self._client is not None
                 await self._client.start(appid=self.config.app_id, secret=self.config.secret)
             except Exception as e:
                 logger.warning("QQ bot error: {}", e)
@@ -108,13 +112,14 @@ class QQChannel(BaseChannel):
                 openid=msg.chat_id,
                 msg_type=0,
                 content=msg.content,
-                msg_id=msg_id,
+                msg_id=msg_id or "",
             )
         except Exception as e:
             logger.error("Error sending QQ message: {}", e)
 
     async def _on_message(self, data: "C2CMessage") -> None:
         """Handle incoming message from QQ."""
+        assert data is not None
         try:
             # Dedup by message ID
             if data.id in self._processed_ids:

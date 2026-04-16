@@ -114,7 +114,7 @@ class ContextCompactor:
         safety_ratio: float = 0.0,
     ) -> list[ChatMessage]:
         """Best-effort runtime shrinking for tool-heavy loops without rewriting session."""
-        fit_kw = dict(
+        fit_kw: dict[str, Any] = dict(
             estimate_multiplier=estimate_multiplier,
             safety_tokens=safety_tokens,
             safety_ratio=safety_ratio,

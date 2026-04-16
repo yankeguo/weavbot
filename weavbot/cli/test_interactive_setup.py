@@ -1,4 +1,5 @@
 import io
+from typing import Any, cast
 
 from rich.console import Console
 
@@ -63,6 +64,7 @@ def test_select_provider_realtime_path(monkeypatch):
 
     chosen = interactive_setup._select_provider(providers, _make_console())
     assert chosen is not None
+    chosen = cast(dict[str, Any], chosen)
     assert chosen["id"] == "openai"
 
 
@@ -94,6 +96,7 @@ def test_select_model_realtime_path(monkeypatch):
 
     chosen = interactive_setup._select_model(provider, _make_console())
     assert chosen is not None
+    chosen = cast(tuple[str, dict[str, Any]], chosen)
     model_id, _model_data = chosen
     assert model_id == "gpt-4o"
 
@@ -172,6 +175,7 @@ def test_select_provider_falls_back_when_fuzzy_unavailable(monkeypatch):
     ]
     picked = interactive_setup._select_provider(providers, _make_console())
     assert picked is not None
+    picked = cast(dict[str, Any], picked)
     assert picked["id"] == "openai"
 
 
@@ -201,6 +205,7 @@ def test_select_model_falls_back_on_internal_error(monkeypatch):
 
     chosen = interactive_setup._select_model(provider, _make_console())
     assert chosen is not None
+    chosen = cast(tuple[str, dict[str, Any]], chosen)
     model_id, _model_data = chosen
     assert model_id == "gpt-4o-mini"
 

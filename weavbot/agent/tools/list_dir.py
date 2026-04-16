@@ -30,7 +30,7 @@ class ListDirTool(Tool):
             "required": ["path"],
         }
 
-    async def execute(self, path: str, **kwargs: Any) -> str:
+    async def execute(self, path: str, *args: Any, **kwargs: Any) -> str:
         try:
             dir_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if not dir_path.exists():

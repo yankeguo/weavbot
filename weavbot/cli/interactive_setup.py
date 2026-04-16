@@ -14,7 +14,7 @@ import sys
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import typer
@@ -24,8 +24,8 @@ try:
     from InquirerPy import inquirer
     from InquirerPy.utils import get_style
 except ImportError:  # pragma: no cover - runtime fallback when optional dependency missing
-    inquirer = None
-    get_style = None  # type: ignore[assignment]
+    inquirer = cast(Any, None)
+    get_style = cast(Any, None)
 from rich.console import Console
 
 from weavbot.config.schema import Config
@@ -251,6 +251,7 @@ def _ask_numbered_choice(
         return _PROMPT_CTRL_C
     if picked_index is None:
         return None
+    assert isinstance(picked_index, int)
     return choices[picked_index - 1]["value"]
 
 
@@ -506,6 +507,8 @@ def _configure_channels(data: dict, console: Console) -> dict:
 
     if selected_index is None:
         return data
+
+    assert isinstance(selected_index, int)
 
     channels_data = data.setdefault("channels", {})
     configured: list[str] = []
@@ -851,8 +854,11 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
         else:
             while True:
                 provider = _select_provider(providers, console)
-                if provider is _PROMPT_CTRL_C or provider is None:
+                if provider is _PROMPT_CTRL_C:
                     break
+                if provider is None:
+                    break
+                provider = cast(dict[str, Any], provider)
 
                 result = _select_model(provider, console)
                 if result is _PROMPT_CTRL_C:
@@ -860,6 +866,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                     continue
                 if result is None:
                     break
+                result = cast(tuple[str, dict[str, Any]], result)
 
                 model_id, model_data = result
 
@@ -877,7 +884,7 @@ def interactive_provider_setup(config: Config, console: Console) -> Config:
                         api_base = api_base.rstrip("/")
                         if api_base.endswith("/v1"):
                             api_base = api_base[:-3] or None
-                    limit = model_data.get("limit") or {}
+                    limit = cast(dict[str, Any], model_data.get("limit") or {})
                     max_tokens: int = limit.get("output", 8192)
                     max_context: int = limit.get("context", 131072)
 

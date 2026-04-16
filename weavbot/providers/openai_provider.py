@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, cast
 
 import json_repair
 from loguru import logger
@@ -29,7 +29,7 @@ class OpenAIProvider(LLMProvider):
         super().__init__(api_key, api_base)
         self.default_model = default_model
         self._debug_enabled = self._env_flag("WB_DEBUG_OPENAI", default=False)
-        self._client = AsyncOpenAI(
+        self._client: Any = AsyncOpenAI(
             api_key=api_key,
             base_url=api_base,
             default_headers=build_provider_headers(extra_headers),
@@ -211,9 +211,12 @@ class OpenAIProvider(LLMProvider):
             ToolCallRequest(
                 id=tc.id,
                 name=tc.function.name,
-                arguments=json_repair.loads(tc.function.arguments)
-                if isinstance(tc.function.arguments, str)
-                else tc.function.arguments,
+                arguments=cast(
+                    dict[str, Any],
+                    json_repair.loads(tc.function.arguments)
+                    if isinstance(tc.function.arguments, str)
+                    else tc.function.arguments,
+                ),
             )
             for tc in (msg.tool_calls or [])
         ]

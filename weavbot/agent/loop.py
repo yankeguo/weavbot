@@ -8,7 +8,7 @@ import re
 from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, cast
 
 from loguru import logger
 
@@ -184,7 +184,7 @@ class AgentLoop:
         for name in ("message", "spawn", "add_cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id)
+                    cast(Any, tool).set_context(channel, chat_id)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:

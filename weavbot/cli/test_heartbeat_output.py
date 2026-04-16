@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 
 from weavbot.cli.commands import (
@@ -59,7 +61,9 @@ def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_state() -> Non
         {"key": "feishu:oc_legacy"},
         {"key": "wechat:acc-a:u_new"},
     ]
-    channel, chat_id, target_meta = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    channel, chat_id, target_meta = _pick_heartbeat_target_from_sessions(
+        cast(list[dict[str, object]], sessions), {"wechat"}
+    )
     assert channel == "wechat"
     assert chat_id == "acc-a:u_new"
     assert target_meta == {}
@@ -70,7 +74,9 @@ def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> No
         {"key": "feishu:oc_legacy"},
         {"key": "cli:direct"},
     ]
-    channel, chat_id, target_meta = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    channel, chat_id, target_meta = _pick_heartbeat_target_from_sessions(
+        cast(list[dict[str, object]], sessions), {"wechat"}
+    )
     assert channel == "cli"
     assert chat_id == "direct"
     assert target_meta == {}

@@ -49,11 +49,12 @@ class Tool(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, **kwargs: Any) -> str | ToolResult:
+    async def execute(self, *args: Any, **kwargs: Any) -> str | ToolResult:
         """
         Execute the tool with given parameters.
 
         Args:
+            *args: Positional arguments (ignored by most tools).
             **kwargs: Tool-specific parameters.
 
         Returns:

@@ -51,7 +51,7 @@ class GlobFileTool(Tool):
         self,
         pattern: str,
         path: str | None = None,
-        **kwargs: Any,
+        *args: Any, **kwargs: Any,
     ) -> str:
         try:
             search_path_str = path if path is not None else "."

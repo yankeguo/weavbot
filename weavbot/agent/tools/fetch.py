@@ -70,7 +70,7 @@ class FetchTool(Tool):
         url: str,
         fmt: str = "markdown",
         max_chars: int | None = None,
-        **kwargs: Any,
+        *args: Any, **kwargs: Any,
     ) -> str:
         from readability import Document
 

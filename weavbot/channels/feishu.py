@@ -8,7 +8,7 @@ import threading
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from loguru import logger
 
@@ -36,8 +36,8 @@ try:
     FEISHU_AVAILABLE = True
 except ImportError:
     FEISHU_AVAILABLE = False
-    lark = None
-    Emoji = None
+    lark = cast(Any, None)
+    Emoji = cast(Any, None)
 
 # Message type display mapping
 MSG_TYPE_MAP = {
@@ -277,7 +277,9 @@ class FeishuChannel(BaseChannel):
 
     name = "feishu"
 
-    def __init__(self, config: FeishuConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: FeishuConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: FeishuConfig = config
         self._client: Any = None
@@ -758,11 +760,17 @@ class FeishuChannel(BaseChannel):
         """Handle incoming message from Feishu."""
         try:
             event = data.event
+            if not event:
+                return
             message = event.message
             sender = event.sender
+            if not message or not sender:
+                return
 
             # Deduplication check
             message_id = message.message_id
+            if not message_id:
+                return
             if message_id in self._processed_message_ids:
                 return
             self._processed_message_ids[message_id] = None
@@ -832,7 +840,7 @@ class FeishuChannel(BaseChannel):
                     content_parts.append(text)
 
             else:
-                content_parts.append(MSG_TYPE_MAP.get(msg_type, f"[{msg_type}]"))
+                content_parts.append(MSG_TYPE_MAP.get(msg_type or "", f"[{msg_type}]"))
 
             content = "\n".join(content_parts) if content_parts else ""
 
@@ -841,9 +849,11 @@ class FeishuChannel(BaseChannel):
 
             # Forward to message bus
             reply_to = chat_id if chat_type == "group" else sender_id
+            if not reply_to:
+                return
             await self._handle_message(
-                sender_id=sender_id,
-                chat_id=reply_to,
+                sender_id=sender_id or "",
+                chat_id=reply_to or "",
                 content=content,
                 media=media_paths,
             )

@@ -73,7 +73,7 @@ class AddCronTool(Tool):
         expr: str | None = None,
         tz: str | None = None,
         at: str | None = None,
-        **kwargs: Any,
+        *args: Any, **kwargs: Any,
     ) -> str:
         if self._in_cron_context.get():
             return "Error: cannot schedule new jobs from within a cron job execution"

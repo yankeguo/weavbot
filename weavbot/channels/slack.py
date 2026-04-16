@@ -3,6 +3,7 @@
 import asyncio
 import re
 from pathlib import Path
+from typing import Any, cast
 
 from loguru import logger
 from slack_sdk.socket_mode.request import SocketModeRequest
@@ -22,7 +23,9 @@ class SlackChannel(BaseChannel):
 
     name = "slack"
 
-    def __init__(self, config: SlackConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: SlackConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: SlackConfig = config
         self._web_client: AsyncWebClient | None = None
@@ -46,7 +49,7 @@ class SlackChannel(BaseChannel):
             web_client=self._web_client,
         )
 
-        self._socket_client.socket_mode_request_listeners.append(self._on_socket_request)
+        cast(Any, self._socket_client.socket_mode_request_listeners).append(self._on_socket_request)
 
         # Resolve bot user ID for mention handling
         try:
@@ -172,7 +175,7 @@ class SlackChannel(BaseChannel):
                 await self._web_client.reactions_add(
                     channel=chat_id,
                     name=self.config.react_emoji,
-                    timestamp=event.get("ts"),
+                    timestamp=event.get("ts") or "",
                 )
         except Exception as e:
             logger.debug("Slack reactions_add failed: {}", e)

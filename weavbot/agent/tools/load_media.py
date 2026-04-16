@@ -21,11 +21,12 @@ Usage:
 
 
 def _human_size(n: int) -> str:
+    size = float(n)
     for unit in ("B", "KB", "MB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}" if unit != "B" else f"{n} {unit}"
-        n /= 1024
-    return f"{n:.1f} GB"
+        if size < 1024:
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
 
 
 _MAX_FILE_SIZE_TEXT = _human_size(MAX_FILE_SIZE)
@@ -64,7 +65,7 @@ class LoadMediaTool(Tool):
             "required": ["path"],
         }
 
-    async def execute(self, path: str, **kwargs: Any) -> str | ToolResult:
+    async def execute(self, path: str, *args: Any, **kwargs: Any) -> str | ToolResult:
         try:
             file_path = resolve_path(path, self._workspace, self._restrict_to_workspace)
             if not file_path.exists():

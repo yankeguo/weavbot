@@ -192,6 +192,7 @@ class TelegramChannel(BaseChannel):
             logger.warning("Failed to register bot commands: {}", e)
 
         # Start polling (this runs until stopped)
+        assert self._app.updater is not None
         await self._app.updater.start_polling(
             allowed_updates=["message"],
             drop_pending_updates=True,  # Ignore old messages on startup
@@ -216,6 +217,7 @@ class TelegramChannel(BaseChannel):
 
         if self._app:
             logger.info("Stopping Telegram bot...")
+            assert self._app.updater is not None
             await self._app.updater.stop()
             await self._app.stop()
             await self._app.shutdown()
@@ -337,7 +339,7 @@ class TelegramChannel(BaseChannel):
         await self._handle_message(
             sender_id=self._sender_id(update.effective_user),
             chat_id=str(update.message.chat_id),
-            content=update.message.text,
+            content=update.message.text or "",
         )
 
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -384,6 +386,7 @@ class TelegramChannel(BaseChannel):
         if media_file and self._app:
             try:
                 file = await self._app.bot.get_file(media_file.file_id)
+                assert media_type is not None
                 ext = self._get_extension(media_type, getattr(media_file, "mime_type", None))
 
                 file_path = self.media_dir / f"{media_file.file_id[:16]}{ext}"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+import typing
 from pathlib import Path
 from typing import Any
 
@@ -171,7 +172,7 @@ class WechatChannel(BaseChannel):
                     self._build_bot_message(
                         to_user_id=raw_chat_id,
                         context_token=context_token or None,
-                        item_list=[text_item],
+                        item_list=[typing.cast(MessageItem, text_item)],
                     )
                 )
         finally:
@@ -282,7 +283,10 @@ class WechatChannel(BaseChannel):
                 parts.append(f"[wechat:{marker}]")
                 continue
 
-            media_ref = media_node.get("media") if isinstance(media_node.get("media"), dict) else {}
+            media_val = media_node.get("media")
+            media_ref = (
+                media_val if isinstance(media_val, dict) else typing.cast(dict[str, Any], {})
+            )
             encrypt_param = str(media_ref.get("encrypt_query_param", "")).strip()
             aes_key = str(media_ref.get("aes_key", "")).strip() or None
             if not encrypt_param:

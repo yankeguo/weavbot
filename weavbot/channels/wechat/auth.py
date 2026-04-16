@@ -22,11 +22,11 @@ class LoginResult:
 def _render_qr_if_possible(console: Console, qr_url: str) -> None:
     """Best-effort terminal QR rendering, fallback to URL."""
     try:
-        import qrcode
+        import qrcode as _qrcode  # type: ignore
     except ImportError:
         console.print(f"[cyan]QR URL:[/cyan] {qr_url}")
         return
-    qr = qrcode.QRCode(border=1)
+    qr = _qrcode.QRCode(border=1)
     qr.add_data(qr_url)
     qr.make(fit=True)
     matrix = qr.get_matrix()
