@@ -33,7 +33,9 @@ try:
 except ImportError:
     WECOM_AVAILABLE = False
     websockets = typing.cast(Any, None)
-    ConnectionClosed = typing.cast(Any, None)
+    # Keep Exception as fallback so "except ConnectionClosed" doesn't crash
+    # if this module is restructured and the guard is bypassed.
+    ConnectionClosed: Any = Exception
 
 
 CMD_SUBSCRIBE = "aibot_subscribe"

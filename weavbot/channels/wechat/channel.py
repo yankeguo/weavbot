@@ -284,9 +284,7 @@ class WechatChannel(BaseChannel):
                 continue
 
             media_val = media_node.get("media")
-            media_ref = (
-                media_val if isinstance(media_val, dict) else typing.cast(dict[str, Any], {})
-            )
+            media_ref = media_val if isinstance(media_val, dict) else {}
             encrypt_param = str(media_ref.get("encrypt_query_param", "")).strip()
             aes_key = str(media_ref.get("aes_key", "")).strip() or None
             if not encrypt_param:

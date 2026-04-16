@@ -127,7 +127,8 @@ class DiscordChannel(BaseChannel):
         self, url: str, headers: dict[str, str], payload: dict[str, Any]
     ) -> bool:
         """Send a single Discord API payload with retry on rate-limit. Returns True on success."""
-        assert self._http is not None
+        if self._http is None:
+            raise RuntimeError("Discord HTTP client not initialized")
         for attempt in range(3):
             try:
                 response = await self._http.post(url, headers=headers, json=payload)
@@ -278,7 +279,8 @@ class DiscordChannel(BaseChannel):
             headers = {"Authorization": f"Bot {self.config.token}"}
             while self._running:
                 try:
-                    assert self._http is not None
+                    if self._http is None:
+                        return
                     await self._http.post(url, headers=headers)
                 except asyncio.CancelledError:
                     return

@@ -119,7 +119,8 @@ class QQChannel(BaseChannel):
 
     async def _on_message(self, data: "C2CMessage") -> None:
         """Handle incoming message from QQ."""
-        assert data is not None
+        if data is None:
+            return
         try:
             # Dedup by message ID
             if data.id in self._processed_ids:
