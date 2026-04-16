@@ -56,7 +56,7 @@ class TestGetSkillMetadata:
     def test_no_frontmatter(self, tmp_path):
         d = tmp_path / "skills" / "bare"
         d.mkdir(parents=True)
-        (d / "SKILL.md").write_text("# No frontmatter\n\nJust content.\n")
+        (d / "SKILL.md").write_text("# No frontmatter\n\nJust content.\n", encoding="utf-8")
         loader = SkillsLoader(tmp_path)
         assert loader.get_skill_metadata("bare") is None
 

@@ -247,7 +247,7 @@ You are a subagent spawned by the main agent to complete a specific task.
 Stay focused on the assigned task. Your final response will be reported back to the main agent.
 
 ## Workspace
-{self.workspace}
+All file tools accept paths relative to the workspace root or absolute paths.
 
 ## Available Tools
 read_file, write_file, edit_file, list_dir, glob_file, grep_file, shell, load_media, fetch.
