@@ -1,7 +1,6 @@
 """CLI commands for weavbot."""
 
 import asyncio
-import json
 import os
 import select
 import signal
