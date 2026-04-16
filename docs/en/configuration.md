@@ -47,12 +47,12 @@ OpenAI-compatible notes:
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `workspace` | string | `workspace` | Agent workspace path (relative values are resolved from `WB_DATA_PATH`) |
-| `model` | string | — | Model name (e.g. `claude-sonnet-4-20250514`) |
+| `model` | string | `anthropic/claude-opus-4-5` | Model name (e.g. `claude-sonnet-4-20250514`) |
 | `provider` | string | — | Must match a key in `providers` |
 | `maxTokens` | int | 8192 | Max response tokens |
 | `temperature` | float | 0.1 | Sampling temperature |
 | `maxToolIterations` | int | 40 | Max tool-call rounds per turn |
-| `memoryWindow` | int | 100 | Conversation window size |
+| `maxContext` | int | 131072 | Context window size |
 | `reasoningEffort` | string \| null | null | `"low"` \| `"medium"` \| `"high"` for thinking mode |
 
 ## gateway
@@ -167,7 +167,6 @@ OpenAI-compatible notes:
 | `perChatPerMinute` | int | Per-chat rate limit per minute |
 | `perChatPerHour` | int | Per-chat rate limit per hour |
 | `uploadChunkSize` | int | Media upload chunk size in bytes |
-| `tempMediaDir` | string | Temporary media directory (relative to workspace) |
 
 ## channels.wechat
 
@@ -176,8 +175,6 @@ OpenAI-compatible notes:
 | `enabled` | bool | Enable channel |
 | `accountId` | string | Default account ID (optional when using `accounts`) |
 | `token` | string | Default account token (optional when using `accounts`) |
-| `baseUrl` | string | API base URL (default `https://ilinkai.weixin.qq.com`) |
-| `cdnBaseUrl` | string | CDN base URL (default `https://novac2c.cdn.weixin.qq.com/c2c`) |
 | `routeTag` | string | Optional `SKRouteTag` header |
 | `allowFrom` | string[] | Allowed sender IDs; empty = allow all |
 | `requestTimeoutSec` | int | HTTP request timeout in seconds |
@@ -186,35 +183,14 @@ OpenAI-compatible notes:
 | `maxConsecutiveFailures` | int | Backoff threshold for consecutive poll errors |
 | `sessionPauseMinutes` | int | Pause window when server returns session-expired error (`-14`) |
 | `typingKeepaliveSec` | int | Typing-status keepalive interval hint |
-| `tempMediaDir` | string | Temporary media directory (relative to workspace) |
-| `stateDir` | string | Persistent state directory for account files and cursors |
 | `enabledAccounts` | string[] | Optional allowlist of account keys to run |
-| `accounts` | object | Multi-account map. Each account supports: `enabled`, `accountId`, `token`, `baseUrl`, `cdnBaseUrl`, `routeTag`, `allowFrom` |
+| `accounts` | object | Multi-account map. Each account supports: `enabled`, `accountId`, `token`, `routeTag`, `allowFrom` |
 
 Notes:
 
 - `weavbot onboard` only enables Wechat as a placeholder (`channels.wechat.enabled=true`); QR login is not executed in onboarding.
 - Run `weavbot wechat login` to scan QR code and persist account credentials after onboarding.
 - Multi-account runs in one workspace; session keys are scoped by account and peer.
-
-## channels.email
-
-| Key | Type | Description |
-| --- | --- | --- |
-| `enabled` | bool | Enable channel |
-| `consentGranted` | bool | Owner consent to access mailbox |
-| `imapHost`, `imapPort`, `imapUsername`, `imapPassword` | string/int | IMAP (receive) |
-| `imapMailbox` | string | Mailbox name (default INBOX) |
-| `imapUseSsl` | bool | Use SSL for IMAP |
-| `smtpHost`, `smtpPort`, `smtpUsername`, `smtpPassword` | string/int | SMTP (send) |
-| `smtpUseTls`, `smtpUseSsl` | bool | SMTP TLS/SSL |
-| `fromAddress` | string | From address for replies |
-| `autoReplyEnabled` | bool | Send automatic replies |
-| `pollIntervalSeconds` | int | Poll interval |
-| `markSeen` | bool | Mark messages read |
-| `maxBodyChars` | int | Max body length |
-| `subjectPrefix` | string | Reply subject prefix |
-| `allowFrom` | string[] | Allowed sender addresses; empty = allow all |
 
 ## channels.mochat
 
@@ -231,6 +207,7 @@ Notes:
 | `groups` | object | Per-group rules (e.g. requireMention) |
 | `replyDelayMode` | string | `"off"` \| `"non-mention"` |
 | `replyDelayMs` | int | Delay for non-mention replies |
+| `socketDisableMsgpack` | bool | Disable msgpack serialization for Socket.IO |
 | Socket/retry options | — | `socketReconnectDelayMs`, `socketMaxReconnectDelayMs`, `socketConnectTimeoutMs`, `refreshIntervalMs`, `watchTimeoutMs`, `watchLimit`, `retryDelayMs`, `maxRetryAttempts` |
 
 [CLI Reference]({{ site.baseurl }}/en/cli/) | [Quick Start]({{ site.baseurl }}/en/quick-start/)

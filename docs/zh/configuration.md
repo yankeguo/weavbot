@@ -47,12 +47,12 @@ OpenAI 兼容模式说明：
 | 键 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `workspace` | string | `workspace` | 代理工作区路径（相对路径会基于 `WB_DATA_PATH` 解析） |
-| `model` | string | — | 模型名（如 `claude-sonnet-4-20250514`） |
+| `model` | string | `anthropic/claude-opus-4-5` | 模型名（如 `claude-sonnet-4-20250514`） |
 | `provider` | string | — | 需与 `providers` 中某键一致 |
 | `maxTokens` | int | 8192 | 最大回复 token 数 |
+| `maxContext` | int | 131072 | 上下文窗口大小 |
 | `temperature` | float | 0.1 | 采样温度 |
 | `maxToolIterations` | int | 40 | 每轮最大工具调用次数 |
-| `memoryWindow` | int | 100 | 对话窗口大小 |
 | `reasoningEffort` | string \| null | null | 思考模式：`"low"` \| `"medium"` \| `"high"` |
 
 ## gateway
@@ -167,7 +167,6 @@ OpenAI 兼容模式说明：
 | `perChatPerMinute` | int | 每个会话每分钟限流阈值 |
 | `perChatPerHour` | int | 每个会话每小时限流阈值 |
 | `uploadChunkSize` | int | 媒体上传分片大小（字节） |
-| `tempMediaDir` | string | 临时媒体目录（相对工作区） |
 
 ## channels.wechat
 
@@ -176,8 +175,6 @@ OpenAI 兼容模式说明：
 | `enabled` | bool | 是否启用 |
 | `accountId` | string | 默认账号 ID（使用 `accounts` 时可不填） |
 | `token` | string | 默认账号 token（使用 `accounts` 时可不填） |
-| `baseUrl` | string | API 地址（默认 `https://ilinkai.weixin.qq.com`） |
-| `cdnBaseUrl` | string | CDN 地址（默认 `https://novac2c.cdn.weixin.qq.com/c2c`） |
 | `routeTag` | string | 可选 `SKRouteTag` 请求头 |
 | `allowFrom` | string[] | 允许的发送者 ID；空为全部允许 |
 | `requestTimeoutSec` | int | HTTP 请求超时（秒） |
@@ -186,35 +183,14 @@ OpenAI 兼容模式说明：
 | `maxConsecutiveFailures` | int | 连续失败退避阈值 |
 | `sessionPauseMinutes` | int | 服务端返回会话过期（`-14`）后的暂停窗口（分钟） |
 | `typingKeepaliveSec` | int | 输入状态保活间隔提示值 |
-| `tempMediaDir` | string | 临时媒体目录（相对工作区） |
-| `stateDir` | string | 账号与游标持久化目录 |
 | `enabledAccounts` | string[] | 可选，限定启动的账号 key 列表 |
-| `accounts` | object | 多账号映射。每个账号支持：`enabled`、`accountId`、`token`、`baseUrl`、`cdnBaseUrl`、`routeTag`、`allowFrom` |
+| `accounts` | object | 多账号映射。每个账号支持：`enabled`、`accountId`、`token`、`routeTag`、`allowFrom` |
 
 说明：
 
 - `weavbot onboard` 对 Wechat 仅做占位启用（`channels.wechat.enabled=true`），不执行二维码登录。
 - 完成 onboarding 后，请执行 `weavbot wechat login` 扫码并保存账号凭据。
 - 多账号共享同一 workspace，但会话键按账号 + 对端隔离。
-
-## channels.email
-
-| 键 | 类型 | 说明 |
-| --- | --- | --- |
-| `enabled` | bool | 是否启用 |
-| `consentGranted` | bool | 用户同意访问邮箱 |
-| `imapHost`、`imapPort`、`imapUsername`、`imapPassword` | string/int | IMAP（收信） |
-| `imapMailbox` | string | 邮箱名（默认 INBOX） |
-| `imapUseSsl` | bool | IMAP 使用 SSL |
-| `smtpHost`、`smtpPort`、`smtpUsername`、`smtpPassword` | string/int | SMTP（发信） |
-| `smtpUseTls`、`smtpUseSsl` | bool | SMTP TLS/SSL |
-| `fromAddress` | string | 回复发件地址 |
-| `autoReplyEnabled` | bool | 是否自动回复 |
-| `pollIntervalSeconds` | int | 轮询间隔 |
-| `markSeen` | bool | 是否标为已读 |
-| `maxBodyChars` | int | 正文最大长度 |
-| `subjectPrefix` | string | 回复主题前缀 |
-| `allowFrom` | string[] | 允许的发件人；空为全部允许 |
 
 ## channels.mochat
 
@@ -231,6 +207,7 @@ OpenAI 兼容模式说明：
 | `groups` | object | 按群规则（如 requireMention） |
 | `replyDelayMode` | string | `"off"` \| `"non-mention"` |
 | `replyDelayMs` | int | 非 @ 回复延迟（毫秒） |
+| `socketDisableMsgpack` | bool | 禁用 Socket.IO 的 msgpack 序列化 |
 | Socket/重试选项 | — | `socketReconnectDelayMs`、`socketMaxReconnectDelayMs`、`socketConnectTimeoutMs`、`refreshIntervalMs`、`watchTimeoutMs`、`watchLimit`、`retryDelayMs`、`maxRetryAttempts` |
 
 [命令参考]({{ site.baseurl }}/zh/cli/) | [快速开始]({{ site.baseurl }}/zh/quick-start/)
