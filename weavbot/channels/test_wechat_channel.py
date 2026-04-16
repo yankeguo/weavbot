@@ -70,9 +70,9 @@ def test_handle_inbound_sets_account_scoped_session_key(tmp_path: Path):
 
     inbound = asyncio.run(run_case())
     assert inbound.channel == "wechat"
-    assert inbound.chat_id == "u1@im.wechat"
+    assert inbound.chat_id == "acc-key:u1@im.wechat"
     assert inbound.session_key == "wechat:acc-key:u1@im.wechat"
-    state_data = asyncio.run(store.get("wechat", "u1@im.wechat"))
+    state_data = asyncio.run(store.get("wechat", "acc-key:u1@im.wechat"))
     assert state_data.get("context_token") == "ctx-1"
 
 
@@ -106,11 +106,13 @@ def test_send_text_routes_to_selected_account(tmp_path: Path):
     api = _FakeApi()
     ch._apis = {"acc-key": api}  # type: ignore[assignment]
     asyncio.run(
-        store.set("wechat", "u1@im.wechat", {"account_key": "acc-key", "context_token": "ctx-1"})
+        store.set(
+            "wechat", "acc-key:u1@im.wechat", {"account_key": "acc-key", "context_token": "ctx-1"}
+        )
     )
     msg = OutboundMessage(
         channel="wechat",
-        chat_id="u1@im.wechat",
+        chat_id="acc-key:u1@im.wechat",
         content="pong",
     )
     asyncio.run(ch.send(msg))
@@ -150,7 +152,7 @@ def test_send_falls_back_to_single_account_when_default_missing(tmp_path: Path):
     ch._apis = {"acc-x": api}  # type: ignore[assignment]
 
     # Simulate message-tool style send without account metadata.
-    msg = OutboundMessage(channel="wechat", chat_id="u2@im.wechat", content="hello")
+    msg = OutboundMessage(channel="wechat", chat_id="acc-x:u2@im.wechat", content="hello")
     asyncio.run(ch.send(msg))
 
     assert len(api.sent) == 1
@@ -188,10 +190,11 @@ def test_send_skips_when_account_paused(tmp_path: Path):
     ch._apis = {"acc-x": api}  # type: ignore[assignment]
     ch._guard.pause("acc-x")
 
-    asyncio.run(ch.send(OutboundMessage(channel="wechat", chat_id="u2@im.wechat", content="hello")))
+    asyncio.run(
+        ch.send(OutboundMessage(channel="wechat", chat_id="acc-x:u2@im.wechat", content="hello"))
+    )
 
     assert api.sent == []
-
 
 
 def test_handle_inbound_rejects_sender_not_in_allow_list(tmp_path: Path):

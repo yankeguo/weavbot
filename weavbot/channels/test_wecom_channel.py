@@ -45,7 +45,7 @@ def test_parse_mixed_message(tmp_path):
 def test_extract_req_id_via_message_id_cache(tmp_path):
     channel = _make_channel(tmp_path)
     channel._remember_msgid_reqid("m1", "r1")
-    req_id = channel._extract_req_id({"message_id": "m1"}, {})
+    req_id = channel._extract_req_id({"message_id": "m1"})
     assert req_id == "r1"
 
 
@@ -89,7 +89,7 @@ def test_event_callback_publishes_inbound(tmp_path):
     assert inbound.sender_id == "u1"
     state_data = asyncio.run(channel.state.get("wecom", "u1"))
     assert state_data.get("req_id") == "req-1"
-    assert state_data.get("wecom", {}).get("event_type") == "feedback_event"
+    assert state_data.get("event_type") == "feedback_event"
 
 
 def test_send_enter_chat_uses_welcome_command(tmp_path):
@@ -109,7 +109,7 @@ def test_send_enter_chat_uses_welcome_command(tmp_path):
         await channel.state.set(
             "wecom",
             "user-1",
-            {"wecom": {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT}},
+            {"req_id": "req-2", "event_type": EVENT_ENTER_CHAT},
         )
         await channel.send(
             OutboundMessage(

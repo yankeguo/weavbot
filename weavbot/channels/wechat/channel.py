@@ -42,7 +42,9 @@ class WechatChannel(BaseChannel):
 
     name = "wechat"
 
-    def __init__(self, config: WechatConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: WechatConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: WechatConfig = config
         self._state_dir = self.data_path / "wechat"
@@ -110,37 +112,38 @@ class WechatChannel(BaseChannel):
         self._poll_tasks.clear()
 
     async def send(self, msg: OutboundMessage) -> None:
-        state_data = await self.state.get("wechat", msg.chat_id)
-        wechat_meta = state_data.get("wechat", {}) if isinstance(state_data.get("wechat"), dict) else {}
-        requested_account_key = (
-            str(state_data.get("account_key", "")).strip()
-            or str(wechat_meta.get("account_key", "")).strip()
-            or "default"
-        )
-        account_key = self._resolve_outbound_account_key(requested_account_key, msg.chat_id)
+        composite_chat_id = msg.chat_id
+        if ":" not in composite_chat_id:
+            logger.warning(
+                "Wechat outbound dropped, chat_id missing account_key: {}", composite_chat_id
+            )
+            return
+
+        account_key, raw_chat_id = composite_chat_id.split(":", 1)
         account = self._accounts.get(account_key)
         api = self._apis.get(account_key)
         if not account or not api:
+            account_key = self._resolve_outbound_account_key(account_key, raw_chat_id)
+            account = self._accounts.get(account_key)
+            api = self._apis.get(account_key)
+        if not account or not api:
             logger.warning(
-                "Wechat outbound dropped, unknown account_key={} requested={} chat_id={}",
+                "Wechat outbound dropped, unknown account_key={} chat_id={}",
                 account_key,
-                requested_account_key,
-                msg.chat_id,
+                composite_chat_id,
             )
             return
         if self._guard.is_paused(account_key):
             logger.warning("Wechat outbound skipped, account paused: {}", account_key)
             return
 
-        chat_id = msg.chat_id
         # Reply token is scoped by account+peer and can be supplied explicitly by callers.
-        context_token = (
-            str(state_data.get("context_token", "")).strip()
-            or str(wechat_meta.get("context_token", "")).strip()
-            or self._context_tokens.get(f"{account_key}:{chat_id}", "")
-        )
+        state_data = await self.state.get("wechat", composite_chat_id)
+        context_token = str(
+            state_data.get("context_token", "")
+        ).strip() or self._context_tokens.get(f"{account_key}:{raw_chat_id}", "")
         typing_ticket = await self._typing.send_typing(
-            api, account_key, chat_id, context_token or None
+            api, account_key, raw_chat_id, context_token or None
         )
 
         try:
@@ -151,11 +154,11 @@ class WechatChannel(BaseChannel):
                         logger.warning("Wechat media file not found: {}", path)
                         continue
                     _media_type, media_item = await upload_media_file(
-                        api, account.cdn_base_url, path, chat_id
+                        api, account.cdn_base_url, path, raw_chat_id
                     )
                     await api.send_message(
                         self._build_bot_message(
-                            to_user_id=chat_id,
+                            to_user_id=raw_chat_id,
                             context_token=context_token or None,
                             item_list=[media_item],
                         )
@@ -166,7 +169,7 @@ class WechatChannel(BaseChannel):
                 text_item = {"type": ITEM_TYPE_TEXT, "text_item": {"text": text}}
                 await api.send_message(
                     self._build_bot_message(
-                        to_user_id=chat_id,
+                        to_user_id=raw_chat_id,
                         context_token=context_token or None,
                         item_list=[text_item],
                     )
@@ -175,7 +178,7 @@ class WechatChannel(BaseChannel):
             await self._typing.cancel_typing(
                 api,
                 account_key,
-                chat_id,
+                raw_chat_id,
                 context_token or None,
                 ticket=typing_ticket,
             )
@@ -233,9 +236,10 @@ class WechatChannel(BaseChannel):
         if not content and not media:
             content = "[wechat:empty]"
 
+        chat_id = f"{account.key}:{sender_id}"
         await self.state.set(
             "wechat",
-            sender_id,
+            chat_id,
             {
                 "account_key": account.key,
                 "account_id": account.account_id,
@@ -244,7 +248,7 @@ class WechatChannel(BaseChannel):
         )
         await self._handle_message(
             sender_id=sender_id,
-            chat_id=sender_id,
+            chat_id=chat_id,
             content=content,
             media=media,
             # Include account key in session namespace for multi-account isolation.

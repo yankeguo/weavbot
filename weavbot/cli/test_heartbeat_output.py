@@ -51,18 +51,18 @@ def test_heartbeat_response_empty_when_progress_and_final_are_empty() -> None:
 
 def test_parse_heartbeat_target_wechat_scoped_key() -> None:
     parsed = _parse_heartbeat_target("wechat:bot-main:u_123")
-    assert parsed == ("wechat", "u_123", {"wechat": {"account_key": "bot-main"}})
+    assert parsed == ("wechat", "bot-main:u_123", {})
 
 
-def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_metadata() -> None:
+def test_pick_heartbeat_target_prefers_enabled_wechat_and_exposes_state() -> None:
     sessions = [
         {"key": "feishu:oc_legacy"},
         {"key": "wechat:acc-a:u_new"},
     ]
-    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    channel, chat_id, target_meta = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
     assert channel == "wechat"
-    assert chat_id == "u_new"
-    assert metadata == {"wechat": {"account_key": "acc-a"}}
+    assert chat_id == "acc-a:u_new"
+    assert target_meta == {}
 
 
 def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> None:
@@ -70,10 +70,10 @@ def test_pick_heartbeat_target_fallbacks_to_cli_when_no_routable_session() -> No
         {"key": "feishu:oc_legacy"},
         {"key": "cli:direct"},
     ]
-    channel, chat_id, metadata = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
+    channel, chat_id, target_meta = _pick_heartbeat_target_from_sessions(sessions, {"wechat"})
     assert channel == "cli"
     assert chat_id == "direct"
-    assert metadata == {}
+    assert target_meta == {}
 
 
 def test_background_notify_contract_mentions_message_and_target_context() -> None:
@@ -81,12 +81,11 @@ def test_background_notify_contract_mentions_message_and_target_context() -> Non
         source="Heartbeat",
         channel="wechat",
         chat_id="u_123",
-        target_metadata={"wechat": {"account_key": "acc-a"}},
     )
     assert "Only notify when necessary by calling the `message` tool." in contract
     assert "channel: wechat" in contract
     assert "chat_id: u_123" in contract
-    assert '"account_key": "acc-a"' in contract
+    assert "metadata" not in contract
 
 
 def test_build_heartbeat_execute_input_includes_contract_and_tasks() -> None:
@@ -94,14 +93,13 @@ def test_build_heartbeat_execute_input_includes_contract_and_tasks() -> None:
         "check pending reviews",
         channel="telegram",
         chat_id="1001",
-        target_metadata={"foo": "bar"},
     )
     assert "[Heartbeat Task]" in text
     assert "check pending reviews" in text
     assert "[Heartbeat Notification Contract]" in text
     assert "channel: telegram" in text
     assert "chat_id: 1001" in text
-    assert '"foo": "bar"' in text
+    assert "metadata" not in text
 
 
 def test_build_cron_execute_input_includes_contract_and_instruction() -> None:

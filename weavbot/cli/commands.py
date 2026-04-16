@@ -173,15 +173,8 @@ def _build_background_notify_contract(
     source: str,
     channel: str,
     chat_id: str,
-    target_metadata: dict[str, object] | None = None,
 ) -> str:
     """Build explicit notification contract for background-triggered turns."""
-    metadata_text = "{}"
-    if target_metadata:
-        try:
-            metadata_text = json.dumps(target_metadata, ensure_ascii=False, sort_keys=True)
-        except TypeError:
-            metadata_text = "{}"
     return (
         f"[{source} Notification Contract]\n"
         "- This is a background task run.\n"
@@ -192,19 +185,16 @@ def _build_background_notify_contract(
         "- For `message` target routing, prefer current context defaults; if needed, use:\n"
         f"  - channel: {channel}\n"
         f"  - chat_id: {chat_id}\n"
-        f"  - metadata: {metadata_text}\n"
     )
 
 
-def _build_heartbeat_execute_input(
-    tasks: str, *, channel: str, chat_id: str, target_metadata: dict[str, object]
-) -> str:
+def _build_heartbeat_execute_input(tasks: str, *, channel: str, chat_id: str) -> str:
     """Compose heartbeat execution input with explicit notify contract."""
     task_text = (tasks or "").strip() or "(empty heartbeat tasks)"
     return (
         "[Heartbeat Task]\n"
         f"{task_text}\n\n"
-        f"{_build_background_notify_contract(source='Heartbeat', channel=channel, chat_id=chat_id, target_metadata=target_metadata)}"
+        f"{_build_background_notify_contract(source='Heartbeat', channel=channel, chat_id=chat_id)}"
     )
 
 
@@ -257,7 +247,7 @@ def _parse_heartbeat_target(key: str) -> tuple[str, str, dict[str, object]] | No
     if text.startswith("wechat:"):
         parts = text.split(":", 2)
         if len(parts) == 3 and parts[1] and parts[2]:
-            return "wechat", parts[2], {"wechat": {"account_key": parts[1]}}
+            return "wechat", f"{parts[1]}:{parts[2]}", {}
         return None
 
     if ":" not in text:
@@ -276,11 +266,11 @@ def _pick_heartbeat_target_from_sessions(
         parsed = _parse_heartbeat_target(str(item.get("key") or ""))
         if not parsed:
             continue
-        channel, chat_id, metadata = parsed
+        channel, chat_id, target_meta = parsed
         if channel in {"cli", "system"}:
             continue
         if channel in enabled_channels and chat_id:
-            return channel, chat_id, metadata
+            return channel, chat_id, target_meta
     return "cli", "direct", {}
 
 
@@ -599,7 +589,6 @@ def gateway(
             tasks,
             channel=channel,
             chat_id=chat_id,
-            target_metadata=target_meta,
         )
         try:
             final_content = await agent.process_direct(
@@ -647,12 +636,7 @@ def gateway(
             sorted(target_meta.keys()),
         )
         if target_meta:
-            state_payload = dict(target_meta)
-            if channel == "wechat":
-                wechat_meta = target_meta.get("wechat")
-                if isinstance(wechat_meta, dict):
-                    state_payload = dict(wechat_meta)
-            await channels.state_store.update(channel, chat_id, state_payload)
+            await channels.state_store.update(channel, chat_id, dict(target_meta))
         await bus.publish_outbound(
             OutboundMessage(channel=channel, chat_id=chat_id, content=response)
         )

@@ -62,7 +62,9 @@ class WecomChannel(BaseChannel):
     _VOICE_EXTS = {".amr"}
     _VIDEO_EXTS = {".mp4"}
 
-    def __init__(self, config: WecomConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: WecomConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: WecomConfig = config
 
@@ -153,11 +155,9 @@ class WecomChannel(BaseChannel):
             logger.warning("Wecom websocket is not connected.")
             return
 
-        state_data = await self.state.get("wecom", msg.chat_id)
-        metadata = dict(state_data)
-        wecom_meta = metadata.get("wecom", {}) if isinstance(metadata.get("wecom"), dict) else {}
-        req_id = self._extract_req_id(metadata, wecom_meta)
-        chat_type = self._infer_chat_type(msg.chat_id, metadata, wecom_meta)
+        metadata = dict(await self.state.get("wecom", msg.chat_id))
+        req_id = self._extract_req_id(metadata)
+        chat_type = self._infer_chat_type(msg.chat_id, metadata)
 
         if not self._within_rate_limit(msg.chat_id):
             logger.warning("Wecom outbound dropped due to rate-limit for chat_id={}", msg.chat_id)
@@ -171,7 +171,6 @@ class WecomChannel(BaseChannel):
                     chat_id=msg.chat_id,
                     chat_type=chat_type,
                     metadata=metadata,
-                    wecom_meta=wecom_meta,
                 )
 
         content = (msg.content or "").strip()
@@ -191,8 +190,8 @@ class WecomChannel(BaseChannel):
             self._stream_ids_by_req_id.pop(req_id, None)
             return
 
-        cmd_override = str(wecom_meta.get("command", "")).strip()
-        body_override = wecom_meta.get("body")
+        cmd_override = str(metadata.get("command", "")).strip()
+        body_override = metadata.get("body")
         if cmd_override and body_override is not None:
             await self._send_custom_command(
                 cmd=cmd_override,
@@ -203,7 +202,7 @@ class WecomChannel(BaseChannel):
             )
             return
 
-        if wecom_meta.get("event_type") == EVENT_ENTER_CHAT and req_id:
+        if metadata.get("event_type") == EVENT_ENTER_CHAT and req_id:
             body = {"msgtype": "text", "text": {"content": content}}
             await self._send_reply(req_id=req_id, cmd=CMD_RESPOND_WELCOME, body=body)
             return
@@ -348,17 +347,10 @@ class WecomChannel(BaseChannel):
             {
                 "message_id": msg_id,
                 "req_id": req_id,
-                "msg_id": msg_id,
                 "chat_type": chat_type,
                 "msg_type": msg_type,
-                "wecom": {
-                    "req_id": req_id,
-                    "msg_id": msg_id,
-                    "chat_type": chat_type,
-                    "chat_id": group_chat_id,
-                    "sender_id": sender_id,
-                    "msg_type": msg_type,
-                },
+                "chat_id": group_chat_id,
+                "sender_id": sender_id,
             },
         )
 
@@ -403,17 +395,11 @@ class WecomChannel(BaseChannel):
             {
                 "message_id": msg_id,
                 "req_id": req_id,
-                "msg_id": msg_id,
                 "chat_type": chat_type,
                 "msg_type": "event",
-                "wecom": {
-                    "req_id": req_id,
-                    "msg_id": msg_id,
-                    "chat_type": chat_type,
-                    "chat_id": group_chat_id,
-                    "sender_id": sender_id,
-                    "event_type": event_type,
-                },
+                "chat_id": group_chat_id,
+                "sender_id": sender_id,
+                "event_type": event_type,
             },
         )
 
@@ -575,7 +561,6 @@ class WecomChannel(BaseChannel):
         chat_id: str,
         chat_type: int,
         metadata: dict[str, Any],
-        wecom_meta: dict[str, Any],
     ) -> None:
         """Upload local media and send the message."""
         media_path = self.resolve_media_path(media_ref)
@@ -593,7 +578,7 @@ class WecomChannel(BaseChannel):
             body[msg_type]["title"] = media_path.stem
             body[msg_type]["description"] = media_path.name
 
-        cmd_override = str(wecom_meta.get("command", "")).strip()
+        cmd_override = str(metadata.get("command", "")).strip()
         if cmd_override in {CMD_RESPOND_WELCOME, CMD_RESPOND_UPDATE, CMD_RESPOND_MSG} and req_id:
             await self._send_reply(req_id=req_id, cmd=cmd_override, body=body)
             return
@@ -901,10 +886,8 @@ class WecomChannel(BaseChannel):
                 fut.set_exception(RuntimeError(reason))
             self._pending_acks.pop(req_id, None)
 
-    def _extract_req_id(self, metadata: dict[str, Any], wecom_meta: dict[str, Any]) -> str | None:
-        req_id = (
-            str(wecom_meta.get("req_id", "")).strip() or str(metadata.get("req_id", "")).strip()
-        )
+    def _extract_req_id(self, metadata: dict[str, Any]) -> str | None:
+        req_id = str(metadata.get("req_id", "")).strip()
         if req_id:
             return req_id
         message_id = str(metadata.get("message_id", "")).strip()
@@ -912,10 +895,8 @@ class WecomChannel(BaseChannel):
             return self._msgid_to_reqid.get(message_id)
         return None
 
-    def _infer_chat_type(
-        self, chat_id: str, metadata: dict[str, Any], wecom_meta: dict[str, Any]
-    ) -> int:
-        chat_type_raw = wecom_meta.get("chat_type") or metadata.get("chat_type")
+    def _infer_chat_type(self, chat_id: str, metadata: dict[str, Any]) -> int:
+        chat_type_raw = metadata.get("chat_type")
         if isinstance(chat_type_raw, int):
             return 2 if chat_type_raw == 2 else 1
         if isinstance(chat_type_raw, str):

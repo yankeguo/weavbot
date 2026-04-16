@@ -234,7 +234,9 @@ class MochatChannel(BaseChannel):
 
     name = "mochat"
 
-    def __init__(self, config: MochatConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None):
+    def __init__(
+        self, config: MochatConfig, bus: MessageBus, workspace: Path, data_path: Path, state=None
+    ):
         super().__init__(config, bus, workspace, data_path, state=state)
         self.config: MochatConfig = config
         self._http: httpx.AsyncClient | None = None
@@ -1001,5 +1003,5 @@ class MochatChannel(BaseChannel):
     def _read_group_id(metadata: dict[str, Any]) -> str | None:
         if not isinstance(metadata, dict):
             return None
-        value = metadata.get("group_id") or metadata.get("groupId")
+        value = metadata.get("group_id")
         return value.strip() if isinstance(value, str) and value.strip() else None
