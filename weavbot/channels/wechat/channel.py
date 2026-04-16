@@ -330,7 +330,10 @@ class WechatChannel(BaseChannel):
                     else ""
                 )
                 if item_aeskey and not aes_key:
-                    aes_key = base64.b64encode(bytes.fromhex(item_aeskey)).decode("ascii")
+                    try:
+                        aes_key = base64.b64encode(bytes.fromhex(item_aeskey)).decode("ascii")
+                    except ValueError:
+                        logger.debug("Wechat inbound image aeskey hex decode failed, skipping")
 
             if not encrypt_param and not full_url:
                 parts.append(f"[wechat:{marker}]")

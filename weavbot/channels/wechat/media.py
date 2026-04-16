@@ -54,7 +54,7 @@ def _aes_ecb_decrypt(data: bytes, key: bytes) -> bytes:
 
 
 def _cipher_size(plain_size: int) -> int:
-    return math.ceil(plain_size / 16) * 16
+    return math.ceil((plain_size + 1) / 16) * 16
 
 
 def _guess_media_type(path: Path) -> tuple[int, int]:
